@@ -37,7 +37,8 @@ import {
   faCircleCheck,
   faCircleXmark,
   faTriangleExclamation,
-  faCircleInfo
+  faCircleInfo,
+  faShieldAlt
 } from '@fortawesome/free-solid-svg-icons'
 
 /* Import Base Components */
@@ -76,7 +77,8 @@ library.add(
   faCircleCheck,
   faCircleXmark,
   faTriangleExclamation,
-  faCircleInfo
+  faCircleInfo,
+  faShieldAlt
 )
 
 const app = createApp(App)

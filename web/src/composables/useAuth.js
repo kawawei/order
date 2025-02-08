@@ -10,14 +10,36 @@ export function useAuth() {
       await new Promise(resolve => setTimeout(resolve, 1000))
 
       // 驗證帳號密碼
-      if (credentials.email === 'admin@example.com' && credentials.password === '123456') {
+      if (credentials.role === 'admin') {
+        // 超級管理員登入
+        if (credentials.username === 'admin' && 
+            credentials.password === '123456' && 
+            credentials.verificationCode === '654321') {
+          const mockResponse = {
+            token: 'mock-admin-token',
+            user: {
+              id: 999,
+              username: 'admin',
+              role: 'admin',
+              name: '超級管理員'
+            }
+          }
+          // 保存 token 和用戶信息
+          token.value = mockResponse.token
+          localStorage.setItem('token', mockResponse.token)
+          user.value = mockResponse.user
+          localStorage.setItem('user', JSON.stringify(mockResponse.user))
+          return mockResponse
+        }
+      } else if (credentials.email === 'merchant@example.com' && credentials.password === '123456') {
+        // 餐廳管理員登入
         const mockResponse = {
-          token: 'mock-jwt-token',
+          token: 'mock-merchant-token',
           user: {
             id: 1,
             email: credentials.email,
             role: 'merchant',
-            name: '管理員'
+            name: '餐廳管理員'
           }
         }
 

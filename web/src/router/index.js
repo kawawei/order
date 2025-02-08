@@ -1,13 +1,18 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { useAuth } from '../composables/useAuth'
 
+// 靜態導入組件
+import AdminLayout from '../layouts/AdminLayout.vue'
+import AdminDashboard from '../views/admin/dashboard/Dashboard.vue'
+import AdminLogin from '../views/auth/admin/Login.vue'
+
 const routes = [
   // 餐廳管理員路由
   {
     path: '/merchant/login',
     name: 'MerchantLogin',
     component: () => import('../views/auth/merchant/Login.vue'),
-    meta: { requiresAuth: false }
+    meta: { requiresAuth: false, role: 'merchant' }
   },
   {
     path: '/merchant',
@@ -36,6 +41,40 @@ const routes = [
     ]
   },
 
+  // 超級管理員路由
+  {
+    path: '/admin/login',
+    name: 'AdminLogin',
+    component: AdminLogin,
+    meta: { requiresAuth: false, role: 'admin' }
+  },
+  {
+    path: '/admin',
+    component: AdminLayout,
+    meta: { requiresAuth: true, role: 'admin' },
+    children: [
+      {
+        path: 'dashboard',
+        name: 'AdminDashboard',
+        component: AdminDashboard
+      },
+      {
+        path: 'restaurants',
+        name: 'AdminRestaurants',
+        component: () => import('../views/admin/restaurants/Restaurants.vue')
+      },
+      {
+        path: 'users',
+        name: 'AdminUsers',
+        component: () => import('../views/admin/users/Users.vue')
+      },
+      {
+        path: '',
+        redirect: { name: 'AdminDashboard' }
+      }
+    ]
+  },
+
   // 根路由重定向
   {
     path: '/',
@@ -50,11 +89,22 @@ const router = createRouter({
 
 // 導航守衛
 router.beforeEach((to, from, next) => {
-  const { isAuthenticated } = useAuth()
+  const { isAuthenticated, getUserRole } = useAuth()
   const requiresAuth = to.matched.some(record => record.meta.requiresAuth)
+  const routeRole = to.matched.find(record => record.meta.role)?.meta.role
 
   if (requiresAuth && !isAuthenticated()) {
-    next({ name: 'MerchantLogin' })
+    // 未登入時重定向到對應的登入頁面
+    next({ name: routeRole === 'admin' ? 'AdminLogin' : 'MerchantLogin' })
+  } else if (requiresAuth && routeRole) {
+    // 驗證用戶角色
+    const userRole = getUserRole()
+    if (userRole === routeRole) {
+      next()
+    } else {
+      // 無權訪問時重定向到對應的登入頁面
+      next({ name: userRole === 'admin' ? 'AdminLogin' : 'MerchantLogin' })
+    }
   } else {
     next()
   }
