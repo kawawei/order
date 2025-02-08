@@ -38,7 +38,11 @@ import {
   faCircleXmark,
   faTriangleExclamation,
   faCircleInfo,
-  faShieldAlt
+  faShieldAlt,
+  faUserShield,
+  faBan,
+  faKey,
+  faCheck
 } from '@fortawesome/free-solid-svg-icons'
 
 /* Import Base Components */
@@ -48,7 +52,11 @@ import BaseComponents from './plugins/components'
 library.add(
   faChartLine, 
   faClipboardList, 
-  faUtensils, 
+  faUtensils,
+  faUserShield,
+  faBan,
+  faKey,
+  faCheck, 
   faUsers, 
   faBars, 
   faChevronLeft,

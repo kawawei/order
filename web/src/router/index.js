@@ -5,6 +5,7 @@ import { useAuth } from '../composables/useAuth'
 import AdminLayout from '../layouts/AdminLayout.vue'
 import AdminDashboard from '../views/admin/dashboard/Dashboard.vue'
 import AdminLogin from '../views/auth/admin/Login.vue'
+import AdminUsers from '../views/admin/users/Users.vue'
 
 const routes = [
   // 餐廳管理員路由
@@ -66,7 +67,7 @@ const routes = [
       {
         path: 'users',
         name: 'AdminUsers',
-        component: () => import('../views/admin/users/Users.vue')
+        component: AdminUsers
       },
       {
         path: '',
