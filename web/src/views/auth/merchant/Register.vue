@@ -43,19 +43,7 @@
             </div>
           </div>
 
-          <div class="form-group">
-            <div class="input-group">
-              <span class="input-icon">
-                <font-awesome-icon icon="user" />
-              </span>
-              <input 
-                type="text" 
-                v-model="form.ownerName"
-                placeholder="請輸入負責人姓名"
-                required
-              />
-            </div>
-          </div>
+
 
           <div class="form-group">
             <div class="input-group">
@@ -116,7 +104,7 @@
             type="button"
             variant="primary"
             class="next-button"
-            :disabled="!form.name || !form.ownerName || !form.phone || !form.city || !form.district || !form.address"
+            :disabled="!form.name || !form.phone || !form.city || !form.district || !form.address"
             @click="nextStep"
           >
             下一步

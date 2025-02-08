@@ -1,14 +1,15 @@
 import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
-import { useAuth } from '../../../composables/useAuth'
-import { useToast } from '../../../composables/useToast'
+import { authAPI } from '@/services/api'
 import '../../../assets/styles/login.css'
 
 export default {
   setup() {
     const router = useRouter()
-    const { register } = useAuth()
-    const { showToast } = useToast()
+    const toast = {
+      error: (msg) => alert(msg),
+      success: (msg) => alert(msg)
+    }
 
     // 表單狀態
     const loading = ref(false)
@@ -91,6 +92,21 @@ export default {
     }
 
     const validateForm = () => {
+      if (!form.value.name) {
+        toast.error('請輸入商家名稱')
+        return false
+      }
+
+      if (!form.value.email) {
+        toast.error('請輸入電子郵件')
+        return false
+      }
+
+      if (!form.value.password) {
+        toast.error('請輸入密碼')
+        return false
+      }
+
       if (!isPasswordMatch.value) {
         toast.error('兩次輸入的密碼不一致')
         return false
@@ -114,21 +130,44 @@ export default {
 
       try {
         loading.value = true
-        await register({
-          name: form.value.name,
-          ownerName: form.value.ownerName,
+        const registerData = {
+          businessName: form.value.name,
           email: form.value.email,
+          password: form.value.password,
+          businessType: 'restaurant',
           phone: form.value.phone,
-          city: form.value.city,
-          district: form.value.district,
-          address: form.value.address,
-          password: form.value.password
-        })
-        toast.success('註冊成功')
-        router.push({ name: 'MerchantLogin' })
+          address: {
+            city: form.value.city,
+            district: form.value.district,
+            street: form.value.address,
+            postalCode: '000'
+          },
+          businessHours: {
+            monday: { open: '09:00', close: '21:00' },
+            tuesday: { open: '09:00', close: '21:00' },
+            wednesday: { open: '09:00', close: '21:00' },
+            thursday: { open: '09:00', close: '21:00' },
+            friday: { open: '09:00', close: '21:00' },
+            saturday: { open: '10:00', close: '22:00' },
+            sunday: { open: '10:00', close: '22:00' }
+          }
+        }
+
+        console.log('發送註冊數據:', registerData)
+        const response = await authAPI.register(registerData)
+        console.log('註冊響應:', response)
+
+        alert('註冊成功！請登入您的帳戶')
+        router.push('/merchant/login')
       } catch (error) {
-        toast.error(error.message || '註冊失敗')
-        console.error('註冊失敗：', error)
+        console.error('註冊錯誤:', error)
+        if (error.response) {
+          alert(error.response.data.message || '註冊失敗，請稍後再試')
+        } else if (error.message) {
+          alert(error.message)
+        } else {
+          alert('註冊失敗，請稍後再試')
+        }
       } finally {
         loading.value = false
       }

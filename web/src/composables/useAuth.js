@@ -1,4 +1,5 @@
 import { ref } from 'vue'
+import { authAPI } from '@/services/api'
 
 export function useAuth() {
   const token = ref(localStorage.getItem('token'))
@@ -6,55 +7,28 @@ export function useAuth() {
 
   const login = async (credentials) => {
     try {
-      // 模擬 API 請求
-      await new Promise(resolve => setTimeout(resolve, 1000))
-
-      // 驗證帳號密碼
+      const response = await authAPI.login(credentials)
+      
+      // 保存 token
+      token.value = response.token
+      localStorage.setItem('token', response.token)
+      
+      // 保存用戶信息
       if (credentials.role === 'admin') {
-        // 超級管理員登入
-        if (credentials.username === 'admin' && 
-            credentials.password === '123456' && 
-            credentials.verificationCode === '654321') {
-          const mockResponse = {
-            token: 'mock-admin-token',
-            user: {
-              id: 999,
-              username: 'admin',
-              role: 'admin',
-              name: '超級管理員'
-            }
-          }
-          // 保存 token 和用戶信息
-          token.value = mockResponse.token
-          localStorage.setItem('token', mockResponse.token)
-          user.value = mockResponse.user
-          localStorage.setItem('user', JSON.stringify(mockResponse.user))
-          return mockResponse
-        }
-      } else if (credentials.email === 'merchant@example.com' && credentials.password === '123456') {
-        // 餐廳管理員登入
-        const mockResponse = {
-          token: 'mock-merchant-token',
-          user: {
-            id: 1,
-            email: credentials.email,
-            role: 'merchant',
-            name: '餐廳管理員'
-          }
-        }
-
-        // 保存 token
-        token.value = mockResponse.token
-        localStorage.setItem('token', mockResponse.token)
-        
-        // 保存用戶信息
-        user.value = mockResponse.user
-        localStorage.setItem('user', JSON.stringify(mockResponse.user))
-        
-        return mockResponse
+        user.value = response.data.admin
+        localStorage.setItem('user', JSON.stringify({
+          ...response.data.admin,
+          role: 'admin'
+        }))
       } else {
-        throw new Error('帳號或密碼錯誤')
+        user.value = response.data.merchant
+        localStorage.setItem('user', JSON.stringify({
+          ...response.data.merchant,
+          role: 'merchant'
+        }))
       }
+      
+      return response
     } catch (error) {
       console.error('登入失敗：', error)
       throw error
@@ -78,48 +52,22 @@ export function useAuth() {
   const getUserRole = () => {
     const storedUser = localStorage.getItem('user')
     if (storedUser) {
-      const userData = JSON.parse(storedUser)
-      return userData.role
+      try {
+        const userData = JSON.parse(storedUser)
+        console.log('用戶信息:', userData)
+        return userData.role || 'merchant'
+      } catch (error) {
+        console.error('解析用戶信息錯誤:', error)
+        return null
+      }
     }
     return null
   }
 
   const register = async (userData) => {
     try {
-      // 模擬 API 請求
-      await new Promise(resolve => setTimeout(resolve, 1000))
-
-      // 驗證電話號碼格式
-      if (!userData.phone.match(/^[0-9]{10}$/)) {
-        throw new Error('電話號碼格式不正確')
-      }
-
-      // 驗證必填欄位
-      const requiredFields = ['name', 'ownerName', 'email', 'phone', 'city', 'district', 'address']
-      for (const field of requiredFields) {
-        if (!userData[field]) {
-          throw new Error(`${field} 為必填欄位`)
-        }
-      }
-
-      // 模擬註冊成功
-      const mockResponse = {
-        message: '註冊成功',
-        user: {
-          id: Math.floor(Math.random() * 1000) + 1,
-          email: userData.email,
-          name: userData.name,
-          ownerName: userData.ownerName,
-          phone: userData.phone,
-          city: userData.city,
-          district: userData.district,
-          address: userData.address,
-          role: 'merchant',
-          status: 'pending' // 新註冊的商家需要審核
-        }
-      }
-
-      return mockResponse
+      const response = await authAPI.register(userData)
+      return response
     } catch (error) {
       console.error('註冊失敗：', error)
       throw error
@@ -135,43 +83,4 @@ export function useAuth() {
     getUserRole,
     register
   }
-}
-
-// 模擬登入 API
-function mockLoginApi(credentials) {
-  return new Promise((resolve, reject) => {
-    setTimeout(() => {
-      // 餐廳管理員登入
-      if (credentials.role === 'merchant' && 
-          credentials.email === 'restaurant@example.com' && 
-          credentials.password === 'password') {
-        resolve({
-          token: 'mock-merchant-token',
-          user: {
-            id: 1,
-            email: 'restaurant@example.com',
-            name: '餐廳管理員',
-            role: 'merchant'
-          }
-        })
-      }
-      // 超級管理員登入
-      else if (credentials.role === 'admin' && 
-               credentials.username === 'admin' && 
-               credentials.password === 'admin123' &&
-               credentials.verificationCode === '1234') {
-        resolve({
-          token: 'mock-admin-token',
-          user: {
-            id: 999,
-            username: 'admin',
-            name: '系統管理員',
-            role: 'admin'
-          }
-        })
-      } else {
-        reject(new Error('帳號或密碼錯誤'))
-      }
-    }, 1000) // 模擬網絡延遲
-  })
 }

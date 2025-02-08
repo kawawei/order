@@ -1,6 +1,11 @@
 import { createApp } from 'vue'
 import App from './App.vue'
 import router from './router'
+import axios from 'axios'
+
+// 配置 axios 默認值
+axios.defaults.baseURL = 'http://localhost:3002/api/v1'
+axios.defaults.headers.common['Content-Type'] = 'application/json'
 
 /* Import Font Awesome */
 import { library } from '@fortawesome/fontawesome-svg-core'

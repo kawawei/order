@@ -95,12 +95,33 @@ const toast = useToast()
 const handleLogin = async () => {
   try {
     loading.value = true
-    await login(form.value)
+    const response = await login(form.value)
+    console.log('登入響應:', response)
+    
+    // 先存儲用戶信息
+    localStorage.setItem('user', JSON.stringify({
+      ...response.data.merchant,
+      role: 'merchant'
+    }))
+    
+    // 存儲 token
+    localStorage.setItem('token', response.token)
+    
     toast.success('登入成功')
-    router.push({ name: 'MerchantDashboard' })
+    
+    // 等待一下再重定向，讓用戶看到成功提示
+    setTimeout(() => {
+      window.location.href = '/merchant/dashboard'
+    }, 1000)
   } catch (error) {
-    toast.error(error.message || '登入失敗')
     console.error('登入失敗：', error)
+    if (error.response) {
+      toast.error(error.response.data.message || '登入失敗，請稍後再試')
+    } else if (error.message) {
+      toast.error(error.message)
+    } else {
+      toast.error('登入失敗，請稍後再試')
+    }
   } finally {
     loading.value = false
   }
