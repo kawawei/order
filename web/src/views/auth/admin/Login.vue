@@ -2,19 +2,19 @@
   <div class="login-page">
     <div class="login-container">
       <div class="login-header">
-        <h1>餐廳管理系統</h1>
-        <p>請登入您的帳號</p>
+        <h1>系統管理後台</h1>
+        <p>超級管理員登入</p>
       </div>
       
       <form class="login-form" @submit.prevent="handleLogin">
         <div class="form-group">
-          <label>電子郵件</label>
+          <label>帳號</label>
           <div class="input-group">
-            <font-awesome-icon icon="envelope" />
+            <font-awesome-icon icon="user" />
             <input 
-              type="email" 
-              v-model="form.email"
-              placeholder="請輸入您的電子郵件"
+              type="text" 
+              v-model="form.username"
+              placeholder="請輸入管理員帳號"
               required
             />
           </div>
@@ -27,7 +27,7 @@
             <input 
               :type="showPassword ? 'text' : 'password'" 
               v-model="form.password"
-              placeholder="請輸入您的密碼"
+              placeholder="請輸入密碼"
               required
             />
             <button 
@@ -39,16 +39,19 @@
             </button>
           </div>
         </div>
-        
-        <div class="form-group remember-me">
-          <label class="checkbox-label">
+
+        <div class="form-group verification-code">
+          <label>驗證碼</label>
+          <div class="input-group">
+            <font-awesome-icon icon="shield-alt" />
             <input 
-              type="checkbox" 
-              v-model="form.rememberMe"
+              type="text" 
+              v-model="form.verificationCode"
+              placeholder="請輸入驗證碼"
+              required
             />
-            <span>記住我</span>
-          </label>
-          <a href="#" class="forgot-password">忘記密碼？</a>
+          </div>
+          <!-- 這裡可以添加驗證碼圖片 -->
         </div>
         
         <BaseButton 
@@ -60,6 +63,11 @@
           登入
         </BaseButton>
       </form>
+
+      <div class="security-notice">
+        <font-awesome-icon icon="info-circle" />
+        <span>此為系統管理員專用入口，未經授權請勿嘗試登入</span>
+      </div>
     </div>
   </div>
 </template>
@@ -67,8 +75,8 @@
 <script setup>
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { useAuth } from '../../composables/useAuth'
-import '../../assets/styles/login.css'
+import { useAuth } from '../../../composables/useAuth'
+import '../../../assets/styles/login.css'
 
 const router = useRouter()
 const { login } = useAuth()
@@ -76,16 +84,19 @@ const { login } = useAuth()
 const loading = ref(false)
 const showPassword = ref(false)
 const form = ref({
-  email: '',
+  username: '',
   password: '',
-  rememberMe: false
+  verificationCode: ''
 })
 
 const handleLogin = async () => {
   try {
     loading.value = true
-    await login(form.value)
-    router.push('/menu')
+    await login({
+      ...form.value,
+      role: 'admin'
+    })
+    router.push('/admin/dashboard')
   } catch (error) {
     console.error('登入失敗：', error)
   } finally {
@@ -93,3 +104,26 @@ const handleLogin = async () => {
   }
 }
 </script>
+
+<style scoped>
+.verification-code {
+  margin-bottom: 1.5rem;
+}
+
+.security-notice {
+  margin-top: 2rem;
+  padding: 1rem;
+  background-color: #fff3cd;
+  border: 1px solid #ffeeba;
+  border-radius: 4px;
+  color: #856404;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+}
+
+.security-notice svg {
+  color: #856404;
+}
+</style>

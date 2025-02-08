@@ -29,7 +29,15 @@ import {
   faPlus,
   faPen,
   faTrash,
-  faUpload
+  faEnvelope,
+  faLock,
+  faEye,
+  faEyeSlash,
+  faUpload,
+  faCircleCheck,
+  faCircleXmark,
+  faTriangleExclamation,
+  faCircleInfo
 } from '@fortawesome/free-solid-svg-icons'
 
 /* Import Base Components */
@@ -60,7 +68,15 @@ library.add(
   faPlus,
   faPen,
   faTrash,
-  faUpload
+  faUpload,
+  faEnvelope,
+  faLock,
+  faEye,
+  faEyeSlash,
+  faCircleCheck,
+  faCircleXmark,
+  faTriangleExclamation,
+  faCircleInfo
 )
 
 const app = createApp(App)

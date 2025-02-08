@@ -22,16 +22,36 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
+import { useAuth } from '../composables/useAuth'
 
 const router = useRouter()
-const username = ref('管理員') // 這裡之後可以從 store 或 API 獲取
+const { user, logout } = useAuth()
+const username = ref('')
 
-const handleLogout = () => {
-  // TODO: 實現登出邏輯
-  console.log('登出')
-  // router.push('/login')
+onMounted(() => {
+  const storedUser = localStorage.getItem('user')
+  if (storedUser) {
+    const userData = JSON.parse(storedUser)
+    username.value = userData.name
+  }
+})
+
+import { useToast } from '../composables/useToast'
+
+const toast = useToast()
+
+const handleLogout = async () => {
+  try {
+    logout()
+    toast.success('登出成功')
+    await router.push({ name: 'MerchantLogin' })
+    window.location.reload() // 強制重新載入頁面
+  } catch (error) {
+    toast.error('登出失敗')
+    console.error('登出時發生錯誤：', error)
+  }
 }
 </script>
 

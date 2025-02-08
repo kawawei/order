@@ -1,6 +1,19 @@
 <template>
   <router-view></router-view>
+  <Toast
+    :visible="toastVisible"
+    :message="toastMessage"
+    :type="toastType"
+    :position="toastPosition"
+  />
 </template>
+
+<script setup>
+import Toast from './components/Toast.vue'
+import { useToast } from './composables/useToast'
+
+const { visible: toastVisible, message: toastMessage, type: toastType, position: toastPosition } = useToast()
+</script>
 
 <style>
 * {
