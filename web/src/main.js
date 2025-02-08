@@ -25,7 +25,12 @@ import {
   faArrowTrendUp,
   faBell,
   faSignOutAlt,
-  faUser
+  faUser,
+  faCog,
+  faPlus,
+  faPen,
+  faTrash,
+  faUpload
 } from '@fortawesome/free-solid-svg-icons'
 
 /* Import Base Components */
@@ -51,7 +56,12 @@ library.add(
   faArrowTrendUp,
   faBell,
   faSignOutAlt,
-  faUser
+  faUser,
+  faCog,
+  faPlus,
+  faPen,
+  faTrash,
+  faUpload
 )
 
 const router = createRouter({
@@ -65,13 +75,21 @@ const router = createRouter({
       path: '/dashboard',
       name: 'Dashboard',
       component: Dashboard
+    },
+    {
+      path: '/menu',
+      name: 'Menu',
+      component: () => import('./views/Menu.vue')
+    },
+    {
+      path: '/settings',
+      name: 'Settings',
+      component: () => import('./views/Settings.vue')
     }
   ]
 })
 
 const app = createApp(App)
-app.use(router)
-app.component('font-awesome-icon', FontAwesomeIcon)
 app
   .use(router)
   .use(BaseComponents)

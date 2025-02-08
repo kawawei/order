@@ -17,7 +17,7 @@ const props = defineProps({
     type: String,
     default: 'default',
     validator: (value) => [
-      'default', 'primary', 'success', 'warning', 'danger', 'info'
+      'default', 'primary', 'success', 'warning', 'danger', 'info', 'price'
     ].includes(value)
   },
   size: {
@@ -97,6 +97,11 @@ const handleClick = (event) => {
 .base-tag.danger {
   background-color: #fdecea;
   color: #ff3b30;
+}
+
+.base-tag.price {
+  background-color: #e6f4ff;
+  color: #0066ff;
 }
 
 .base-tag.info {

@@ -7,23 +7,24 @@
     </div>
     <nav class="sidebar-nav">
       <router-link to="/dashboard" class="nav-item">
-        <font-awesome-icon icon="chart-line" />
+        <div class="icon-wrapper">
+          <font-awesome-icon icon="chart-line" />
+        </div>
         <span class="nav-text">儀表板</span>
       </router-link>
 
-      <router-link to="/orders" class="nav-item">
-        <font-awesome-icon icon="clipboard-list" />
-        <span class="nav-text">訂單管理</span>
-      </router-link>
-
       <router-link to="/menu" class="nav-item">
-        <font-awesome-icon icon="utensils" />
+        <div class="icon-wrapper">
+          <font-awesome-icon icon="utensils" />
+        </div>
         <span class="nav-text">菜單管理</span>
       </router-link>
 
-      <router-link to="/members" class="nav-item">
-        <font-awesome-icon icon="users" />
-        <span class="nav-text">會員管理</span>
+      <router-link to="/settings" class="nav-item">
+        <div class="icon-wrapper">
+          <font-awesome-icon icon="cog" />
+        </div>
+        <span class="nav-text">基礎設置</span>
       </router-link>
     </nav>
   </aside>
@@ -103,6 +104,14 @@ const toggleSidebar = () => {
   transition: all 0.3s;
   border-left: 3px solid transparent;
   white-space: nowrap;
+  height: 42px;
+}
+
+.icon-wrapper {
+  width: 20px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
 }
 
 .nav-item:hover {
