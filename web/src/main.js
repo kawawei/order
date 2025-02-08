@@ -42,7 +42,11 @@ import {
   faUserShield,
   faBan,
   faKey,
-  faCheck
+  faCheck,
+  faStore,
+  faPhone,
+  faMapMarkerAlt,
+  faMapMarkedAlt
 } from '@fortawesome/free-solid-svg-icons'
 
 /* Import Base Components */
@@ -86,7 +90,11 @@ library.add(
   faCircleXmark,
   faTriangleExclamation,
   faCircleInfo,
-  faShieldAlt
+  faShieldAlt,
+  faStore,
+  faPhone,
+  faMapMarkerAlt,
+  faMapMarkedAlt
 )
 
 const app = createApp(App)

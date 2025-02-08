@@ -62,6 +62,10 @@
         >
           {{ loading ? '登入中...' : '登入' }}
         </BaseButton>
+
+        <div class="form-footer">
+          <p>還沒有帳號？<router-link to="/merchant/register" class="register-link">立即註冊</router-link></p>
+        </div>
       </form>
     </div>
   </div>
@@ -102,3 +106,20 @@ const handleLogin = async () => {
   }
 }
 </script>
+
+<style scoped>
+.form-footer {
+  margin-top: 1rem;
+  text-align: center;
+}
+
+.register-link {
+  color: var(--primary-color);
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.register-link:hover {
+  text-decoration: underline;
+}
+</style>

@@ -84,13 +84,56 @@ export function useAuth() {
     return null
   }
 
+  const register = async (userData) => {
+    try {
+      // 模擬 API 請求
+      await new Promise(resolve => setTimeout(resolve, 1000))
+
+      // 驗證電話號碼格式
+      if (!userData.phone.match(/^[0-9]{10}$/)) {
+        throw new Error('電話號碼格式不正確')
+      }
+
+      // 驗證必填欄位
+      const requiredFields = ['name', 'ownerName', 'email', 'phone', 'city', 'district', 'address']
+      for (const field of requiredFields) {
+        if (!userData[field]) {
+          throw new Error(`${field} 為必填欄位`)
+        }
+      }
+
+      // 模擬註冊成功
+      const mockResponse = {
+        message: '註冊成功',
+        user: {
+          id: Math.floor(Math.random() * 1000) + 1,
+          email: userData.email,
+          name: userData.name,
+          ownerName: userData.ownerName,
+          phone: userData.phone,
+          city: userData.city,
+          district: userData.district,
+          address: userData.address,
+          role: 'merchant',
+          status: 'pending' // 新註冊的商家需要審核
+        }
+      }
+
+      return mockResponse
+    } catch (error) {
+      console.error('註冊失敗：', error)
+      throw error
+    }
+  }
+
   return {
     user,
     token,
     login,
     logout,
     isAuthenticated,
-    getUserRole
+    getUserRole,
+    register
   }
 }
 

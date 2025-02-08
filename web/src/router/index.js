@@ -16,6 +16,12 @@ const routes = [
     meta: { requiresAuth: false, role: 'merchant' }
   },
   {
+    path: '/merchant/register',
+    name: 'MerchantRegister',
+    component: () => import('../views/auth/merchant/Register.vue'),
+    meta: { requiresAuth: false, role: 'merchant' }
+  },
+  {
     path: '/merchant',
     component: () => import('../layouts/MerchantLayout.vue'),
     meta: { requiresAuth: true, role: 'merchant' },
