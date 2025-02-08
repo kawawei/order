@@ -2,36 +2,22 @@
   <aside class="sidebar" :class="{ 'collapsed': isCollapsed }">
     <div class="toggle-btn-wrapper">
       <button class="toggle-btn" @click="toggleSidebar">
-        <i :class="isCollapsed ? 'fas fa-bars' : 'fas fa-chevron-left'"></i>
+        <font-awesome-icon :icon="isCollapsed ? 'bars' : 'chevron-left'" />
       </button>
     </div>
+
     <nav class="sidebar-nav">
-      <router-link to="/admin/dashboard" class="nav-item">
+      <router-link 
+        v-for="item in menuItems" 
+        :key="item.path"
+        :to="item.path"
+        class="nav-item"
+        :class="{ 'active': $route.path === item.path }"
+      >
         <div class="icon-wrapper">
-          <i class="fas fa-chart-pie"></i>
+          <font-awesome-icon :icon="item.icon" />
         </div>
-        <span class="nav-text">系統總覽</span>
-      </router-link>
-
-      <router-link to="/admin/restaurants" class="nav-item">
-        <div class="icon-wrapper">
-          <i class="fas fa-store"></i>
-        </div>
-        <span class="nav-text">餐廳管理</span>
-      </router-link>
-
-      <router-link to="/admin/users" class="nav-item">
-        <div class="icon-wrapper">
-          <i class="fas fa-users"></i>
-        </div>
-        <span class="nav-text">用戶管理</span>
-      </router-link>
-
-      <router-link to="/admin/settings" class="nav-item">
-        <div class="icon-wrapper">
-          <i class="fas fa-cogs"></i>
-        </div>
-        <span class="nav-text">系統設置</span>
+        <span class="nav-text">{{ item.label }}</span>
       </router-link>
     </nav>
   </aside>
@@ -39,8 +25,17 @@
 
 <script setup>
 import { ref } from 'vue'
+import { useRoute } from 'vue-router'
 
+const route = useRoute()
 const isCollapsed = ref(false)
+
+const menuItems = [
+  { path: '/admin/dashboard', icon: 'chart-line', label: '儀表板' },
+  { path: '/admin/restaurants', icon: 'utensils', label: '餐廳管理' },
+  { path: '/admin/users', icon: 'users', label: '用戶管理' },
+  { path: '/admin/settings', icon: 'cog', label: '系統設置' }
+]
 
 const toggleSidebar = () => {
   isCollapsed.value = !isCollapsed.value
@@ -49,106 +44,96 @@ const toggleSidebar = () => {
 
 <style scoped>
 .sidebar {
-  width: 200px;
+  width: 240px;
   height: 100vh;
-  background-color: white;
-  color: #333;
-  transition: all 0.3s ease;
+  background-color: #ffffff;
+  color: #64748b;
+  transition: all 0.3s;
   position: relative;
-  border-right: 1px solid #eee;
+  box-shadow: 1px 0 4px rgba(0, 0, 0, 0.05);
+  border-right: 1px solid #e2e8f0;
 }
 
-.sidebar.collapsed {
-  width: 48px;
+.collapsed {
+  width: 64px;
 }
 
 .toggle-btn-wrapper {
-  padding: 1rem;
-  display: flex;
-  justify-content: flex-end;
+  padding: 1.25rem;
+  text-align: right;
+  border-bottom: 1px solid #e2e8f0;
 }
 
 .toggle-btn {
-  background: white;
-  border: 1px solid #eee;
-  width: 32px;
-  height: 32px;
-  border-radius: 4px;
-  color: #666;
+  background: none;
+  border: none;
+  color: #64748b;
   cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.3s ease;
+  padding: 0.5rem;
+  border-radius: 6px;
+  transition: all 0.2s;
 }
 
 .toggle-btn:hover {
-  background: #f8f9fa;
-  color: #1a73e8;
-}
-
-.sidebar.collapsed .toggle-btn-wrapper {
-  padding: 0.5rem;
-}
-
-.sidebar.collapsed .toggle-btn {
-  width: 36px;
-  height: 36px;
+  color: #3b82f6;
+  background-color: #f1f5f9;
 }
 
 .sidebar-nav {
-  display: flex;
-  flex-direction: column;
-  padding-top: 1rem;
+  padding: 1rem 0;
 }
 
 .nav-item {
   display: flex;
   align-items: center;
-  padding: 0.8rem 1rem;
-  color: #666;
+  padding: 0.875rem 1.5rem;
+  color: #64748b;
   text-decoration: none;
-  transition: all 0.3s ease;
+  transition: all 0.2s;
+  margin: 0.25rem 0.75rem;
+  border-radius: 8px;
 }
 
 .nav-item:hover {
-  background: #f8f9fa;
-  color: #1a73e8;
+  color: #3b82f6;
+  background-color: #f1f5f9;
 }
 
-.nav-item.router-link-active {
-  color: #1a73e8;
-  background: #f0f7ff;
+.nav-item.active {
+  color: #3b82f6;
+  background-color: #eff6ff;
   font-weight: 500;
 }
 
 .icon-wrapper {
-  width: 24px;
-  height: 24px;
+  width: 20px;
+  height: 20px;
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-right: 0.8rem;
+  margin-right: 0.875rem;
 }
 
 .nav-text {
+  font-size: 0.9375rem;
+  font-weight: 500;
   white-space: nowrap;
   opacity: 1;
-  transition: opacity 0.3s ease;
+  transition: opacity 0.2s;
 }
 
-.sidebar.collapsed .nav-text {
+.collapsed .nav-text {
   opacity: 0;
   width: 0;
-  overflow: hidden;
+  margin: 0;
 }
 
-.sidebar.collapsed .nav-item {
-  padding: 0.8rem;
+.collapsed .nav-item {
+  padding: 0.875rem;
   justify-content: center;
 }
 
-.sidebar.collapsed .icon-wrapper {
-  margin-right: 0;
+.collapsed .icon-wrapper {
+  margin: 0;
 }
 </style>]]>
