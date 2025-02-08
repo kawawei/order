@@ -1,0 +1,134 @@
+<template>
+  <aside class="sidebar" :class="{ 'collapsed': isCollapsed }">
+    <div class="toggle-btn-wrapper">
+      <button class="toggle-btn" @click="toggleSidebar">
+        <font-awesome-icon :icon="isCollapsed ? 'bars' : 'chevron-left'" size="lg" />
+      </button>
+    </div>
+    <nav class="sidebar-nav">
+      <router-link to="/dashboard" class="nav-item">
+        <font-awesome-icon icon="chart-line" />
+        <span class="nav-text">儀表板</span>
+      </router-link>
+
+      <router-link to="/orders" class="nav-item">
+        <font-awesome-icon icon="clipboard-list" />
+        <span class="nav-text">訂單管理</span>
+      </router-link>
+
+      <router-link to="/menu" class="nav-item">
+        <font-awesome-icon icon="utensils" />
+        <span class="nav-text">菜單管理</span>
+      </router-link>
+
+      <router-link to="/members" class="nav-item">
+        <font-awesome-icon icon="users" />
+        <span class="nav-text">會員管理</span>
+      </router-link>
+    </nav>
+  </aside>
+</template>
+
+<script setup>
+import { ref } from 'vue'
+
+const isCollapsed = ref(false)
+
+const toggleSidebar = () => {
+  isCollapsed.value = !isCollapsed.value
+}
+</script>
+
+<style scoped>
+.sidebar {
+  width: 200px;
+  height: 100vh;
+  background-color: white;
+  color: #333;
+  transition: all 0.3s ease;
+  position: relative;
+  border-right: 1px solid #eee;
+}
+
+.sidebar.collapsed {
+  width: 48px;
+}
+
+.toggle-btn-wrapper {
+  padding: 1rem;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.toggle-btn {
+  background: white;
+  border: 1px solid #eee;
+  width: 32px;
+  height: 32px;
+  border-radius: 4px;
+  color: #666;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s ease;
+}
+
+.toggle-btn:hover {
+  background: #f8f9fa;
+  color: #1a73e8;
+}
+
+.sidebar.collapsed .toggle-btn-wrapper {
+  padding: 0.5rem;
+}
+
+.sidebar.collapsed .toggle-btn {
+  width: 36px;
+  height: 36px;
+}
+
+.sidebar-nav {
+  display: flex;
+  flex-direction: column;
+  padding-top: 1rem;
+}
+
+.nav-item {
+  display: flex;
+  align-items: center;
+  padding: 0.8rem 1rem;
+  color: #666;
+  text-decoration: none;
+  transition: all 0.3s;
+  border-left: 3px solid transparent;
+  white-space: nowrap;
+}
+
+.nav-item:hover {
+  color: #1a73e8;
+  background-color: #f8f9fa;
+  border-left-color: #1a73e8;
+}
+
+.nav-item.router-link-active {
+  color: #1a73e8;
+  background-color: #f8f9fa;
+  border-left-color: #1a73e8;
+}
+
+.nav-text {
+  margin-left: 0.8rem;
+  transition: opacity 0.3s;
+}
+
+.sidebar.collapsed .nav-item {
+  padding: 0.8rem 0;
+  justify-content: center;
+}
+
+.sidebar.collapsed .nav-text {
+  display: none;
+  opacity: 0;
+}
+</style>
