@@ -68,11 +68,11 @@
 </template>
 
 <script setup>
-import { useMenuPage } from '../composables/useMenuPage'
-import AddCategoryDialog from '../components/menu/AddCategoryDialog.vue'
-import AddMenuItemDialog from '../components/menu/AddMenuItemDialog.vue'
-import MenuItemCard from '../components/menu/MenuItemCard.vue'
-import '../assets/styles/menu.css'
+import { useMenuPage } from '../../../composables/merchant/useMenuPage'
+import AddCategoryDialog from '../../../components/merchant/menu/AddCategoryDialog.vue'
+import AddMenuItemDialog from '../../../components/merchant/menu/AddMenuItemDialog.vue'
+import MenuItemCard from '../../../components/merchant/menu/MenuItemCard.vue'
+import '../../../assets/styles/menu.css'
 
 const {
   categories,

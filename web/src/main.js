@@ -1,7 +1,6 @@
 import { createApp } from 'vue'
-import { createRouter, createWebHistory } from 'vue-router'
 import App from './App.vue'
-import Dashboard from './views/Dashboard.vue'
+import router from './router'
 
 /* Import Font Awesome */
 import { library } from '@fortawesome/fontawesome-svg-core'
@@ -63,31 +62,6 @@ library.add(
   faTrash,
   faUpload
 )
-
-const router = createRouter({
-  history: createWebHistory(),
-  routes: [
-    {
-      path: '/',
-      redirect: '/dashboard'
-    },
-    {
-      path: '/dashboard',
-      name: 'Dashboard',
-      component: Dashboard
-    },
-    {
-      path: '/menu',
-      name: 'Menu',
-      component: () => import('./views/Menu.vue')
-    },
-    {
-      path: '/settings',
-      name: 'Settings',
-      component: () => import('./views/Settings.vue')
-    }
-  ]
-})
 
 const app = createApp(App)
 app

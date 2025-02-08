@@ -191,7 +191,7 @@
 </template>
 
 <script setup>
-import { useDashboard } from '../composables/useDashboard'
+import { useDashboard } from '../../../composables/merchant/useDashboard'
 
 const {
   currentDate,
@@ -203,5 +203,5 @@ const {
 </script>
 
 <style>
-@import '../assets/styles/dashboard.css';
+@import '../../../assets/styles/dashboard.css';
 </style>

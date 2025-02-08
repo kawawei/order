@@ -6,21 +6,21 @@
       </button>
     </div>
     <nav class="sidebar-nav">
-      <router-link to="/dashboard" class="nav-item">
+      <router-link to="/merchant/dashboard" class="nav-item">
         <div class="icon-wrapper">
           <font-awesome-icon icon="chart-line" />
         </div>
         <span class="nav-text">儀表板</span>
       </router-link>
 
-      <router-link to="/menu" class="nav-item">
+      <router-link to="/merchant/menu" class="nav-item">
         <div class="icon-wrapper">
           <font-awesome-icon icon="utensils" />
         </div>
         <span class="nav-text">菜單管理</span>
       </router-link>
 
-      <router-link to="/settings" class="nav-item">
+      <router-link to="/merchant/settings" class="nav-item">
         <div class="icon-wrapper">
           <font-awesome-icon icon="cog" />
         </div>
