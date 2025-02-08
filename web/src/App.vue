@@ -1,14 +1,18 @@
 <template>
   <div class="app">
-    <Sidebar />
-    <main class="main-content">
-      <router-view></router-view>
-    </main>
+    <TopBar />
+    <div class="app-content">
+      <Sidebar />
+      <main class="main-content">
+        <router-view></router-view>
+      </main>
+    </div>
   </div>
 </template>
 
 <script setup>
 import Sidebar from './components/Sidebar.vue'
+import TopBar from './components/TopBar.vue'
 </script>
 
 <style>
@@ -25,16 +29,21 @@ body {
 }
 
 .app {
-  display: flex;
   min-height: 100vh;
   position: relative;
   overflow-x: hidden;
   background-color: white;
 }
 
+.app-content {
+  display: flex;
+  min-height: calc(100vh - 60px);
+  margin-top: 60px;
+}
+
 .main-content {
   flex: 1;
-  padding: 2rem;
+  padding: 1.5rem;
   background-color: #f8f9fa;
   transition: margin-left 0.3s ease;
 }

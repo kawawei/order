@@ -23,7 +23,9 @@ import {
   faStar,
   faChair,
   faArrowTrendUp,
-  faBell
+  faBell,
+  faSignOutAlt,
+  faUser
 } from '@fortawesome/free-solid-svg-icons'
 
 /* Import Base Components */
@@ -47,7 +49,9 @@ library.add(
   faStar,
   faChair,
   faArrowTrendUp,
-  faBell
+  faBell,
+  faSignOutAlt,
+  faUser
 )
 
 const router = createRouter({
