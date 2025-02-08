@@ -1,0 +1,161 @@
+.login-container {
+  background-color: #ffffff;
+  padding: 2rem;
+  border-radius: 8px;
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+  width: 100%;
+  max-width: 500px;
+}
+
+.login-form {
+  position: relative;
+  min-height: 400px;
+  width: 100%;
+}
+
+/* 過渡動畫 */
+.form-step {
+  width: 100%;
+  animation: fadeIn 0.3s ease-in-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.form-footer {
+  margin-top: 20px;
+}
+
+.step-indicator {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 2rem;
+}
+
+.step-numbers {
+  display: flex;
+  justify-content: center;
+  gap: 4rem;
+  margin-bottom: 0.5rem;
+  position: relative;
+  width: 200px;
+}
+
+.step-numbers:before {
+  content: '';
+  position: absolute;
+  width: calc(100% - 40px);
+  height: 2px;
+  background-color: #e0e0e0;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 0;
+}
+
+.step {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background-color: #f3f4f6;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #666;
+  font-weight: bold;
+  position: relative;
+  z-index: 1;
+  border: 2px solid #e0e0e0;
+  font-size: 16px;
+}
+
+.step.active {
+  background-color: white;
+  color: #4CAF50;
+  border-color: #4CAF50;
+}
+
+.step.completed {
+  background-color: #4CAF50;
+  color: white;
+  border-color: #4CAF50;
+}
+
+.step-labels {
+  display: flex;
+  justify-content: center;
+  gap: 3rem;
+  margin-top: 0.5rem;
+}
+
+.step-labels div {
+  color: #666;
+  font-size: 0.9rem;
+}
+
+.step-labels div.active {
+  color: #4CAF50;
+  font-weight: bold;
+}
+
+.next-button {
+  min-width: 100px;
+}
+
+.terms {
+  text-align: left;
+  margin-bottom: 1rem;
+}
+
+.terms a {
+  color: var(--primary-color);
+  text-decoration: none;
+}
+
+.terms a:hover {
+  text-decoration: underline;
+}
+
+.form-footer {
+  margin-top: 1rem;
+  text-align: center;
+}
+
+.login-link {
+  color: var(--primary-color);
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.login-link:hover {
+  text-decoration: underline;
+}
+
+.location-group {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.location-select {
+  flex: 1;
+  padding: 0.5rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.375rem;
+  font-size: 0.875rem;
+  background-color: white;
+  color: #1a1a1a;
+}
+
+.location-select:disabled {
+  background-color: #f3f4f6;
+  cursor: not-allowed;
+}
+
+.location-select:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 1px #3b82f6;
+}
