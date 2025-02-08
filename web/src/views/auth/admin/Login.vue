@@ -82,12 +82,11 @@
 <script setup>
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { useAuth } from '../../../composables/useAuth'
 import { useToast } from '../../../composables/useToast'
+import { useAuth } from '../../../composables/useAuth'
 import '../../../assets/styles/login.css'
 
 const router = useRouter()
-const { login } = useAuth()
 const toast = useToast()
 
 const loading = ref(false)
@@ -99,18 +98,39 @@ const form = ref({
   rememberMe: false
 })
 
+const { login } = useAuth()
+
 const handleLogin = async () => {
   try {
+    if (!form.value.username || !form.value.password || !form.value.verificationCode) {
+      toast.error('請填寫所有必要欄位')
+      return
+    }
+
     loading.value = true
-    await login({
-      ...form.value,
+
+    const requestData = {
+      email: form.value.username,
+      password: form.value.password,
+      verificationCode: form.value.verificationCode,
       role: 'admin'
-    })
+    }
+
+    console.log('發送管理員登入請求:', { ...requestData, password: '[HIDDEN]' })
+
+    // 使用 useAuth composable 登入
+    const response = await login(requestData)
+    console.log('登入成功:', response)
+
     toast.success('登入成功')
-    router.push('/admin/dashboard')
+    
+    // 等待一下再重定向
+    await new Promise(resolve => setTimeout(resolve, 1000))
+    window.location.href = '/admin/dashboard'
   } catch (error) {
     console.error('登入失敗：', error)
-    toast.error('帳號、密碼或驗證碼錯誤')
+    const errorMessage = error.response?.data?.message || error.message || '登入失敗，請稍後再試'
+    toast.error(errorMessage)
   } finally {
     loading.value = false
   }
