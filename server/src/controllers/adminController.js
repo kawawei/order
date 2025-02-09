@@ -28,35 +28,28 @@ exports.createSuperAdmin = catchAsync(async (req, res, next) => {
 // 管理員登入
 exports.login = catchAsync(async (req, res, next) => {
   console.log('收到管理員登入請求:', req.body);
-  const { email, password, verificationCode } = req.body;
+  const { email, username, password, verificationCode } = req.body;
 
   // 驗證必要欄位
-  if (!email || !password || !verificationCode) {
+  if ((!email && !username) || !password || !verificationCode) {
     return next(new AppError('請提供帳號、密碼和驗證碼', 400));
   }
 
-  // 驗證管理員帳號
-  const adminUsername = process.env.SUPER_ADMIN_USERNAME;
-  const adminPassword = process.env.SUPER_ADMIN_PASSWORD;
+  // 查找管理員
+  const admin = await Admin.findOne({
+    $or: [
+      { email: email },
+      { username: username || email }
+    ]
+  }).select('+password');
 
-  console.log('檢查管理員帳號:', {
-    inputEmail: email,
-    adminUsername,
-    match: email === adminUsername
-  });
-
-  if (email !== adminUsername) {
+  if (!admin) {
     return next(new AppError('管理員帳號不存在', 401));
   }
 
   // 驗證密碼
-  console.log('檢查密碼:', {
-    inputPassword: password,
-    adminPassword,
-    match: password === adminPassword
-  });
-
-  if (password !== adminPassword) {
+  const isPasswordCorrect = await admin.correctPassword(password, admin.password);
+  if (!isPasswordCorrect) {
     return next(new AppError('密碼錯誤', 401));
   }
 
@@ -67,7 +60,7 @@ exports.login = catchAsync(async (req, res, next) => {
 
   // 生成 JWT token
   const token = jwt.sign(
-    { id: 'admin', role: 'admin' },
+    { id: admin._id, role: admin.role },
     process.env.JWT_SECRET,
     { expiresIn: process.env.JWT_EXPIRES_IN }
   );
@@ -77,8 +70,9 @@ exports.login = catchAsync(async (req, res, next) => {
     token,
     data: {
       admin: {
-        username: adminUsername,
-        role: 'admin'
+        username: admin.username,
+        email: admin.email,
+        role: admin.role
       }
     }
   };

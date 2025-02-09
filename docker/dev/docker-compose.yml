@@ -1,0 +1,73 @@
+version: '3.8'
+
+services:
+  mongodb:
+    image: mongo:latest
+    container_name: order-system-mongodb-dev
+    ports:
+      - "27018:27017"
+    volumes:
+      - order_mongodb_data:/data/db
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=admin
+      - MONGO_INITDB_ROOT_PASSWORD=admin123
+    networks:
+      - order-system-network-dev
+    healthcheck:
+      test: mongosh --eval 'db.runCommand("ping").ok' --quiet
+      interval: 5s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  backend:
+    build:
+      context: ../../server
+      dockerfile: Dockerfile.dev
+    container_name: order-system-backend-dev
+    ports:
+      - "3002:3002"
+    volumes:
+      - ../../server:/app
+      - /app/node_modules
+    environment:
+      - NODE_ENV=development
+      - MONGO_URI=mongodb://admin:admin123@order-system-mongodb-dev:27017/order?authSource=admin
+      - JWT_SECRET=your_jwt_secret_dev
+      - JWT_EXPIRES_IN=1d
+      - SUPER_ADMIN_USERNAME=superadmin
+      - SUPER_ADMIN_PASSWORD=Admin@123456
+      - CORS_ORIGIN=http://localhost:5173
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    restart: always
+    networks:
+      - order-system-network-dev
+
+  frontend:
+    build:
+      context: ../../web
+      dockerfile: Dockerfile.dev
+    container_name: order-system-frontend-dev
+    ports:
+      - "5173:5173"
+    volumes:
+      - ../../web:/app
+      - /app/node_modules
+    environment:
+      - NODE_ENV=development
+      - VITE_API_URL=http://localhost:3002/api/v1
+    depends_on:
+      - backend
+    networks:
+      - order-system-network-dev
+
+networks:
+  order-system-network-dev:
+    name: order-system-network-dev
+    driver: bridge
+
+volumes:
+  order_mongodb_data:
+    name: order-system-mongodb-data-dev

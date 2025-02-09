@@ -9,9 +9,10 @@ const adminRoutes = require('./routes/adminRoutes');
 
 // 配置 CORS 選項
 const corsOptions = {
-  origin: 'http://localhost:5173', // Vite 默認端口
+  origin: process.env.CORS_ORIGIN || 'http://localhost:5173',
   credentials: true,
-  optionsSuccessStatus: 200
+  optionsSuccessStatus: 200,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS']
 };
 
 // 初始化 Express 應用

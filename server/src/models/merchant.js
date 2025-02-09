@@ -27,7 +27,7 @@ const merchantSchema = new mongoose.Schema({
   },
   businessType: {
     type: String,
-    required: [true, '請選擇商家類型'],
+    default: 'restaurant',
     enum: ['restaurant', 'cafe', 'fastFood', 'other']
   },
   phone: {
@@ -44,22 +44,24 @@ const merchantSchema = new mongoose.Schema({
 
   // 地址信息
   address: {
-    city: {
-      type: String,
-      required: [true, '請選擇城市']
-    },
-    district: {
-      type: String,
-      required: [true, '請選擇地區']
-    },
-    street: {
-      type: String,
-      required: [true, '請提供詳細地址']
-    },
-    postalCode: {
-      type: String,
-      required: [true, '請提供郵遞區號']
-    }
+    type: String,
+    required: [true, '請提供地址']
+  },
+  city: {
+    type: String,
+    default: ''
+  },
+  district: {
+    type: String,
+    default: ''
+  },
+  street: {
+    type: String,
+    default: ''
+  },
+  postalCode: {
+    type: String,
+    default: ''
   },
 
   // 營業信息

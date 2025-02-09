@@ -33,10 +33,10 @@ exports.signup = catchAsync(async (req, res, next) => {
   const {
     email,
     password,
-    businessName,
-    businessType,
+    name: businessName,
     phone,
     address,
+    businessType,
     businessHours
   } = req.body;
 
