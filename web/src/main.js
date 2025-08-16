@@ -51,7 +51,13 @@ import {
   faStore,
   faPhone,
   faMapMarkerAlt,
-  faMapMarkedAlt
+  faMapMarkedAlt,
+  faBookOpen,
+  faReceipt,
+  faCreditCard,
+  faShoppingCart,
+  faChevronDown,
+  faMinus
 } from '@fortawesome/free-solid-svg-icons'
 
 /* Import Base Components */
@@ -99,7 +105,13 @@ library.add(
   faStore,
   faPhone,
   faMapMarkerAlt,
-  faMapMarkedAlt
+  faMapMarkedAlt,
+  faBookOpen,
+  faReceipt,
+  faCreditCard,
+  faShoppingCart,
+  faChevronDown,
+  faMinus
 )
 
 const app = createApp(App)

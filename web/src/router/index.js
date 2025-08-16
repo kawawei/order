@@ -82,10 +82,41 @@ const routes = [
     ]
   },
 
+  // 客戶端路由（不需要登入）
+  {
+    path: '/customer',
+    component: () => import('../layouts/CustomerLayout.vue'),
+    children: [
+      {
+        path: 'menu',
+        name: 'CustomerMenu',
+        component: () => import('../views/customer/Menu.vue')
+      },
+      {
+        path: 'orders',
+        name: 'CustomerOrders',
+        component: () => import('../views/customer/Orders.vue')
+      },
+      {
+        path: '',
+        redirect: { name: 'CustomerMenu' }
+      }
+    ]
+  },
+  // 直接訪問 /menu 也會導向客戶點餐頁面
+  {
+    path: '/menu',
+    redirect: { name: 'CustomerMenu' }
+  },
+  {
+    path: '/orders',
+    redirect: { name: 'CustomerOrders' }
+  },
+
   // 根路由重定向
   {
     path: '/',
-    redirect: { name: 'MerchantLogin' }
+    redirect: { name: 'CustomerMenu' }
   }
 ]
 
