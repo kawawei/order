@@ -1,0 +1,218 @@
+/* 顧客訂單頁面樣式 - Customer Orders Page Styles */
+
+/* 主容器樣式 - Main Container Styles */
+.customer-orders {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+/* 標題區域樣式 - Header Section Styles */
+.orders-header {
+  margin-bottom: 32px;
+  text-align: center;
+}
+
+.orders-header h1 {
+  margin: 0 0 8px;
+  font-size: 2rem;
+  font-weight: 700;
+  color: #1d1d1f;
+}
+
+.subtitle {
+  margin: 0;
+  color: #666;
+  font-size: 1rem;
+}
+
+/* 訂單列表樣式 - Orders List Styles */
+.orders-list {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* 訂單卡片樣式 - Order Card Styles */
+.order-card {
+  overflow: visible;
+}
+
+.order-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 16px;
+}
+
+.order-info h3 {
+  margin: 0 0 4px;
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #1d1d1f;
+}
+
+.order-date {
+  margin: 0;
+  color: #666;
+  font-size: 0.875rem;
+}
+
+/* 訂單項目樣式 - Order Items Styles */
+.order-items {
+  margin-bottom: 16px;
+}
+
+.order-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: 8px 0;
+  border-bottom: 1px solid #f0f0f0;
+  gap: 12px;
+}
+
+.order-item:last-child {
+  border-bottom: none;
+}
+
+.item-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+}
+
+.item-name {
+  font-weight: 500;
+}
+
+.item-quantity {
+  color: #666;
+  font-size: 0.875rem;
+}
+
+.item-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  flex: 1;
+}
+
+.item-price {
+  font-weight: 600;
+  color: #007AFF;
+  flex-shrink: 0;
+}
+
+/* 訂單底部樣式 - Order Footer Styles */
+.order-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-top: 16px;
+  border-top: 1px solid #f0f0f0;
+}
+
+.order-total {
+  font-size: 1.125rem;
+}
+
+.order-actions {
+  display: flex;
+  gap: 8px;
+}
+
+/* 結帳按鈕樣式 - Checkout Button Styles */
+.checkout-button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  min-width: 200px;
+  justify-content: center;
+}
+
+.checkout-button svg {
+  font-size: 1.1rem;
+}
+
+/* 空狀態樣式 - Empty State Styles */
+.empty-state {
+  margin-top: 40px;
+}
+
+.empty-content {
+  text-align: center;
+  padding: 40px 20px;
+}
+
+.empty-icon {
+  font-size: 3rem;
+  color: #ccc;
+  margin-bottom: 16px;
+}
+
+.empty-content h3 {
+  margin: 0 0 8px;
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: #1d1d1f;
+}
+
+.empty-content p {
+  margin: 0 0 24px;
+  color: #666;
+  line-height: 1.5;
+}
+
+/* 手機版樣式調整 - Mobile Responsive Styles */
+@media (max-width: 768px) {
+  .customer-orders {
+    padding: 16px;
+  }
+
+  .orders-header h1 {
+    font-size: 1.5rem;
+  }
+
+  .checkout-button {
+    min-width: 100%;
+    font-size: 1rem;
+  }
+  
+  .order-header {
+    flex-direction: column;
+    gap: 12px;
+    align-items: stretch;
+  }
+
+  .order-footer {
+    flex-direction: column;
+    gap: 16px;
+    align-items: stretch;
+  }
+
+  .order-total {
+    text-align: center;
+    font-size: 1.25rem;
+  }
+
+  .order-item {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+  
+  .item-options {
+    margin: 4px 0;
+  }
+  
+  .item-price {
+    text-align: right;
+  }
+
+  .order-actions {
+    justify-content: center;
+  }
+}

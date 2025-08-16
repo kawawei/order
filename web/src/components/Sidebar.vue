@@ -20,6 +20,13 @@
         <span class="nav-text">菜單管理</span>
       </router-link>
 
+      <router-link to="/merchant/tables" class="nav-item">
+        <div class="icon-wrapper">
+          <font-awesome-icon icon="table" />
+        </div>
+        <span class="nav-text">桌次管理</span>
+      </router-link>
+
       <router-link to="/merchant/settings" class="nav-item">
         <div class="icon-wrapper">
           <font-awesome-icon icon="cog" />

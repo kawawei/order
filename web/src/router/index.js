@@ -37,6 +37,11 @@ const routes = [
         component: () => import('../views/merchant/menu/Menu.vue')
       },
       {
+        path: 'tables',
+        name: 'MerchantTables',
+        component: () => import('../views/merchant/tables/Tables.vue')
+      },
+      {
         path: 'settings',
         name: 'MerchantSettings',
         component: () => import('../views/merchant/settings/Settings.vue')
