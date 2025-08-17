@@ -32,5 +32,6 @@ import TopBar from '../components/TopBar.vue'
   padding: 2rem;
   background-color: #f5f5f7;
   overflow-y: auto;
+  height: calc(100vh - 60px);
 }
 </style>

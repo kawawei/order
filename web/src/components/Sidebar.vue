@@ -27,6 +27,13 @@
         <span class="nav-text">桌次管理</span>
       </router-link>
 
+      <router-link to="/merchant/orders" class="nav-item">
+        <div class="icon-wrapper">
+          <font-awesome-icon icon="receipt" />
+        </div>
+        <span class="nav-text">查看訂單</span>
+      </router-link>
+
       <router-link to="/merchant/settings" class="nav-item">
         <div class="icon-wrapper">
           <font-awesome-icon icon="cog" />

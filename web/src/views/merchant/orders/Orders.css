@@ -1,0 +1,463 @@
+.orders-container {
+  padding: 0;
+  background-color: #f8f9fa;
+  min-height: calc(100vh - 120px);
+  overflow-y: auto;
+}
+
+.orders-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 2rem;
+}
+
+.header-main h1 {
+  margin: 0 0 0.5rem 0;
+  font-size: 2rem;
+  font-weight: 600;
+  color: #1a1a1a;
+}
+
+.header-stats {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+}
+
+.header-actions {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.mr-1 {
+  margin-right: 0.25rem;
+}
+
+/* 標籤頁樣式 */
+.orders-tabs {
+  margin-bottom: 2rem;
+}
+
+.tabs-actions {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.time-filter {
+  padding: 0.5rem 1rem;
+  border: 1px solid #e6e6e6;
+  border-radius: 6px;
+  background: white;
+  font-size: 0.875rem;
+}
+
+/* 即時訂單監控樣式 */
+.live-orders-section > * + * {
+  margin-top: 2rem;
+}
+
+.live-stats {
+  margin-bottom: 2rem;
+}
+
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 2rem;
+}
+
+.stat-item {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.stat-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.25rem;
+  color: white;
+}
+
+.stat-icon.preparing {
+  background-color: #f59e0b;
+}
+
+.stat-icon.ready {
+  background-color: #10b981;
+}
+
+.stat-icon.delivered {
+  background-color: #6366f1;
+}
+
+.stat-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.stat-number {
+  font-size: 1.875rem;
+  font-weight: 700;
+  color: #1a1a1a;
+}
+
+.stat-label {
+  font-size: 0.875rem;
+  color: #6b7280;
+}
+
+/* 即時訂單網格 */
+.live-orders-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1.5rem;
+}
+
+.orders-column {
+  min-height: 400px;
+}
+
+.column-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 600;
+  color: white;
+  padding: 1rem;
+  margin: -16px -20px 16px -20px;
+}
+
+.column-header.preparing {
+  background-color: #f59e0b;
+}
+
+.column-header.ready {
+  background-color: #10b981;
+}
+
+.column-header.delivered {
+  background-color: #6366f1;
+}
+
+.orders-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.order-card {
+  padding: 1rem;
+  border-radius: 8px;
+  border-left: 4px solid #e6e6e6;
+  background: white;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.order-card.preparing {
+  border-left-color: #f59e0b;
+}
+
+.order-card.ready {
+  border-left-color: #10b981;
+}
+
+.order-card.delivered {
+  border-left-color: #6366f1;
+}
+
+.order-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 0.75rem;
+}
+
+.order-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.order-number {
+  font-weight: 600;
+  color: #1a1a1a;
+}
+
+.table-number {
+  font-size: 0.875rem;
+  color: #6b7280;
+}
+
+.order-time {
+  font-size: 0.75rem;
+  color: #9ca3af;
+}
+
+.order-items {
+  margin-bottom: 1rem;
+}
+
+.order-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.25rem 0;
+  font-size: 0.875rem;
+}
+
+.item-name {
+  color: #374151;
+}
+
+.item-quantity {
+  color: #6b7280;
+  font-weight: 500;
+}
+
+.order-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.order-total {
+  text-align: right;
+  font-weight: 600;
+  color: #1a1a1a;
+  padding-top: 0.5rem;
+  border-top: 1px solid #f3f4f6;
+}
+
+/* 歷史訂單樣式 */
+.history-orders-section > * + * {
+  margin-top: 2rem;
+}
+
+.history-stats {
+  margin-bottom: 2rem;
+}
+
+.card-header-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+}
+
+.card-header-content h3 {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+.header-filters {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+}
+
+.search-input {
+  padding: 0.5rem 1rem;
+  border: 1px solid #e6e6e6;
+  border-radius: 6px;
+  background: white;
+  font-size: 0.875rem;
+  width: 250px;
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 2rem;
+}
+
+.stat-icon.total {
+  background-color: #3b82f6;
+}
+
+.stat-icon.revenue {
+  background-color: #10b981;
+}
+
+.stat-icon.average {
+  background-color: #f59e0b;
+}
+
+.stat-icon.peak {
+  background-color: #8b5cf6;
+}
+
+.order-number-link {
+  color: #3b82f6;
+  cursor: pointer;
+  font-weight: 500;
+}
+
+.order-number-link:hover {
+  text-decoration: underline;
+}
+
+.amount {
+  font-weight: 600;
+  color: #059669;
+}
+
+/* 訂單詳情樣式 */
+.order-details > * + * {
+  margin-top: 2rem;
+}
+
+.order-basic-info {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1rem;
+  padding: 1.5rem;
+  background: #f8f9fa;
+  border-radius: 8px;
+}
+
+.info-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.label {
+  font-weight: 600;
+  color: #374151;
+  min-width: 80px;
+}
+
+.value {
+  color: #1a1a1a;
+}
+
+.order-items-detail h4 {
+  margin: 0 0 1rem 0;
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: #1a1a1a;
+}
+
+.items-list {
+  margin-bottom: 1.5rem;
+}
+
+.items-list > * + * {
+  margin-top: 0.75rem;
+}
+
+.item-detail {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 1rem;
+  align-items: center;
+  padding: 0.75rem;
+  background: #f8f9fa;
+  border-radius: 6px;
+}
+
+.item-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.item-name {
+  font-weight: 500;
+  color: #1a1a1a;
+}
+
+.item-price {
+  font-size: 0.875rem;
+  color: #6b7280;
+}
+
+.item-quantity {
+  font-weight: 500;
+  color: #374151;
+}
+
+.item-subtotal {
+  font-weight: 600;
+  color: #059669;
+  text-align: right;
+}
+
+.total-section {
+  border-top: 1px solid #e6e6e6;
+  padding-top: 1rem;
+}
+
+.total-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.5rem 0;
+}
+
+.total-row.final {
+  border-top: 1px solid #e6e6e6;
+  margin-top: 0.5rem;
+  padding-top: 1rem;
+  font-weight: 700;
+  font-size: 1.125rem;
+}
+
+.total-label {
+  color: #374151;
+}
+
+.total-value {
+  color: #1a1a1a;
+}
+
+.total-row.final .total-value {
+  color: #059669;
+}
+
+/* 響應式設計 */
+@media (max-width: 1024px) {
+  .live-orders-grid {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+  
+  .stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 768px) {
+  .orders-container {
+    padding: 1rem;
+  }
+  
+  .orders-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1rem;
+  }
+  
+  .header-stats {
+    flex-wrap: wrap;
+  }
+  
+  .stats-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .order-basic-info {
+    grid-template-columns: 1fr;
+  }
+  
+  .search-input {
+    width: 100%;
+  }
+}

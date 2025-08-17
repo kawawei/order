@@ -61,7 +61,10 @@ import {
   faTable,
   faQrcode,
   faCopy,
-  faDownload
+  faDownload,
+  faDollarSign,
+  faTruck,
+  faCheckCircle
 } from '@fortawesome/free-solid-svg-icons'
 
 /* Import Base Components */
@@ -119,7 +122,10 @@ library.add(
   faTable,
   faQrcode,
   faCopy,
-  faDownload
+  faDownload,
+  faDollarSign,
+  faTruck,
+  faCheckCircle
 )
 
 const app = createApp(App)
