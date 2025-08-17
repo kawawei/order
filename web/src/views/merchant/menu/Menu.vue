@@ -12,18 +12,18 @@
       <BaseTabs
         v-if="categories.length > 0"
         v-model="activeCategory"
-        :tabs="categories"
+        :tabs="categories.map(c => ({ name: c._id, label: c.label }))"
       >
         <BaseTab
           v-for="category in categories"
-          :key="category.name"
-          :name="category.name"
-          :is-active="activeCategory === category.name"
+          :key="category._id"
+          :name="category._id"
+          :is-active="activeCategory === category._id"
         >
           <div class="category-content">
             <div class="category-header">
               <h2>{{ category.label }}</h2>
-              <BaseButton variant="text" @click="handleAddMenuItem(category.name)">
+              <BaseButton variant="text" @click="handleAddMenuItem(category._id)">
                 <font-awesome-icon icon="plus" />
                 添加菜品
               </BaseButton>
@@ -31,12 +31,19 @@
             
             <!-- 菜品列表 -->
             <div class="menu-items">
+              <div v-if="loading" class="loading-state">
+                載入中...
+              </div>
+              <div v-else-if="menuItems[category._id]?.length === 0" class="empty-items">
+                <p>此分類還沒有菜品</p>
+              </div>
               <MenuItemCard
-                v-for="item in menuItems[category.name]"
-                :key="item.id"
+                v-else
+                v-for="item in menuItems[category._id]"
+                :key="item._id"
                 :item="item"
-                @edit="handleEditMenuItem(category.name, item)"
-                @delete="handleDeleteMenuItem(category.name, item)"
+                @edit="handleEditMenuItem(category._id, item)"
+                @delete="handleDeleteMenuItem(category._id, item)"
               />
             </div>
           </div>
@@ -58,13 +65,15 @@
       :categories="categories"
       @confirm="handleConfirmAddCategory"
     />
+    
+    <!-- 添加菜品對話框 -->
+    <AddMenuItemDialog
+      v-model="showAddMenuItemDialog"
+      :initial-category="currentCategory"
+      :editing-item="editingItem"
+      @confirm="handleConfirmAddMenuItem"
+    />
   </div>
-  <AddMenuItemDialog
-    v-model="showAddMenuItemDialog"
-    :initial-category="currentCategory"
-    :editing-item="editingItem"
-    @confirm="handleConfirmAddMenuItem"
-  />
 </template>
 
 <script setup>
@@ -78,6 +87,8 @@ const {
   categories,
   activeCategory,
   menuItems,
+  loading,
+  error,
   showAddCategoryDialog,
   showAddMenuItemDialog,
   currentCategory,

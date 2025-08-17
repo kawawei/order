@@ -10,29 +10,34 @@
       <div class="item-header">
         <h3>{{ item.name }}</h3>
         <div class="price">
-          NT$ {{ item.basePrice }}
+          NT$ {{ item.price || item.basePrice }}
         </div>
       </div>
 
       <!-- 選項列表 -->
-      <div class="item-options">
-        <template v-for="optionType in item.options" :key="optionType">
+      <div class="item-options" v-if="item.customOptions && item.customOptions.length > 0">
+        <template v-for="optionGroup in item.customOptions" :key="optionGroup.name">
           <div class="option-group">
-            <h4>{{ getOptionGroupLabel(optionType) }}</h4>
+            <h4>{{ optionGroup.name }}</h4>
             <div class="option-list">
               <BaseTag
-                v-for="option in getOptions(optionType)"
-                :key="option.name"
-                :variant="option.price ? 'price' : 'default'"
+                v-for="option in optionGroup.options"
+                :key="option.label"
+                :variant="option.price > 0 ? 'price' : 'default'"
               >
                 {{ option.label }}
-                <template v-if="option.price">
+                <template v-if="option.price > 0">
                   +{{ option.price }}
                 </template>
               </BaseTag>
             </div>
           </div>
         </template>
+      </div>
+      
+      <!-- 菜品描述 -->
+      <div class="item-description" v-if="item.description">
+        <p>{{ item.description }}</p>
       </div>
 
       <!-- 操作按鈕 -->
@@ -60,39 +65,7 @@ const props = defineProps({
 
 const emit = defineEmits(['edit', 'delete'])
 
-// 選項組標籤映射
-const optionGroupLabels = {
-  size: '份量',
-  extra: '加料',
-  sugar: '甜度'
-}
-
-// 獲取選項組標籤
-const getOptionGroupLabel = (type) => {
-  return optionGroupLabels[type] || type
-}
-
-// 獲取選項列表
-const getOptions = (type) => {
-  // 這裡暫時使用寫死的數據，之後可以改為從 props 或 store 中獲取
-  const defaultOptions = {
-    size: [
-      { name: 'large', label: '大份', price: 30 },
-      { name: 'small', label: '小份', price: 20 }
-    ],
-    extra: [
-      { name: 'extra_rice', label: '加飯', price: 10 },
-      { name: 'extra_noodles', label: '加麵', price: 10 }
-    ],
-    sugar: [
-      { name: 'normal', label: '正常' },
-      { name: 'half', label: '半糖' },
-      { name: 'less', label: '少糖' },
-      { name: 'no', label: '無糖' }
-    ]
-  }
-  return defaultOptions[type] || []
-}
+// 組件正在處理後端返回的数据结构，不再需要静态映射
 </script>
 
 <style scoped>

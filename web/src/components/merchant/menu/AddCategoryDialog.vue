@@ -12,7 +12,7 @@
         <div class="category-tags">
           <BaseTag
             v-for="category in categories"
-            :key="category.name"
+            :key="category._id"
           >
             {{ category.label }}
           </BaseTag>
@@ -88,7 +88,7 @@ const handleConfirm = () => {
   
   // 檢查是否重複
   const isDuplicate = props.categories.some(
-    category => category.label === name
+    category => category.label === name || category.name === name.toLowerCase().replace(/\s+/g, '-')
   )
   
   if (isDuplicate) {

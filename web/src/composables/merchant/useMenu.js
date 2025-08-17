@@ -1,4 +1,5 @@
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
+import { menuService } from '@/services/api'
 
 const defaultOptions = {
   size: [
@@ -18,124 +19,201 @@ const defaultOptions = {
 }
 
 export function useMenu() {
-  const menuItems = ref({
-    rice: [
-      {
-        id: 1,
-        name: '台式滷肉飯',
-        image: 'https://placehold.co/300x200/e6e6e6/1d1d1f?text=台式滷肉飯',
-        basePrice: 120,
-        options: ['size', 'extra']
-      },
-      {
-        id: 2,
-        name: '湯包蛋飯',
-        image: 'https://placehold.co/300x200/e6e6e6/1d1d1f?text=湯包蛋飯',
-        basePrice: 90,
-        options: ['size', 'extra']
-      },
-      {
-        id: 3,
-        name: '咖哩飯',
-        image: 'https://placehold.co/300x200/e6e6e6/1d1d1f?text=咖哩飯',
-        basePrice: 140,
-        options: ['size', 'extra']
-      },
-      {
-        id: 4,
-        name: '三寶飯',
-        image: 'https://placehold.co/300x200/e6e6e6/1d1d1f?text=三寶飯',
-        basePrice: 130,
-        options: ['size', 'extra']
-      }
-    ],
-    noodles: [
-      {
-        id: 5,
-        name: '紅燉牛肉麵',
-        image: 'https://placehold.co/300x200/e6e6e6/1d1d1f?text=紅燉牛肉麵',
-        basePrice: 150,
-        options: ['size', 'extra']
-      },
-      {
-        id: 6,
-        name: '海鮮炒麵',
-        image: 'https://placehold.co/300x200/e6e6e6/1d1d1f?text=海鮮炒麵',
-        basePrice: 160,
-        options: ['size', 'extra']
-      },
-      {
-        id: 7,
-        name: '豬排麵',
-        image: 'https://placehold.co/300x200/e6e6e6/1d1d1f?text=豬排麵',
-        basePrice: 140,
-        options: ['size', 'extra']
-      }
-    ],
-    drinks: [
-      {
-        id: 8,
-        name: '珍珠奶茶',
-        image: 'https://placehold.co/300x200/e6e6e6/1d1d1f?text=珍珠奶茶',
-        basePrice: 60,
-        options: ['sugar']
-      },
-      {
-        id: 9,
-        name: '四季青茶',
-        image: 'https://placehold.co/300x200/e6e6e6/1d1d1f?text=四季青茶',
-        basePrice: 45,
-        options: ['sugar']
-      },
-      {
-        id: 10,
-        name: '紅茶拉鈴',
-        image: 'https://placehold.co/300x200/e6e6e6/1d1d1f?text=紅茶拉鈴',
-        basePrice: 55,
-        options: ['sugar']
-      },
-      {
-        id: 11,
-        name: '檸檬綠茶',
-        image: 'https://placehold.co/300x200/e6e6e6/1d1d1f?text=檸檬綠茶',
-        basePrice: 50,
-        options: ['sugar']
-      }
-    ]
-  })
+  const categories = ref([])
+  const dishes = ref([])
+  const activeCategory = ref('')
+  const loading = ref(false)
+  const error = ref(null)
 
-  const categories = ref([
-    { name: 'rice', label: '飯類' },
-    { name: 'noodles', label: '麵類' },
-    { name: 'drinks', label: '飲料' }
-  ])
-  const activeCategory = ref('rice')
-
-  const addCategory = (category) => {
-    categories.value.push({
-      name: category.toLowerCase().replace(/\s+/g, '-'),
-      label: category
-    })
-    if (categories.value.length === 1) {
-      activeCategory.value = categories.value[0].name
+  // 加載分類
+  const loadCategories = async () => {
+    try {
+      loading.value = true
+      const response = await menuService.getCategories({ isActive: true })
+      if (response.status === 'success') {
+        categories.value = response.data.categories
+        if (categories.value.length > 0 && !activeCategory.value) {
+          activeCategory.value = categories.value[0]._id
+        }
+      }
+    } catch (err) {
+      console.error('加載分類失敗:', err)
+      error.value = '加載分類失敗'
+    } finally {
+      loading.value = false
     }
   }
 
-  const removeCategory = (categoryName) => {
-    const index = categories.value.findIndex(c => c.name === categoryName)
-    if (index !== -1) {
-      categories.value.splice(index, 1)
-      if (activeCategory.value === categoryName) {
-        activeCategory.value = categories.value[0]?.name || ''
+  // 加載菜品
+  const loadDishes = async (categoryId = null) => {
+    try {
+      loading.value = true
+      const params = { isActive: true }
+      if (categoryId) {
+        params.category = categoryId
       }
+      const response = await menuService.getDishes(params)
+      if (response.status === 'success') {
+        dishes.value = response.data.dishes
+      }
+    } catch (err) {
+      console.error('加載菜品失敗:', err)
+      error.value = '加載菜品失敗'
+    } finally {
+      loading.value = false
     }
+  }
+
+  // 創建分類
+  const addCategory = async (categoryData) => {
+    try {
+      const response = await menuService.createCategory(categoryData)
+      if (response.status === 'success') {
+        categories.value.push(response.data.category)
+        if (categories.value.length === 1) {
+          activeCategory.value = response.data.category._id
+        }
+        return response.data.category
+      }
+    } catch (err) {
+      console.error('創建分類失敗:', err)
+      throw new Error('創建分類失敗')
+    }
+  }
+
+  // 更新分類
+  const updateCategory = async (categoryId, categoryData) => {
+    try {
+      const response = await menuService.updateCategory(categoryId, categoryData)
+      if (response.status === 'success') {
+        const index = categories.value.findIndex(c => c._id === categoryId)
+        if (index !== -1) {
+          categories.value[index] = response.data.category
+        }
+        return response.data.category
+      }
+    } catch (err) {
+      console.error('更新分類失敗:', err)
+      throw new Error('更新分類失敗')
+    }
+  }
+
+  // 刪除分類
+  const removeCategory = async (categoryId) => {
+    try {
+      await menuService.deleteCategory(categoryId)
+      const index = categories.value.findIndex(c => c._id === categoryId)
+      if (index !== -1) {
+        categories.value.splice(index, 1)
+        if (activeCategory.value === categoryId) {
+          activeCategory.value = categories.value[0]?._id || ''
+        }
+      }
+    } catch (err) {
+      console.error('刪除分類失敗:', err)
+      throw new Error('刪除分類失敗')
+    }
+  }
+
+  // 創建菜品
+  const addDish = async (dishData) => {
+    try {
+      const response = await menuService.createDish(dishData)
+      if (response.status === 'success') {
+        dishes.value.push(response.data.dish)
+        return response.data.dish
+      }
+    } catch (err) {
+      console.error('創建菜品失敗:', err)
+      throw new Error('創建菜品失敗')
+    }
+  }
+
+  // 更新菜品
+  const updateDish = async (dishId, dishData) => {
+    try {
+      const response = await menuService.updateDish(dishId, dishData)
+      if (response.status === 'success') {
+        const index = dishes.value.findIndex(d => d._id === dishId)
+        if (index !== -1) {
+          dishes.value[index] = response.data.dish
+        }
+        return response.data.dish
+      }
+    } catch (err) {
+      console.error('更新菜品失敗:', err)
+      throw new Error('更新菜品失敗')
+    }
+  }
+
+  // 刪除菜品
+  const removeDish = async (dishId) => {
+    try {
+      await menuService.deleteDish(dishId)
+      const index = dishes.value.findIndex(d => d._id === dishId)
+      if (index !== -1) {
+        dishes.value.splice(index, 1)
+      }
+    } catch (err) {
+      console.error('刪除菜品失敗:', err)
+      throw new Error('刪除菜品失敗')
+    }
+  }
+
+  // 批量更新菜品
+  const batchUpdateDishes = async (dishIds, updateData) => {
+    try {
+      const response = await menuService.batchUpdateDishes(dishIds, updateData)
+      if (response.status === 'success') {
+        // 更新本地數據
+        response.data.dishes.forEach(updatedDish => {
+          const index = dishes.value.findIndex(d => d._id === updatedDish._id)
+          if (index !== -1) {
+            dishes.value[index] = updatedDish
+          }
+        })
+        return response.data.dishes
+      }
+    } catch (err) {
+      console.error('批量更新菜品失敗:', err)
+      throw new Error('批量更新菜品失敗')
+    }
+  }
+
+  // 獲取當前分類的菜品
+  const getCurrentCategoryDishes = () => {
+    if (!activeCategory.value) return []
+    return dishes.value.filter(dish => dish.category._id === activeCategory.value)
+  }
+
+  // 初始化數據
+  const initializeData = async () => {
+    await loadCategories()
+    await loadDishes()
   }
 
   return {
+    // 響應式數據
     categories,
+    dishes,
     activeCategory,
+    loading,
+    error,
+    
+    // 方法
+    loadCategories,
+    loadDishes,
     addCategory,
+    updateCategory,
     removeCategory,
-    menuItems
+    addDish,
+    updateDish,
+    removeDish,
+    batchUpdateDishes,
+    getCurrentCategoryDishes,
+    initializeData,
+    
+    // 默認選項
+    defaultOptions
   }
 }

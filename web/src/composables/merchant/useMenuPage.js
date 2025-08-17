@@ -1,17 +1,32 @@
-import { ref } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useMenu } from './useMenu'
-
-const generateId = () => {
-  return Math.floor(Math.random() * 10000)
-}
 
 export function useMenuPage() {
   const {
     categories,
+    dishes,
     activeCategory,
+    loading,
+    error,
+    loadCategories,
+    loadDishes,
     addCategory,
-    menuItems
+    addDish,
+    updateDish,
+    removeDish,
+    initializeData
   } = useMenu()
+
+  // 根據分類組織菜品數據
+  const menuItems = computed(() => {
+    const organized = {}
+    categories.value.forEach(category => {
+      organized[category._id] = dishes.value.filter(dish => 
+        dish.category && dish.category._id === category._id
+      )
+    })
+    return organized
+  })
 
   // 對話框控制
   const showAddCategoryDialog = ref(false)
@@ -20,79 +35,98 @@ export function useMenuPage() {
     showAddCategoryDialog.value = true
   }
 
-  const handleConfirmAddCategory = (categoryName) => {
-    addCategory(categoryName)
+  const handleConfirmAddCategory = async (categoryName) => {
+    try {
+      // 創建分類數據對象
+      const categoryData = {
+        name: categoryName.toLowerCase().replace(/\s+/g, '-'),
+        label: categoryName,
+        description: `${categoryName}類別菜品`
+      }
+      await addCategory(categoryData)
+      showAddCategoryDialog.value = false
+    } catch (err) {
+      console.error('創建分類失敗:', err)
+      // 可以添加錯誤提示
+    }
   }
 
   const showAddMenuItemDialog = ref(false)
-  const currentCategory = ref('rice')
+  const currentCategory = ref('')
+  const editingItem = ref(null)
 
-  const handleAddMenuItem = (categoryName) => {
-    currentCategory.value = categoryName
+  const handleAddMenuItem = (categoryId) => {
+    currentCategory.value = categoryId
+    editingItem.value = null
     showAddMenuItemDialog.value = true
   }
 
-  const handleConfirmAddMenuItem = (menuItem) => {
-    if (menuItems.value[currentCategory.value]) {
+  const handleConfirmAddMenuItem = async (menuItem) => {
+    try {
+      // 準備菜品數據
+      const dishData = {
+        name: menuItem.name,
+        price: Number(menuItem.basePrice),
+        category: currentCategory.value,
+        description: menuItem.description || '',
+        image: menuItem.image || '',
+        customOptions: menuItem.options || [],
+        isActive: true
+      }
+
       if (editingItem.value) {
         // 編輯現有菜品
-        const index = menuItems.value[currentCategory.value].findIndex(i => i.id === editingItem.value.id)
-        if (index !== -1) {
-          menuItems.value[currentCategory.value][index] = {
-            ...editingItem.value,
-            name: menuItem.name,
-            image: menuItem.image,
-            basePrice: Number(menuItem.basePrice),
-            options: menuItem.options
-          }
-        }
+        await updateDish(editingItem.value._id, dishData)
       } else {
-        // 添加新的菜品
-        menuItems.value[currentCategory.value].push({
-          id: generateId(),
-          name: menuItem.name,
-          image: menuItem.image,
-          basePrice: Number(menuItem.basePrice),
-          options: menuItem.options
-        })
+        // 添加新菜品
+        await addDish(dishData)
       }
+      
+      editingItem.value = null
+      showAddMenuItemDialog.value = false
+    } catch (err) {
+      console.error('保存菜品失敗:', err)
+      // 可以添加錯誤提示
     }
-    editingItem.value = null
-    showAddMenuItemDialog.value = false
   }
 
-  const editingItem = ref(null)
-
   // 編輯菜品
-  const handleEditMenuItem = (categoryName, item) => {
-    currentCategory.value = categoryName
+  const handleEditMenuItem = (categoryId, item) => {
+    currentCategory.value = categoryId
     editingItem.value = item
     showAddMenuItemDialog.value = true
   }
 
   // 刪除菜品
-  const handleDeleteMenuItem = (categoryName, item) => {
-    if (menuItems.value[categoryName]) {
-      const index = menuItems.value[categoryName].findIndex(i => i.id === item.id)
-      if (index !== -1) {
-        menuItems.value[categoryName].splice(index, 1)
-      }
+  const handleDeleteMenuItem = async (categoryId, item) => {
+    try {
+      await removeDish(item._id)
+    } catch (err) {
+      console.error('刪除菜品失敗:', err)
+      // 可以添加錯誤提示
     }
   }
+
+  // 初始化數據
+  onMounted(() => {
+    initializeData()
+  })
 
   return {
     categories,
     activeCategory,
     menuItems,
+    loading,
+    error,
     showAddCategoryDialog,
     showAddMenuItemDialog,
+    currentCategory,
+    editingItem,
     handleAddCategory,
     handleConfirmAddCategory,
     handleAddMenuItem,
     handleConfirmAddMenuItem,
     handleEditMenuItem,
-    handleDeleteMenuItem,
-    currentCategory,
-    editingItem
+    handleDeleteMenuItem
   }
 }

@@ -1,7 +1,7 @@
 <template>
   <BaseDialog
     v-model="dialogVisible"
-    :title="`${props.editingItem ? '編輯' : '添加'}${form.category === 'rice' ? '飯類' : form.category === 'noodles' ? '麵類' : '飲料'}菜品`"
+    :title="`${props.editingItem ? '編輯' : '添加'}菜品`"
   >
 
     <div class="add-menu-item-form">
@@ -17,12 +17,8 @@
           <input type="number" v-model="form.basePrice" placeholder="請輸入基本售價" />
         </div>
         <div class="form-group">
-          <label>分類</label>
-          <select v-model="form.category">
-            <option value="rice">飯類</option>
-            <option value="noodles">麵類</option>
-            <option value="drinks">飲料</option>
-          </select>
+          <label>描述</label>
+          <textarea v-model="form.description" placeholder="請輸入菜品描述（可選）" rows="2"></textarea>
         </div>
       </div>
 
@@ -167,7 +163,7 @@ const fileInput = ref(null)
 const form = ref({
   name: '',
   basePrice: '',
-  category: '',
+  description: '',
   image: '',
   options: []
 })
@@ -198,33 +194,39 @@ const addOption = () => {
   })
 }
 
-// 監聽 initialCategory 的變化
-watch(() => props.initialCategory, (newCategory) => {
-  form.value.category = newCategory
-}, { immediate: true })
+// 當前分類不需要在表單中選擇，由父組件傳入
 
 // 監聽編輯的菜品數據
 watch(() => props.editingItem, (item) => {
   if (item) {
+    // 將後端的 customOptions 轉換為前端期望的格式
+    const transformedOptions = (item.customOptions || []).map(option => ({
+      name: option.name,
+      priceEnabled: option.options && option.options.some(opt => opt.price > 0),
+      choices: option.options ? option.options.map(opt => ({
+        label: opt.label,
+        price: opt.price || 0
+      })) : []
+    }))
+
     form.value = {
       name: item.name,
-      basePrice: item.basePrice,
-      category: item.category || props.initialCategory,
-      image: item.image,
-      options: item.options || []
+      basePrice: item.price || item.basePrice,
+      description: item.description || '',
+      image: item.image || '',
+      options: transformedOptions
     }
   }
 }, { immediate: true })
 
 const isValid = computed(() => {
   return form.value.name && 
-         form.value.basePrice && 
-         form.value.category &&
-         form.value.image &&
+         form.value.basePrice &&
          form.value.options.every(option => 
            option.name && 
-           option.choices.length > 0 &&
-           option.choices.every(choice => choice.label)
+           (!option.choices || option.choices.length === 0 || 
+            (option.choices.length > 0 && option.choices.every(choice => choice.label))
+           )
          )
 })
 
@@ -247,7 +249,7 @@ const resetForm = () => {
   form.value = {
     name: '',
     basePrice: '',
-    category: props.initialCategory,
+    description: '',
     image: '',
     options: []
   }
@@ -255,21 +257,23 @@ const resetForm = () => {
 
 const handleConfirm = () => {
   if (isValid.value) {
-    // 清理選項數據，移除空的價格
-    const cleanedOptions = form.value.options.map(option => ({
-      ...option,
-      choices: option.choices.map(choice => {
-        if (!option.priceEnabled) {
-          const { price, ...rest } = choice
-          return rest
-        }
-        return choice
-      })
+    // 轉換選項數據為後端期望的格式
+    const transformedOptions = form.value.options.map(option => ({
+      name: option.name,
+      type: 'checkbox', // 默認類型
+      required: false,   // 默認非必需
+      options: option.choices ? option.choices
+        .filter(choice => choice.label) // 過濾掉空的選項
+        .map(choice => ({
+          label: choice.label,
+          value: choice.label, // 使用 label 作為 value
+          price: option.priceEnabled ? (choice.price || 0) : 0
+        })) : []
     }))
 
     emit('confirm', { 
       ...form.value,
-      options: cleanedOptions
+      options: transformedOptions
     })
 
     dialogVisible.value = false
@@ -313,6 +317,7 @@ watch(dialogVisible, (newValue) => {
 
 input[type="text"],
 input[type="number"],
+textarea,
 select {
   width: 100%;
   padding: 0.5rem;

@@ -7,6 +7,7 @@ const AppError = require('./utils/appError');
 const authRoutes = require('./routes/authRoutes');
 const adminRoutes = require('./routes/adminRoutes');
 const tableRoutes = require('./routes/tableRoutes');
+const menuRoutes = require('./routes/menuRoutes');
 
 // 配置 CORS 選項
 const corsOptions = {
@@ -31,6 +32,7 @@ app.use(morgan('dev'));
 app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/admin', adminRoutes);
 app.use('/api/v1/tables', tableRoutes);
+app.use('/api/v1/menu', menuRoutes);
 
 // 處理未找到的路由
 app.all('*', (req, res, next) => {

@@ -1,5 +1,6 @@
 // Customer Menu Script - 客戶菜單腳本
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
+import { menuService } from '@/services/api'
 
 export default {
   setup() {
@@ -14,57 +15,19 @@ export default {
       tableNumber: null
     })
 
-    // 分類數據 - Category Data
-    const categories = ref([
-      { id: 'all', name: '全部' },
-      { id: 'main', name: '主餐' },
-      { id: 'side', name: '小菜' },
-      { id: 'drink', name: '飲品' },
-      { id: 'dessert', name: '甜點' }
-    ])
+    // 分類數據 - Category Data  
+    const categories = ref([])
+    const allMenuData = ref([]) // 完整的菜單數據（包含分類和菜品）
 
     // 選中的分類 - Selected Category
     const selectedCategory = ref('all')
 
     // 菜單項目 - Menu Items
-    const menuItems = ref([
-      {
-        id: 1,
-        name: '紅燒牛肉麵',
-        description: '精選牛肉慢燉，湯頭濃郁，麵條Q彈',
-        basePrice: 180,
-        category: 'main',
-        image: null,
-        options: ['size', 'extra']
-      },
-      {
-        id: 2,
-        name: '宮保雞丁',
-        description: '經典川菜，香辣下飯',
-        basePrice: 120,
-        category: 'main',
-        image: null,
-        options: ['extra']
-      },
-      {
-        id: 3,
-        name: '涼拌小黃瓜',
-        description: '清爽開胃，夏日首選',
-        basePrice: 60,
-        category: 'side',
-        image: null,
-        options: []
-      },
-      {
-        id: 4,
-        name: '珍珠奶茶',
-        description: '香濃奶茶配上Q彈珍珠',
-        basePrice: 45,
-        category: 'drink',
-        image: null,
-        options: ['size', 'sugar', 'ice']
-      }
-    ])
+    const menuItems = ref([])
+
+    // 加載狀態
+    const loading = ref(true)
+    const error = ref(null)
 
     // 購物車 - Shopping Cart
     const cartItems = ref([])
@@ -113,7 +76,10 @@ export default {
       if (selectedCategory.value === 'all') {
         return menuItems.value
       }
-      return menuItems.value.filter(item => item.category === selectedCategory.value)
+      
+      // 根據分類ID篩選菜品
+      const selectedCategoryData = allMenuData.value.find(cat => cat._id === selectedCategory.value)
+      return selectedCategoryData ? selectedCategoryData.dishes : []
     })
 
     const cartTotal = computed(() => {
@@ -284,6 +250,153 @@ export default {
       }
     }
 
+    // 獲取商家ID
+    const getMerchantId = () => {
+      try {
+        const storedTableInfo = sessionStorage.getItem('currentTable')
+        if (storedTableInfo) {
+          const tableData = JSON.parse(storedTableInfo)
+          return tableData.merchant?._id || tableData.merchant?.id
+        }
+      } catch (error) {
+        console.error('獲取商家ID失敗:', error)
+      }
+      return null
+    }
+
+    // 獲取菜單數據
+    const loadMenuData = async () => {
+      try {
+        loading.value = true
+        error.value = null
+        
+        const merchantId = getMerchantId()
+        if (!merchantId) {
+          throw new Error('無法獲取商家信息')
+        }
+
+        const response = await menuService.getPublicMenu(merchantId)
+        
+        if (response.status === 'success' && response.data?.menu) {
+          allMenuData.value = response.data.menu
+          
+          // 構建分類列表（包含"全部"選項）
+          categories.value = [
+            { _id: 'all', name: 'all', label: '全部' },
+            ...response.data.menu.map(category => ({
+              _id: category._id,
+              name: category.name,
+              label: category.label || category.name
+            }))
+          ]
+          
+          // 構建所有菜品列表（用於"全部"分類）
+          menuItems.value = response.data.menu.reduce((allDishes, category) => {
+            const dishesWithCategory = category.dishes.map(dish => ({
+              ...dish,
+              id: dish._id,
+              basePrice: dish.price,
+              category: category._id,
+              // 轉換自定義選項格式
+              options: dish.customOptions?.map(opt => opt.name) || []
+            }))
+            return allDishes.concat(dishesWithCategory)
+          }, [])
+          
+          console.log('菜單數據加載成功:', response.data.menu)
+        } else {
+          throw new Error('菜單數據格式錯誤')
+        }
+      } catch (err) {
+        console.error('加載菜單失敗:', err)
+        error.value = err.message || '無法加載菜單，請稍後再試'
+        
+        // 如果API失敗，使用默認菜單數據
+        loadDefaultMenu()
+      } finally {
+        loading.value = false
+      }
+    }
+
+    // 加載默認菜單（備用方案）
+    const loadDefaultMenu = () => {
+      categories.value = [
+        { _id: 'all', name: 'all', label: '全部' },
+        { _id: 'main', name: 'main', label: '主餐' },
+        { _id: 'side', name: 'side', label: '小菜' },
+        { _id: 'drink', name: 'drink', label: '飲品' },
+        { _id: 'dessert', name: 'dessert', label: '甜點' }
+      ]
+
+      menuItems.value = [
+        {
+          id: 1,
+          _id: '1',
+          name: '紅燒牛肉麵',
+          description: '精選牛肉慢燉，湯頭濃郁，麵條Q彈',
+          price: 180,
+          basePrice: 180,
+          category: 'main',
+          image: null,
+          options: ['size', 'extra']
+        },
+        {
+          id: 2,
+          _id: '2',
+          name: '宮保雞丁',
+          description: '經典川菜，香辣下飯',
+          price: 120,
+          basePrice: 120,
+          category: 'main',
+          image: null,
+          options: ['extra']
+        },
+        {
+          id: 3,
+          _id: '3',
+          name: '涼拌小黃瓜',
+          description: '清爽開胃，夏日首選',
+          price: 60,
+          basePrice: 60,
+          category: 'side',
+          image: null,
+          options: []
+        },
+        {
+          id: 4,
+          _id: '4',
+          name: '珍珠奶茶',
+          description: '香濃奶茶配上Q彈珍珠',
+          price: 45,
+          basePrice: 45,
+          category: 'drink',
+          image: null,
+          options: ['size', 'sugar', 'ice']
+        }
+      ]
+
+      allMenuData.value = [
+        {
+          _id: 'main',
+          name: 'main',
+          label: '主餐',
+          dishes: menuItems.value.filter(item => item.category === 'main')
+        },
+        {
+          _id: 'side',
+          name: 'side',
+          label: '小菜',
+          dishes: menuItems.value.filter(item => item.category === 'side')
+        },
+        {
+          _id: 'drink',
+          name: 'drink',
+          label: '飲品',
+          dishes: menuItems.value.filter(item => item.category === 'drink')
+        }
+      ]
+    }
+
     // 初始化桌號 - Initialize Table Number
     const initializeTable = () => {
       // 首先檢查 sessionStorage 中是否有桌次資訊（來自 QR Code 掃描）
@@ -305,7 +418,7 @@ export default {
             restaurantInfo.value.businessHours = tableData.merchant.businessHours
           }
           
-          return // 如果有 sessionStorage 資料，就不需要檢查 URL 參數
+          return tableData.merchant?._id || tableData.merchant?.id // 返回商家ID
         }
       } catch (error) {
         console.error('解析 sessionStorage 中的桌次資訊失敗:', error)
@@ -318,11 +431,15 @@ export default {
       if (tableFromUrl) {
         tableInfo.value.tableNumber = parseInt(tableFromUrl)
       }
-      // 如果URL沒有桌號參數，保持為null（不顯示桌號）
+      
+      return null
     }
 
-    // 在組件掛載時初始化桌號
-    initializeTable()
+    // 在組件掛載時初始化
+    onMounted(async () => {
+      initializeTable()
+      await loadMenuData()
+    })
 
     // 返回所有需要的數據和方法 - Return all required data and methods
     return {
@@ -332,11 +449,14 @@ export default {
       categories,
       selectedCategory,
       menuItems,
+      allMenuData,
       cartItems,
       showCart,
       showOptionsDialog,
       selectedItem,
       selectedOptions,
+      loading,
+      error,
       
       // Computed - 計算屬性
       filteredMenuItems,
@@ -353,7 +473,8 @@ export default {
       orderItem,
       addConfiguredItemToCart,
       updateQuantity,
-      proceedToCheckout
+      proceedToCheckout,
+      loadMenuData
     }
   }
 }

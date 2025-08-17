@@ -102,4 +102,41 @@ export const tableAPI = {
   regenerateQRCode: (tableId) => api.post(`/tables/${tableId}/regenerate-qr`),
 };
 
+export const menuAPI = {
+  // 分類相關
+  getCategories: (params = {}) => api.get('/menu/categories', { params }),
+  createCategory: (data) => api.post('/menu/categories', data),
+  updateCategory: (categoryId, data) => api.patch(`/menu/categories/${categoryId}`, data),
+  deleteCategory: (categoryId) => api.delete(`/menu/categories/${categoryId}`),
+  
+  // 菜品相關
+  getDishes: (params = {}) => api.get('/menu/dishes', { params }),
+  createDish: (data) => api.post('/menu/dishes', data),
+  updateDish: (dishId, data) => api.put(`/menu/dishes/${dishId}`, data),
+  deleteDish: (dishId) => api.delete(`/menu/dishes/${dishId}`),
+  
+  // 菜單相關
+  getMenu: (params = {}) => api.get('/menu', { params }),
+  updateMenuStructure: (data) => api.put('/menu/structure', data),
+};
+
+// 為了向後兼容，創建 menuService 對象
+export const menuService = {
+  // 分類相關方法
+  getCategories: menuAPI.getCategories,
+  createCategory: menuAPI.createCategory,
+  updateCategory: menuAPI.updateCategory,
+  deleteCategory: menuAPI.deleteCategory,
+  
+  // 菜品相關方法  
+  getDishes: menuAPI.getDishes,
+  createDish: menuAPI.createDish,
+  updateDish: menuAPI.updateDish,
+  deleteDish: menuAPI.deleteDish,
+  
+  // 菜單相關方法
+  getMenu: menuAPI.getMenu,
+  updateMenuStructure: menuAPI.updateMenuStructure,
+};
+
 export default api;
