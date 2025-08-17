@@ -1,6 +1,6 @@
 // Customer Menu Script - 客戶菜單腳本
 import { ref, computed, onMounted, watch } from 'vue'
-import { menuService } from '@/services/api'
+import { menuService, orderService } from '@/services/api'
 
 export default {
   setup() {
@@ -216,43 +216,60 @@ export default {
       }
     }
 
-    const proceedToCheckout = () => {
+    const proceedToCheckout = async () => {
       if (cartItems.value.length === 0) {
         alert('購物車是空的')
         return
       }
 
-      // 創建訂單對象
-      const order = {
-        id: Date.now().toString(),
-        status: 'pending',
-        createdAt: new Date(),
-        tableNumber: tableInfo.value.tableNumber,
-        totalAmount: cartTotal.value,
-        items: cartItems.value.map(item => ({
-          id: item.id,
-          name: item.name,
-          quantity: item.quantity,
-          totalPrice: item.totalPrice,
-          selectedOptions: item.selectedOptions
-        }))
-      }
-
-      // 將訂單保存到 localStorage
       try {
-        localStorage.setItem('currentOrder', JSON.stringify(order))
+        // 獲取桌子資訊
+        const storedTableInfo = sessionStorage.getItem('currentTable')
+        if (!storedTableInfo) {
+          alert('找不到桌子資訊，請重新掃描QR碼')
+          return
+        }
+
+        const tableData = JSON.parse(storedTableInfo)
         
-        // 清空購物車
-        cartItems.value = []
-        showCart.value = false
+        // 準備訂單數據
+        const orderData = {
+          tableId: tableData.id,
+          items: cartItems.value.map(item => ({
+            dishId: item.id,
+            quantity: item.quantity,
+            selectedOptions: item.selectedOptions || {},
+            notes: item.notes || ''
+          })),
+          customerNotes: ''
+        }
+
+        console.log('提交訂單數據:', orderData)
+
+        // 調用後端API創建訂單
+        const response = await orderService.createOrder(orderData)
         
-        // 顯示成功消息
-        alert(`點餐成功！\n總金額：NT$ ${order.totalAmount}\n您可以在點餐紀錄中查看詳細內容`)
+        if (response.status === 'success') {
+          const order = response.data.order
+          
+          // 將訂單保存到 localStorage 以供點餐紀錄查看
+          localStorage.setItem('currentOrder', JSON.stringify(order))
+          
+          // 清空購物車
+          cartItems.value = []
+          showCart.value = false
+          
+          // 顯示成功消息
+          alert(`點餐成功！\n訂單編號：${order.orderNumber}\n總金額：NT$ ${order.totalAmount}\n您可以在點餐紀錄中查看詳細內容`)
+          
+          console.log('訂單已創建:', order)
+        } else {
+          throw new Error('訂單創建失敗')
+        }
         
-        console.log('訂單已創建:', order)
       } catch (error) {
-        console.error('保存訂單失敗:', error)
-        alert('訂單保存失敗，請重試')
+        console.error('提交訂單失敗:', error)
+        alert(`訂單提交失敗：${error.message || '請重試'}`)
       }
     }
 

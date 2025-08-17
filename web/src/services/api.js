@@ -124,6 +124,29 @@ export const menuAPI = {
 };
 
 // 為了向後兼容，創建 menuService 對象
+export const orderAPI = {
+  // 創建訂單
+  createOrder: (data) => api.post('/orders', data),
+  
+  // 獲取訂單詳情
+  getOrder: (orderId) => api.get(`/orders/${orderId}`),
+  
+  // 根據桌子獲取訂單列表
+  getOrdersByTable: (tableId, params = {}) => api.get(`/orders/table/${tableId}`, { params }),
+  
+  // 根據商家獲取訂單列表（後台用）
+  getOrdersByMerchant: (merchantId, params = {}) => api.get(`/orders/merchant/${merchantId}`, { params }),
+  
+  // 更新訂單狀態
+  updateOrderStatus: (orderId, data) => api.patch(`/orders/${orderId}/status`, data),
+  
+  // 取消訂單
+  cancelOrder: (orderId) => api.patch(`/orders/${orderId}/cancel`),
+  
+  // 獲取訂單統計
+  getOrderStats: (merchantId, params = {}) => api.get(`/orders/merchant/${merchantId}/stats`, { params }),
+};
+
 export const menuService = {
   // 分類相關方法
   getCategories: menuAPI.getCategories,
@@ -143,6 +166,17 @@ export const menuService = {
   
   // 客戶端公開菜單
   getPublicMenu: menuAPI.getPublicMenu,
+};
+
+// 為了向後兼容，創建 orderService 對象
+export const orderService = {
+  createOrder: orderAPI.createOrder,
+  getOrder: orderAPI.getOrder,
+  getOrdersByTable: orderAPI.getOrdersByTable,
+  getOrdersByMerchant: orderAPI.getOrdersByMerchant,
+  updateOrderStatus: orderAPI.updateOrderStatus,
+  cancelOrder: orderAPI.cancelOrder,
+  getOrderStats: orderAPI.getOrderStats,
 };
 
 export default api;
