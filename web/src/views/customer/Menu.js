@@ -286,7 +286,32 @@ export default {
 
     // 初始化桌號 - Initialize Table Number
     const initializeTable = () => {
-      // 從 URL 參數獲取桌號
+      // 首先檢查 sessionStorage 中是否有桌次資訊（來自 QR Code 掃描）
+      try {
+        const storedTableInfo = sessionStorage.getItem('currentTable')
+        if (storedTableInfo) {
+          const tableData = JSON.parse(storedTableInfo)
+          tableInfo.value.tableNumber = tableData.tableNumber
+          tableInfo.value.tableName = tableData.tableName || null
+          tableInfo.value.capacity = tableData.capacity
+          tableInfo.value.uniqueCode = tableData.uniqueCode
+          
+          // 更新餐廳資訊
+          if (tableData.merchant) {
+            restaurantInfo.value.name = tableData.merchant.businessName || '餐廳'
+            restaurantInfo.value.description = `${tableData.merchant.businessType || ''}` + 
+              (tableData.merchant.address ? ` | ${tableData.merchant.address}` : '')
+            restaurantInfo.value.phone = tableData.merchant.phone
+            restaurantInfo.value.businessHours = tableData.merchant.businessHours
+          }
+          
+          return // 如果有 sessionStorage 資料，就不需要檢查 URL 參數
+        }
+      } catch (error) {
+        console.error('解析 sessionStorage 中的桌次資訊失敗:', error)
+      }
+      
+      // 如果沒有 sessionStorage 資料，則從 URL 參數獲取桌號（兼容性處理）
       const urlParams = new URLSearchParams(window.location.search)
       const tableFromUrl = urlParams.get('table')
       

@@ -10,8 +10,14 @@
       <!-- 桌號顯示 -->
       <div class="table-info" v-if="tableInfo.tableNumber">
         <div class="table-display">
-          <span class="table-label">桌號</span>
-          <span class="table-number">{{ tableInfo.tableNumber }}</span>
+          <div class="table-main">
+            <span class="table-label">桌號</span>
+            <span class="table-number">{{ tableInfo.tableNumber }}</span>
+          </div>
+          <div class="table-details" v-if="tableInfo.tableName || tableInfo.capacity">
+            <span v-if="tableInfo.tableName" class="table-name">{{ tableInfo.tableName }}</span>
+            <span v-if="tableInfo.capacity" class="table-capacity">{{ tableInfo.capacity }}人桌</span>
+          </div>
         </div>
       </div>
       

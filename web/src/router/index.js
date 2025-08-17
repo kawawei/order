@@ -87,6 +87,14 @@ const routes = [
     ]
   },
 
+  // 桌次 QR Code 連結路由
+  {
+    path: '/table/:code',
+    name: 'TableAccess',
+    component: () => import('../views/customer/TableAccess.vue'),
+    meta: { requiresTableCode: true }
+  },
+
   // 客戶端路由（不需要登入）
   {
     path: '/customer',

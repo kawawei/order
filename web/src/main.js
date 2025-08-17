@@ -58,7 +58,10 @@ import {
   faShoppingCart,
   faChevronDown,
   faMinus,
-  faTable
+  faTable,
+  faQrcode,
+  faCopy,
+  faDownload
 } from '@fortawesome/free-solid-svg-icons'
 
 /* Import Base Components */
@@ -113,7 +116,10 @@ library.add(
   faShoppingCart,
   faChevronDown,
   faMinus,
-  faTable
+  faTable,
+  faQrcode,
+  faCopy,
+  faDownload
 )
 
 const app = createApp(App)
