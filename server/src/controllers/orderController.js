@@ -25,11 +25,8 @@ exports.createOrder = catchAsync(async (req, res, next) => {
     return next(new AppError('桌子狀態不正確', 400));
   }
 
-  // 檢查是否已有未結帳的訂單
-  let existingOrder = await Order.findOne({
-    tableId: table._id,
-    status: { $in: ['pending', 'confirmed', 'preparing', 'ready'] }
-  }).sort({ createdAt: -1 });
+  // 獲取下一個批次號碼
+  const nextBatchNumber = await Order.getNextBatchNumber(table._id);
 
   // 驗證商品並計算價格
   const validatedItems = [];
@@ -95,110 +92,53 @@ exports.createOrder = catchAsync(async (req, res, next) => {
     });
   }
 
+  // 創建新的批次訂單（帶重試機制）
   let order;
-
-  if (existingOrder) {
-    // 如果存在未結帳的訂單，累積商品
-    const updatedItems = [...existingOrder.items];
-    
-    // 將新商品加入現有訂單
-    for (const newItem of validatedItems) {
-      // 檢查是否已存在相同商品和選項的項目
-      const existingItemIndex = updatedItems.findIndex(existingItem => {
-        // 比較 dishId
-        if (!existingItem.dishId.equals(newItem.dishId)) {
-          return false;
-        }
-        
-        // 比較選項
-        const existingOptions = existingItem.selectedOptions || new Map();
-        const newOptions = newItem.selectedOptions || new Map();
-        
-        // 將 Map 轉換為可比較的格式
-        const existingOptionsObj = existingOptions instanceof Map ? 
-          Object.fromEntries(existingOptions) : existingOptions;
-        const newOptionsObj = newOptions instanceof Map ? 
-          Object.fromEntries(newOptions) : newOptions;
-        
-        // 比較選項內容
-        const existingOptionsStr = JSON.stringify(existingOptionsObj);
-        const newOptionsStr = JSON.stringify(newOptionsObj);
-        
-        // 比較備註
-        const existingNotes = existingItem.notes || '';
-        const newNotes = newItem.notes || '';
-        
-        return existingOptionsStr === newOptionsStr && existingNotes === newNotes;
-      });
+  let attempts = 0;
+  const maxAttempts = 3;
+  
+  while (attempts < maxAttempts) {
+    try {
+      const orderNumber = await Order.generateOrderNumber();
       
-      if (existingItemIndex !== -1) {
-        // 如果找到相同的項目，增加數量
-        updatedItems[existingItemIndex].quantity += newItem.quantity;
-        updatedItems[existingItemIndex].totalPrice += newItem.totalPrice;
-      } else {
-        // 如果沒找到相同項目，新增
-        updatedItems.push(newItem);
-      }
-    }
-    
-    // 重新計算總金額
-    const newTotalAmount = updatedItems.reduce((total, item) => total + item.totalPrice, 0);
-    
-    // 更新現有訂單
-    existingOrder.items = updatedItems;
-    existingOrder.totalAmount = newTotalAmount;
-    existingOrder.customerNotes = customerNotes || existingOrder.customerNotes;
-    existingOrder.updatedAt = new Date();
-    
-    await existingOrder.save();
-    order = existingOrder;
-    
-  } else {
-    // 如果沒有現有訂單，創建新訂單（帶重試機制）
-    let attempts = 0;
-    const maxAttempts = 3;
-    
-    while (attempts < maxAttempts) {
-      try {
-        const orderNumber = await Order.generateOrderNumber();
-        
-        // 創建訂單
-        order = new Order({
-          orderNumber,
-          tableId: table._id,
-          tableNumber: table.tableNumber,
-          merchantId: table.merchant._id,
-          items: validatedItems,
-          totalAmount,
-          customerNotes: customerNotes || '',
-          status: 'pending'
-        });
+      // 創建新的批次訂單
+      order = new Order({
+        orderNumber,
+        tableId: table._id,
+        tableNumber: table.tableNumber,
+        merchantId: table.merchant._id,
+        batchNumber: nextBatchNumber,
+        isMainOrder: nextBatchNumber === 1,
+        items: validatedItems,
+        totalAmount,
+        customerNotes: customerNotes || '',
+        status: 'pending'
+      });
 
-        await order.save();
-        break; // 成功保存，跳出循環
-        
-      } catch (error) {
-        attempts++;
-        
-        // 如果是重複鍵錯誤，重試
-        if (error.code === 11000 && error.keyValue && error.keyValue.orderNumber) {
-          if (attempts >= maxAttempts) {
-            return next(new AppError('訂單號碼生成失敗，請稍後重試', 500));
-          }
-          // 短暫延遲後重試
-          await new Promise(resolve => setTimeout(resolve, Math.random() * 100));
-          continue;
+      await order.save();
+      break; // 成功保存，跳出循環
+      
+    } catch (error) {
+      attempts++;
+      
+      // 如果是重複鍵錯誤，重試
+      if (error.code === 11000 && error.keyValue && error.keyValue.orderNumber) {
+        if (attempts >= maxAttempts) {
+          return next(new AppError('訂單號碼生成失敗，請稍後重試', 500));
         }
-        
-        // 其他錯誤直接拋出
-        throw error;
+        // 短暫延遲後重試
+        await new Promise(resolve => setTimeout(resolve, Math.random() * 100));
+        continue;
       }
+      
+      // 其他錯誤直接拋出
+      throw error;
     }
   }
 
   // 填充相關資料
   await order.populate([
-    { path: 'tableId', select: 'number status' },
+    { path: 'tableId', select: 'tableNumber status' },
     { path: 'merchantId', select: 'name' },
     { path: 'items.dishId', select: 'name price category' }
   ]);
@@ -227,7 +167,7 @@ exports.checkoutOrder = catchAsync(async (req, res, next) => {
     tableId: table._id,
     status: { $in: ['pending', 'confirmed', 'preparing', 'ready'] }
   }).populate([
-    { path: 'tableId', select: 'number status' },
+    { path: 'tableId', select: 'tableNumber status' },
     { path: 'merchantId', select: 'name' },
     { path: 'items.dishId', select: 'name price category' }
   ]);
@@ -260,7 +200,7 @@ exports.checkoutOrder = catchAsync(async (req, res, next) => {
 exports.getOrder = catchAsync(async (req, res, next) => {
   const order = await Order.findById(req.params.id)
     .populate([
-      { path: 'tableId', select: 'number status' },
+      { path: 'tableId', select: 'tableNumber status' },
       { path: 'merchantId', select: 'name' },
       { path: 'items.dishId', select: 'name price category image' }
     ]);
@@ -296,7 +236,7 @@ exports.getOrdersByTable = catchAsync(async (req, res, next) => {
 
   const orders = await Order.find(query)
     .populate([
-      { path: 'tableId', select: 'number status' },
+      { path: 'tableId', select: 'tableNumber status' },
       { path: 'merchantId', select: 'name' },
       { path: 'items.dishId', select: 'name price category image' }
     ])
@@ -324,12 +264,24 @@ exports.getOrdersByTable = catchAsync(async (req, res, next) => {
 // 根據商家獲取訂單列表（後台用）
 exports.getOrdersByMerchant = catchAsync(async (req, res, next) => {
   const { merchantId } = req.params;
+  
+  // 權限驗證：確保用戶只能查詢自己商家的訂單
+  if (req.merchant && req.merchant._id.toString() !== merchantId) {
+    return next(new AppError('您沒有權限訪問此商家的訂單', 403));
+  }
+
   const { status, date, limit = 20, page = 1 } = req.query;
 
   const query = { merchantId };
   
   if (status) {
-    query.status = status;
+    // 處理逗號分隔的狀態參數
+    if (status.includes(',')) {
+      const statusArray = status.split(',').map(s => s.trim());
+      query.status = { $in: statusArray };
+    } else {
+      query.status = status;
+    }
   }
 
   if (date) {
@@ -346,7 +298,7 @@ exports.getOrdersByMerchant = catchAsync(async (req, res, next) => {
 
   const orders = await Order.find(query)
     .populate([
-      { path: 'tableId', select: 'number status' },
+      { path: 'tableId', select: 'tableNumber status' },
       { path: 'items.dishId', select: 'name price category image' }
     ])
     .sort({ createdAt: -1 })
@@ -404,7 +356,7 @@ exports.updateOrderStatus = catchAsync(async (req, res, next) => {
   // 重新獲取更新後的訂單
   const updatedOrder = await Order.findById(order._id)
     .populate([
-      { path: 'tableId', select: 'number status' },
+      { path: 'tableId', select: 'tableNumber status' },
       { path: 'merchantId', select: 'name' },
       { path: 'items.dishId', select: 'name price category image' }
     ]);
@@ -476,6 +428,83 @@ exports.getOrderStats = catchAsync(async (req, res, next) => {
       totalOrders,
       totalRevenue: totalRevenue[0]?.total || 0,
       statusBreakdown: stats
+    }
+  });
+});
+
+// 獲取桌子的所有批次訂單
+exports.getTableBatches = catchAsync(async (req, res, next) => {
+  const { tableId } = req.params;
+
+  const batches = await Order.getAllBatchesByTable(tableId);
+  
+  // 填充相關資料
+  await Order.populate(batches, [
+    { path: 'tableId', select: 'tableNumber status' },
+    { path: 'items.dishId', select: 'name price category image' }
+  ]);
+
+  const totalAmount = await Order.calculateTableTotal(tableId);
+
+  res.status(200).json({
+    status: 'success',
+    data: {
+      batches,
+      totalAmount,
+      batchCount: batches.length
+    }
+  });
+});
+
+// 結帳功能 - 合併所有批次
+exports.checkoutTable = catchAsync(async (req, res, next) => {
+  const { tableId } = req.params;
+
+  // 獲取合併後的訂單數據
+  const checkoutData = await Order.mergeBatchesForCheckout(tableId);
+  
+  if (!checkoutData) {
+    return next(new AppError('沒有找到未結帳的訂單', 404));
+  }
+
+  // 更新所有批次狀態為 completed
+  await Order.updateMany(
+    { 
+      tableId, 
+      status: { $nin: ['completed', 'cancelled'] } 
+    },
+    { 
+      status: 'completed',
+      completedAt: new Date()
+    }
+  );
+
+  // 更新桌子狀態為可用
+  const table = await Table.findById(tableId);
+  if (table) {
+    await table.updateStatus('available');
+  }
+
+  res.status(200).json({
+    status: 'success',
+    message: '結帳成功',
+    data: checkoutData
+  });
+});
+
+// 獲取桌子當前總金額
+exports.getTableTotal = catchAsync(async (req, res, next) => {
+  const { tableId } = req.params;
+
+  const totalAmount = await Order.calculateTableTotal(tableId);
+  const batches = await Order.getAllBatchesByTable(tableId);
+
+  res.status(200).json({
+    status: 'success',
+    data: {
+      tableId,
+      totalAmount,
+      batchCount: batches.length
     }
   });
 });

@@ -359,12 +359,14 @@ const setTableAvailable = async (tableId) => {
         status: 'available'
       }
       
-      await tableAPI.updateTableStatus(tableId, statusData)
+      const response = await tableAPI.updateTableStatus(tableId, statusData)
       
       // 重新載入桌次列表
       await loadTables()
       
-      alert('桌次已清理！')
+      // 顯示詳細的清理結果訊息
+      const message = response.message || '桌次已清理！'
+      alert(message)
     } catch (error) {
       console.error('清理桌次失敗:', error)
       alert('清理桌次失敗：' + (error.message || '未知錯誤'))

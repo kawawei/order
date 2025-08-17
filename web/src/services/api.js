@@ -128,8 +128,17 @@ export const orderAPI = {
   // 創建訂單
   createOrder: (data) => api.post('/orders', data),
   
-  // 結帳功能
+  // 結帳功能 (舊版本，保持向後兼容)
   checkout: (data) => api.post('/orders/checkout', data),
+  
+  // 新的桌子結帳功能 - 合併所有批次
+  checkoutTable: (tableId) => api.post(`/orders/table/${tableId}/checkout`),
+  
+  // 獲取桌子的所有批次訂單
+  getTableBatches: (tableId) => api.get(`/orders/table/${tableId}/batches`),
+  
+  // 獲取桌子當前總金額
+  getTableTotal: (tableId) => api.get(`/orders/table/${tableId}/total`),
   
   // 獲取訂單詳情
   getOrder: (orderId) => api.get(`/orders/${orderId}`),

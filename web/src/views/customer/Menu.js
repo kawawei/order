@@ -1,6 +1,7 @@
 // Customer Menu Script - 客戶菜單腳本
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { menuService, orderService } from '@/services/api'
+import api from '@/services/api'
 
 export default {
   setup() {
@@ -53,6 +54,12 @@ export default {
       } catch (error) {
         console.error('保存購物車失敗:', error)
       }
+    }
+
+    // 清空購物車
+    const clearCart = () => {
+      cartItems.value = []
+      saveCartToStorage()
     }
 
     // 選項對話框 - Options Dialog
@@ -491,6 +498,41 @@ export default {
       return null
     }
 
+    // 檢查桌次狀態
+    const checkTableStatus = async () => {
+      try {
+        const storedTableInfo = sessionStorage.getItem('currentTable')
+        if (!storedTableInfo) return
+
+        const tableData = JSON.parse(storedTableInfo)
+        if (!tableData.uniqueCode) return
+
+        // 調用後端 API 檢查桌次狀態
+        const response = await api.get(`/tables/public/${tableData.uniqueCode}`)
+        
+        if (response.status === 'success') {
+          const currentTableStatus = response.data.table.status
+          
+          // 如果桌次狀態變為可用（已被清理），清空購物車並提示
+          if (currentTableStatus === 'available' && tableData.status === 'occupied') {
+            clearCart()
+            alert('桌次已被店家清理，購物車已清空。\n如需繼續點餐，請重新開始。')
+            
+            // 更新 sessionStorage 中的桌次狀態
+            const updatedTableData = { ...tableData, status: 'available' }
+            sessionStorage.setItem('currentTable', JSON.stringify(updatedTableData))
+          }
+        }
+      } catch (error) {
+        console.error('檢查桌次狀態失敗:', error)
+        // 如果是 404 或 400 錯誤，說明桌次可能被刪除或禁用
+        if (error.response?.status === 404 || error.response?.status === 400) {
+          clearCart()
+          alert('此桌次已被店家清理或移除，購物車已清空。')
+        }
+      }
+    }
+
     // 監聽購物車顯示狀態
     watch(showCart, (newValue) => {
       if (newValue) {
@@ -498,11 +540,24 @@ export default {
       }
     })
 
+    // 定時器變數
+    let statusCheckInterval = null
+
     // 在組件掛載時初始化
     onMounted(async () => {
       initializeTable()
       loadCartFromStorage() // 載入購物車資料
       await loadMenuData()
+      
+      // 定期檢查桌次狀態（每30秒檢查一次）
+      statusCheckInterval = setInterval(checkTableStatus, 30000)
+    })
+
+    // 組件卸載時清除定時器
+    onUnmounted(() => {
+      if (statusCheckInterval) {
+        clearInterval(statusCheckInterval)
+      }
     })
 
     // 返回所有需要的數據和方法 - Return all required data and methods

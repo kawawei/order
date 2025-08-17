@@ -33,7 +33,65 @@
       </div>
     </div>
 
-    <!-- 成功載入後會自動重定向，不需要顯示內容 -->
+    <!-- 桌次歡迎頁面 -->
+    <div class="welcome-container" v-else-if="tableData && !isStartingOrder">
+      <div class="welcome-card">
+        <div class="restaurant-header">
+          <div class="restaurant-icon">
+            <font-awesome-icon icon="utensils" />
+          </div>
+          <h1 class="restaurant-name">{{ tableData.merchant.businessName }}</h1>
+          <p class="restaurant-description" v-if="tableData.merchant.businessType">
+            {{ getBusinessTypeText(tableData.merchant.businessType) }}
+          </p>
+        </div>
+
+        <div class="table-info-card">
+          <div class="table-number">
+            <span class="table-label">桌號</span>
+            <span class="table-value">{{ tableData.tableNumber }}</span>
+          </div>
+          <div class="table-details">
+            <div v-if="tableData.tableName" class="detail-item">
+              <font-awesome-icon icon="tag" />
+              <span>{{ tableData.tableName }}</span>
+            </div>
+            <div class="detail-item">
+              <font-awesome-icon icon="users" />
+              <span>{{ tableData.capacity }}人桌</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="welcome-message">
+          <h2>歡迎光臨！</h2>
+          <p>點擊下方按鈕開始您的用餐體驗</p>
+        </div>
+
+        <div class="action-section">
+          <BaseButton 
+            variant="primary" 
+            @click="startOrdering"
+            class="start-ordering-btn"
+            :loading="isStartingOrder"
+            size="large"
+          >
+            <font-awesome-icon icon="play" />
+            開始點餐
+          </BaseButton>
+        </div>
+
+
+      </div>
+    </div>
+
+    <!-- 正在開始點餐的載入狀態 -->
+    <div class="loading-container" v-else-if="isStartingOrder">
+      <div class="loading-spinner">
+        <div class="spinner"></div>
+        <p class="loading-text">正在為您準備點餐...</p>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -41,6 +99,7 @@
 import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import api from '../../services/api'
+import BaseButton from '../../components/base/BaseButton.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -48,6 +107,8 @@ const router = useRouter()
 const isLoading = ref(true)
 const error = ref(null)
 const tableCode = ref(route.params.code)
+const tableData = ref(null)
+const isStartingOrder = ref(false)
 
 // 載入桌次資訊
 const loadTableInfo = async () => {
@@ -59,28 +120,21 @@ const loadTableInfo = async () => {
     const response = await api.get(`/tables/public/${tableCode.value}`)
     
     if (response.status === 'success') {
-      const tableData = response.data.table
+      tableData.value = response.data.table
       
       // 將桌次和商家資訊保存到 sessionStorage
       sessionStorage.setItem('currentTable', JSON.stringify({
-        id: tableData.id,
-        tableNumber: tableData.tableNumber,
-        tableName: tableData.tableName,
-        capacity: tableData.capacity,
-        status: tableData.status,
-        merchant: tableData.merchant,
+        id: tableData.value.id,
+        tableNumber: tableData.value.tableNumber,
+        tableName: tableData.value.tableName,
+        capacity: tableData.value.capacity,
+        status: tableData.value.status,
+        merchant: tableData.value.merchant,
         uniqueCode: tableCode.value,
-        isAvailable: tableData.isAvailable
+        isAvailable: tableData.value.isAvailable
       }))
 
-      // 重定向到客戶點餐頁面，並傳遞桌次資訊
-      router.push({
-        name: 'CustomerMenu',
-        query: {
-          table: tableData.tableNumber,
-          code: tableCode.value
-        }
-      })
+      // 不再自動跳轉，而是顯示歡迎頁面
     } else {
       throw new Error('獲取桌次資訊失敗')
     }
@@ -99,14 +153,62 @@ const loadTableInfo = async () => {
   }
 }
 
+// 開始點餐
+const startOrdering = async () => {
+  try {
+    isStartingOrder.value = true
+    
+    // 呼叫後端 API 開始點餐，更新桌次狀態為已入座
+    await api.post(`/tables/${tableData.value.id}/start-ordering`)
+    
+    // 更新 sessionStorage 中的桌次狀態
+    const currentTable = JSON.parse(sessionStorage.getItem('currentTable') || '{}')
+    currentTable.status = 'occupied'
+    sessionStorage.setItem('currentTable', JSON.stringify(currentTable))
+    
+    // 跳轉到菜單頁面
+    router.push({
+      name: 'CustomerMenu',
+      query: {
+        table: tableData.value.tableNumber,
+        code: tableCode.value
+      }
+    })
+  } catch (err) {
+    console.error('開始點餐失敗:', err)
+    alert('開始點餐失敗，請稍後再試')
+  } finally {
+    isStartingOrder.value = false
+  }
+}
+
 // 重試載入
 const retryLoad = () => {
   loadTableInfo()
 }
 
-// 回退到一般菜單頁面
+// 直接進入菜單頁面（不更新桌次狀態）
 const goToMenu = () => {
-  router.push({ name: 'CustomerMenu' })
+  router.push({ 
+    name: 'CustomerMenu',
+    query: tableData.value ? {
+      table: tableData.value.tableNumber,
+      code: tableCode.value
+    } : {}
+  })
+}
+
+// 獲取商家類型文字
+const getBusinessTypeText = (type) => {
+  const types = {
+    'restaurant': '餐廳',
+    'cafe': '咖啡廳',
+    'bar': '酒吧',
+    'fastfood': '快餐店',
+    'bakery': '烘焙店',
+    'other': '其他'
+  }
+  return types[type] || '餐飲店'
 }
 
 // 組件掛載時載入桌次資訊
@@ -163,14 +265,14 @@ onMounted(() => {
   margin: 0;
 }
 
-.error-container {
-  max-width: 400px;
+.error-container, .welcome-container {
+  max-width: 480px;
   width: 100%;
 }
 
-.error-card {
+.error-card, .welcome-card {
   background: white;
-  border-radius: 16px;
+  border-radius: 20px;
   padding: 40px 30px;
   text-align: center;
   box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
@@ -219,22 +321,152 @@ onMounted(() => {
   font-weight: 500;
 }
 
+/* 歡迎頁面樣式 */
+.restaurant-header {
+  margin-bottom: 30px;
+}
+
+.restaurant-icon {
+  width: 80px;
+  height: 80px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 20px;
+}
+
+.restaurant-icon svg {
+  color: white;
+  font-size: 32px;
+}
+
+.restaurant-name {
+  font-size: 1.8rem;
+  font-weight: 700;
+  color: #1f2937;
+  margin: 0 0 8px;
+}
+
+.restaurant-description {
+  color: #6b7280;
+  font-size: 1rem;
+  margin: 0;
+}
+
+.table-info-card {
+  background: #f8fafc;
+  border-radius: 16px;
+  padding: 24px;
+  margin-bottom: 30px;
+}
+
+.table-number {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.table-label {
+  color: #6b7280;
+  font-size: 1rem;
+}
+
+.table-value {
+  font-size: 2rem;
+  font-weight: 800;
+  color: #1f2937;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.table-details {
+  display: flex;
+  justify-content: center;
+  gap: 20px;
+}
+
+.detail-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #6b7280;
+  font-size: 0.9rem;
+}
+
+.detail-item svg {
+  font-size: 14px;
+}
+
+.welcome-message {
+  margin-bottom: 30px;
+}
+
+.welcome-message h2 {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: #1f2937;
+  margin: 0 0 8px;
+}
+
+.welcome-message p {
+  color: #6b7280;
+  font-size: 1rem;
+  margin: 0;
+}
+
+.action-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 30px;
+}
+
+.start-ordering-btn {
+  width: 100%;
+  padding: 16px 24px;
+  font-weight: 600;
+  font-size: 1.1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
 /* 響應式設計 */
 @media (max-width: 480px) {
   .table-access {
     padding: 16px;
   }
   
-  .error-card {
+  .error-card, .welcome-card {
     padding: 30px 20px;
   }
   
-  .error-title {
+  .error-title, .restaurant-name {
     font-size: 1.25rem;
   }
   
   .error-message {
     font-size: 0.9rem;
+  }
+  
+  .table-value {
+    font-size: 1.5rem;
+  }
+  
+  .welcome-message h2 {
+    font-size: 1.25rem;
+  }
+  
+  .table-details {
+    flex-direction: column;
+    gap: 12px;
   }
 }
 </style>

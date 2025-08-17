@@ -1,5 +1,6 @@
 const Table = require('../models/table');
 const Merchant = require('../models/merchant');
+const Order = require('../models/order');
 const catchAsync = require('../utils/catchAsync');
 const AppError = require('../utils/appError');
 const QRCode = require('qrcode');
@@ -104,6 +105,45 @@ exports.getTableByCode = catchAsync(async (req, res, next) => {
         merchant: table.merchant,
         amenities: table.amenities,
         isAvailable: table.isAvailable()
+      }
+    }
+  });
+});
+
+// 客戶端開始點餐（更新桌次狀態為已入座）
+exports.startOrdering = catchAsync(async (req, res, next) => {
+  const table = await Table.findById(req.params.id);
+  
+  if (!table) {
+    return next(new AppError('找不到指定的桌次', 404));
+  }
+  
+  if (!table.isActive) {
+    return next(new AppError('此桌次目前未開放使用', 400));
+  }
+  
+  // 檢查桌次狀態，只有 available 或 reserved 狀態才能開始點餐
+  if (!['available', 'reserved'].includes(table.status)) {
+    return next(new AppError('此桌次目前無法開始點餐', 400));
+  }
+  
+  // 更新桌次狀態為已入座
+  await table.updateStatus('occupied', {
+    sessionId: new Date().getTime().toString(), // 使用時間戳作為會話ID
+    startTime: new Date(),
+    customerCount: 1,
+    customerName: null
+  });
+  
+  res.status(200).json({
+    status: 'success',
+    message: '開始點餐成功，桌次狀態已更新',
+    data: {
+      table: {
+        id: table._id,
+        tableNumber: table.tableNumber,
+        status: table.status,
+        currentSession: table.currentSession
       }
     }
   });
@@ -257,10 +297,35 @@ exports.updateTableStatus = catchAsync(async (req, res, next) => {
     return next(new AppError(`無法從 ${table.status} 狀態轉換到 ${status} 狀態`, 400));
   }
   
+  // 如果桌次狀態變更為可用（清理桌次），清空該桌次的所有相關數據
+  if (status === 'available' && table.status === 'occupied') {
+    try {
+      // 清空該桌次的所有未完成訂單
+      await Order.updateMany(
+        { 
+          tableId: table._id,
+          status: { $in: ['pending', 'confirmed', 'preparing', 'ready'] }
+        },
+        { 
+          status: 'cancelled',
+          updatedAt: new Date()
+        }
+      );
+      
+      console.log(`桌次 ${table.tableNumber} 清理完成，相關訂單已取消`);
+    } catch (error) {
+      console.error('清理桌次訂單時發生錯誤:', error);
+      // 即使清理訂單失敗，仍然繼續更新桌次狀態
+    }
+  }
+  
   await table.updateStatus(status, sessionData);
   
   res.status(200).json({
     status: 'success',
+    message: status === 'available' && table.status === 'occupied' 
+      ? '桌次已清理，相關訂單和購物車數據已清空' 
+      : '桌次狀態更新成功',
     data: {
       table
     }

@@ -58,6 +58,20 @@ const orderSchema = new mongoose.Schema({
     ref: 'Merchant',
     required: true
   },
+  batchNumber: {
+    type: Number,
+    required: true,
+    default: 1
+  },
+  parentOrderId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Order',
+    default: null
+  },
+  isMainOrder: {
+    type: Boolean,
+    default: true
+  },
   items: [orderItemSchema],
   totalAmount: {
     type: Number,
@@ -175,6 +189,58 @@ orderSchema.methods.updateStatus = function(newStatus) {
   }
   
   return this.save();
+};
+
+// 獲取下一個批次號碼的靜態方法
+orderSchema.statics.getNextBatchNumber = async function(tableId) {
+  const lastOrder = await this.findOne({ 
+    tableId, 
+    status: { $nin: ['completed', 'cancelled'] } 
+  }).sort({ batchNumber: -1 });
+  
+  return lastOrder ? lastOrder.batchNumber + 1 : 1;
+};
+
+// 獲取同一桌所有批次的靜態方法
+orderSchema.statics.getAllBatchesByTable = async function(tableId, excludeStatuses = ['completed', 'cancelled']) {
+  return this.find({ 
+    tableId,
+    status: { $nin: excludeStatuses }
+  }).sort({ batchNumber: 1, createdAt: 1 });
+};
+
+// 計算同一桌所有批次總金額的靜態方法
+orderSchema.statics.calculateTableTotal = async function(tableId) {
+  const batches = await this.getAllBatchesByTable(tableId);
+  return batches.reduce((total, batch) => total + batch.totalAmount, 0);
+};
+
+// 合併同一桌所有批次進行結帳的靜態方法
+orderSchema.statics.mergeBatchesForCheckout = async function(tableId) {
+  const batches = await this.getAllBatchesByTable(tableId);
+  
+  if (batches.length === 0) {
+    return null;
+  }
+  
+  // 合併所有項目
+  const allItems = [];
+  let totalAmount = 0;
+  
+  batches.forEach(batch => {
+    allItems.push(...batch.items);
+    totalAmount += batch.totalAmount;
+  });
+  
+  return {
+    tableId,
+    tableNumber: batches[0].tableNumber,
+    merchantId: batches[0].merchantId,
+    batches: batches,
+    allItems,
+    totalAmount,
+    batchCount: batches.length
+  };
 };
 
 module.exports = mongoose.model('Order', orderSchema);

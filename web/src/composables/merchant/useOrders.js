@@ -1,4 +1,5 @@
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { orderService } from '@/services/api'
 
 export function useOrders() {
   // 響應式數據
@@ -19,134 +20,11 @@ export function useOrders() {
     })
   })
 
-  // 模擬的即時訂單數據
-  const liveOrders = ref([
-    {
-      id: 1,
-      orderNumber: 'ORD001',
-      tableNumber: 'A3',
-      status: 'preparing',
-      createdAt: new Date(Date.now() - 15 * 60 * 1000), // 15分鐘前
-      items: [
-        { id: 1, name: '招牌牛肉麵', quantity: 2, price: 280 },
-        { id: 2, name: '小籠包', quantity: 1, price: 180 }
-      ],
-      totalAmount: 740
-    },
-    {
-      id: 2,
-      orderNumber: 'ORD002',
-      tableNumber: 'B5',
-      status: 'preparing',
-      createdAt: new Date(Date.now() - 8 * 60 * 1000), // 8分鐘前
-      items: [
-        { id: 3, name: '宮保雞丁', quantity: 1, price: 220 },
-        { id: 4, name: '白飯', quantity: 2, price: 30 }
-      ],
-      totalAmount: 280
-    },
-    {
-      id: 3,
-      orderNumber: 'ORD003',
-      tableNumber: 'C2',
-      status: 'ready',
-      createdAt: new Date(Date.now() - 25 * 60 * 1000), // 25分鐘前
-      readyAt: new Date(Date.now() - 5 * 60 * 1000), // 5分鐘前準備好
-      items: [
-        { id: 5, name: '糖醋排骨', quantity: 1, price: 320 },
-        { id: 6, name: '酸辣湯', quantity: 1, price: 80 }
-      ],
-      totalAmount: 400
-    },
-    {
-      id: 4,
-      orderNumber: 'ORD004',
-      tableNumber: 'A1',
-      status: 'ready',
-      createdAt: new Date(Date.now() - 30 * 60 * 1000),
-      readyAt: new Date(Date.now() - 2 * 60 * 1000),
-      items: [
-        { id: 7, name: '紅燒豆腐', quantity: 1, price: 160 }
-      ],
-      totalAmount: 160
-    },
-    {
-      id: 5,
-      orderNumber: 'ORD005',
-      tableNumber: 'B3',
-      status: 'delivered',
-      createdAt: new Date(Date.now() - 45 * 60 * 1000),
-      deliveredAt: new Date(Date.now() - 10 * 60 * 1000),
-      items: [
-        { id: 8, name: '麻婆豆腐', quantity: 1, price: 180 },
-        { id: 9, name: '蛋花湯', quantity: 1, price: 60 }
-      ],
-      totalAmount: 240
-    }
-  ])
-
-  // 歷史訂單數據
-  const historyOrders = ref([
-    {
-      id: 1,
-      orderNumber: 'ORD001',
-      tableNumber: 'A3',
-      status: 'completed',
-      createdAt: new Date(Date.now() - 2 * 60 * 60 * 1000),
-      completedAt: new Date(Date.now() - 90 * 60 * 1000),
-      items: [
-        { id: 1, name: '招牌牛肉麵', quantity: 2, price: 280 },
-        { id: 2, name: '小籠包', quantity: 1, price: 180 }
-      ],
-      subtotal: 740,
-      serviceCharge: 74,
-      totalAmount: 814
-    },
-    {
-      id: 2,
-      orderNumber: 'ORD002',
-      tableNumber: 'B5',
-      status: 'completed',
-      createdAt: new Date(Date.now() - 3 * 60 * 60 * 1000),
-      completedAt: new Date(Date.now() - 2.5 * 60 * 60 * 1000),
-      items: [
-        { id: 3, name: '宮保雞丁', quantity: 1, price: 220 },
-        { id: 4, name: '白飯', quantity: 2, price: 30 }
-      ],
-      subtotal: 280,
-      serviceCharge: 28,
-      totalAmount: 308
-    },
-    {
-      id: 3,
-      orderNumber: 'ORD003',
-      tableNumber: 'C2',
-      status: 'completed',
-      createdAt: new Date(Date.now() - 4 * 60 * 60 * 1000),
-      completedAt: new Date(Date.now() - 3.5 * 60 * 60 * 1000),
-      items: [
-        { id: 5, name: '糖醋排骨', quantity: 1, price: 320 },
-        { id: 6, name: '酸辣湯', quantity: 1, price: 80 }
-      ],
-      subtotal: 400,
-      serviceCharge: 40,
-      totalAmount: 440
-    },
-    {
-      id: 4,
-      orderNumber: 'ORD004',
-      tableNumber: 'A1',
-      status: 'cancelled',
-      createdAt: new Date(Date.now() - 5 * 60 * 60 * 1000),
-      cancelledAt: new Date(Date.now() - 4.5 * 60 * 60 * 1000),
-      items: [
-        { id: 7, name: '紅燒豆腐', quantity: 1, price: 160 }
-      ],
-      subtotal: 160,
-      serviceCharge: 0,
-      totalAmount: 160
-    }
-  ])
+  // 即時訂單數據 - 從API獲取
+  const liveOrders = ref([])
+  
+  // 歷史訂單數據 - 從API獲取
+  const historyOrders = ref([])
 
   // 標籤頁配置
   const orderTabs = [
@@ -164,18 +42,71 @@ export function useOrders() {
     { key: 'actions', label: '操作', width: '120px' }
   ]
 
-  // 計算屬性
-  const preparingOrders = computed(() => 
-    liveOrders.value.filter(order => order.status === 'preparing')
-  )
+  // 計算屬性 - 支持批次分組
+  const preparingOrders = computed(() => {
+    const orders = liveOrders.value.filter(order => 
+      ['pending', 'confirmed', 'preparing'].includes(order.status)
+    )
+    return groupOrdersByTable(orders)
+  })
 
-  const readyOrders = computed(() => 
-    liveOrders.value.filter(order => order.status === 'ready')
-  )
+  const readyOrders = computed(() => {
+    const orders = liveOrders.value.filter(order => order.status === 'ready')
+    return groupOrdersByTable(orders)
+  })
 
-  const deliveredOrders = computed(() => 
-    liveOrders.value.filter(order => order.status === 'delivered')
-  )
+  const deliveredOrders = computed(() => {
+    const orders = liveOrders.value.filter(order => 
+      ['served', 'delivered'].includes(order.status)
+    )
+    return groupOrdersByTable(orders)
+  })
+
+  // 將同桌訂單按批次分組
+  const groupOrdersByTable = (orders) => {
+    const grouped = {}
+    
+    orders.forEach(order => {
+      const tableKey = order.tableId?._id || order.tableId
+      if (!grouped[tableKey]) {
+        // 直接在這裡處理桌號邏輯，不依賴預先設置的 tableNumber
+        let tableNumber = '未知桌號'
+        if (order.tableId) {
+          if (typeof order.tableId === 'object' && order.tableId !== null) {
+            // 如果是對象，優先使用 tableNumber，其次是 displayName
+            tableNumber = order.tableId.tableNumber || order.tableId.displayName || '未知桌號'
+          } else {
+            // 如果是字符串或其他類型，直接使用
+            tableNumber = String(order.tableId)
+          }
+        }
+        
+        grouped[tableKey] = {
+          tableId: tableKey,
+          tableNumber: tableNumber,
+          batches: [],
+          totalAmount: 0,
+          itemCount: 0,
+          earliestTime: order.createdAt,
+          latestTime: order.createdAt
+        }
+      }
+      
+      grouped[tableKey].batches.push(order)
+      grouped[tableKey].totalAmount += order.totalAmount
+      grouped[tableKey].itemCount += order.items.length
+      
+      // 更新時間範圍
+      if (order.createdAt < grouped[tableKey].earliestTime) {
+        grouped[tableKey].earliestTime = order.createdAt
+      }
+      if (order.createdAt > grouped[tableKey].latestTime) {
+        grouped[tableKey].latestTime = order.createdAt
+      }
+    })
+    
+    return Object.values(grouped).sort((a, b) => a.earliestTime - b.earliestTime)
+  }
 
   const liveStats = computed(() => ({
     preparing: preparingOrders.value.length,
@@ -236,12 +167,138 @@ export function useOrders() {
     return filtered.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
   })
 
+  // 獲取商家ID - 從localStorage中的用戶信息獲取
+  const getMerchantId = () => {
+    try {
+      // 首先嘗試從localStorage獲取用戶信息
+      const storedUser = localStorage.getItem('user')
+      if (storedUser) {
+        const userData = JSON.parse(storedUser)
+        return userData._id || userData.id
+      }
+      
+      // 如果沒有用戶信息，嘗試從merchant存儲獲取
+      const storedMerchant = localStorage.getItem('merchant')
+      if (storedMerchant) {
+        const merchantData = JSON.parse(storedMerchant)
+        return merchantData._id || merchantData.id
+      }
+      
+      console.warn('無法獲取商家ID，用戶可能未登入')
+      return null
+    } catch (error) {
+      console.error('獲取商家ID失敗:', error)
+      return null
+    }
+  }
+
+  // 載入即時訂單數據
+  const loadLiveOrders = async () => {
+    try {
+      const merchantId = getMerchantId()
+      if (!merchantId) {
+        console.error('無法載入訂單：商家ID不存在，請重新登入')
+        return
+      }
+      
+      const response = await orderService.getOrdersByMerchant(merchantId, {
+        status: 'pending,confirmed,preparing,ready,delivered',
+        limit: 50,
+        sortBy: 'createdAt',
+        sortOrder: 'desc'
+      })
+      
+      if (response.status === 'success') {
+        // 處理訂單數據，確保日期格式正確
+        const orders = response.data.orders.map(order => {
+          // 處理桌號顯示邏輯
+          let tableNumber = '未知桌號'
+          if (order.tableId) {
+            if (typeof order.tableId === 'object' && order.tableId !== null) {
+              // 如果是對象，優先使用 tableNumber，其次是 displayName
+              tableNumber = order.tableId.tableNumber || order.tableId.displayName || '未知桌號'
+            } else {
+              // 如果是字符串或其他類型，直接使用
+              tableNumber = String(order.tableId)
+            }
+          }
+          
+          return {
+            ...order,
+            createdAt: new Date(order.createdAt),
+            readyAt: order.readyAt ? new Date(order.readyAt) : null,
+            deliveredAt: order.deliveredAt ? new Date(order.deliveredAt) : null,
+            completedAt: order.completedAt ? new Date(order.completedAt) : null,
+            tableNumber: tableNumber
+          }
+        })
+        
+        liveOrders.value = orders
+        console.log('即時訂單載入成功:', orders.length, '筆訂單')
+      }
+    } catch (error) {
+      console.error('載入即時訂單失敗:', error)
+      // 可以選擇顯示錯誤訊息給用戶
+    }
+  }
+
+  // 載入歷史訂單數據
+  const loadHistoryOrders = async () => {
+    try {
+      const merchantId = getMerchantId()
+      if (!merchantId) {
+        console.error('無法載入歷史訂單：商家ID不存在，請重新登入')
+        return
+      }
+      
+      const response = await orderService.getOrdersByMerchant(merchantId, {
+        status: 'completed,cancelled',
+        limit: 100,
+        sortBy: 'createdAt',
+        sortOrder: 'desc'
+      })
+      
+      if (response.status === 'success') {
+        // 處理訂單數據，確保日期格式正確
+        const orders = response.data.orders.map(order => {
+          // 處理桌號顯示邏輯
+          let tableNumber = '未知桌號'
+          if (order.tableId) {
+            if (typeof order.tableId === 'object' && order.tableId !== null) {
+              // 如果是對象，優先使用 tableNumber，其次是 displayName
+              tableNumber = order.tableId.tableNumber || order.tableId.displayName || '未知桌號'
+            } else {
+              // 如果是字符串或其他類型，直接使用
+              tableNumber = String(order.tableId)
+            }
+          }
+          
+          return {
+            ...order,
+            createdAt: new Date(order.createdAt),
+            completedAt: order.completedAt ? new Date(order.completedAt) : null,
+            cancelledAt: order.cancelledAt ? new Date(order.cancelledAt) : null,
+            tableNumber: tableNumber
+          }
+        })
+        
+        historyOrders.value = orders
+        console.log('歷史訂單載入成功:', orders.length, '筆訂單')
+      }
+    } catch (error) {
+      console.error('載入歷史訂單失敗:', error)
+    }
+  }
+
   // 方法
   const refreshOrders = async () => {
     loading.value = true
     try {
-      // 模擬 API 調用
-      await new Promise(resolve => setTimeout(resolve, 1000))
+      // 並行載入即時訂單和歷史訂單
+      await Promise.all([
+        loadLiveOrders(),
+        loadHistoryOrders()
+      ])
       console.log('訂單已刷新')
     } catch (error) {
       console.error('刷新訂單失敗:', error)
@@ -250,21 +307,45 @@ export function useOrders() {
     }
   }
 
-  const markAsReady = (orderId) => {
-    const order = liveOrders.value.find(o => o.id === orderId)
-    if (order) {
-      order.status = 'ready'
-      order.readyAt = new Date()
-      console.log(`訂單 ${order.orderNumber} 已標記為準備完成`)
+  const markAsReady = async (orderId) => {
+    try {
+      const response = await orderService.updateOrderStatus(orderId, {
+        status: 'ready'
+      })
+      
+      if (response.status === 'success') {
+        // 更新本地數據
+        const order = liveOrders.value.find(o => o._id === orderId)
+        if (order) {
+          order.status = 'ready'
+          order.readyAt = new Date()
+        }
+        console.log(`訂單已標記為準備完成`)
+      }
+    } catch (error) {
+      console.error('更新訂單狀態失敗:', error)
+      alert('更新訂單狀態失敗，請重試')
     }
   }
 
-  const markAsDelivered = (orderId) => {
-    const order = liveOrders.value.find(o => o.id === orderId)
-    if (order) {
-      order.status = 'delivered'
-      order.deliveredAt = new Date()
-      console.log(`訂單 ${order.orderNumber} 已標記為已送出`)
+  const markAsDelivered = async (orderId) => {
+    try {
+      const response = await orderService.updateOrderStatus(orderId, {
+        status: 'served'
+      })
+      
+      if (response.status === 'success') {
+        // 更新本地數據
+        const order = liveOrders.value.find(o => o._id === orderId)
+        if (order) {
+          order.status = 'served'
+          order.deliveredAt = new Date()
+        }
+        console.log(`訂單已標記為已送達`)
+      }
+    } catch (error) {
+      console.error('更新訂單狀態失敗:', error)
+      alert('更新訂單狀態失敗，請重試')
     }
   }
 
@@ -307,8 +388,11 @@ export function useOrders() {
 
   const getOrderStatusVariant = (status) => {
     switch (status) {
+      case 'pending': return 'warning'
+      case 'confirmed': return 'primary'
       case 'preparing': return 'warning'
       case 'ready': return 'success'
+      case 'served': 
       case 'delivered': return 'info'
       case 'completed': return 'success'
       case 'cancelled': return 'danger'
@@ -318,8 +402,11 @@ export function useOrders() {
 
   const getOrderStatusText = (status) => {
     switch (status) {
+      case 'pending': return '待確認'
+      case 'confirmed': return '已確認'
       case 'preparing': return '準備中'
       case 'ready': return '準備好'
+      case 'served': return '已送達'
       case 'delivered': return '已送出'
       case 'completed': return '已完成'
       case 'cancelled': return '已取消'
@@ -327,9 +414,36 @@ export function useOrders() {
     }
   }
 
+  // 自動刷新定時器
+  let refreshInterval = null
+
+  // 啟動自動刷新
+  const startAutoRefresh = () => {
+    // 每30秒自動刷新一次即時訂單
+    refreshInterval = setInterval(() => {
+      if (activeTab.value === 'live') {
+        loadLiveOrders()
+      }
+    }, 30000) // 30秒
+  }
+
+  // 停止自動刷新
+  const stopAutoRefresh = () => {
+    if (refreshInterval) {
+      clearInterval(refreshInterval)
+      refreshInterval = null
+    }
+  }
+
   // 生命週期
   onMounted(() => {
     refreshOrders()
+    startAutoRefresh()
+  })
+
+  // 組件卸載時清理定時器
+  onUnmounted(() => {
+    stopAutoRefresh()
   })
 
   return {

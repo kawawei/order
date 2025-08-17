@@ -29,10 +29,27 @@
             v-for="(item, index) in currentOrder.items"
             :key="`${item.dishId || item.id}-${index}`"
             class="order-item"
+            :class="{ 'batch-item': item.batchNumber }"
           >
             <div class="item-info">
               <span class="item-name">{{ item.name }}</span>
               <span class="item-quantity">x{{ item.quantity }}</span>
+              <BaseTag 
+                v-if="item.batchNumber && currentOrder.batchCount > 1" 
+                variant="info" 
+                size="small"
+                class="batch-tag"
+              >
+                批次 {{ item.batchNumber }}
+              </BaseTag>
+              <BaseTag 
+                v-if="item.batchStatus && item.batchStatus !== 'pending'"
+                :variant="statusMap[item.batchStatus]?.variant || 'default'"
+                size="small"
+                class="status-tag"
+              >
+                {{ statusMap[item.batchStatus]?.label || item.batchStatus }}
+              </BaseTag>
             </div>
             <div class="item-options" v-if="item.selectedOptions && getOptionsText(item.selectedOptions).length > 0">
               <BaseTag
@@ -128,25 +145,48 @@ const loadOrders = async () => {
 
     const tableData = JSON.parse(storedTableInfo)
     
-    // 從後端獲取該桌子的訂單
-    const response = await orderService.getOrdersByTable(tableData.id, {
-      status: 'pending,confirmed,preparing,ready',
-      limit: 10
-    })
+    // 從後端獲取該桌子的所有批次訂單
+    const response = await orderAPI.getTableBatches(tableData.id)
     
     if (response.status === 'success') {
-      orders.value = response.data.orders
-      // 如果有訂單，取最新的一個作為當前訂單
-      if (orders.value.length > 0) {
-        const order = orders.value[0]
-        // 確保 createdAt 是有效的日期對象
-        if (order.createdAt) {
-          const dateObj = new Date(order.createdAt)
-          order.createdAt = isNaN(dateObj.getTime()) ? new Date() : dateObj
-        } else {
-          order.createdAt = new Date()
+      const batches = response.data.batches
+      orders.value = batches
+      
+      // 如果有批次訂單，將它們合併顯示為一個完整的訂單
+      if (batches.length > 0) {
+        // 合併所有批次的商品
+        const allItems = []
+        let totalAmount = 0
+        let latestCreatedAt = null
+        
+        batches.forEach(batch => {
+          // 為每個商品添加批次信息
+          batch.items.forEach(item => {
+            allItems.push({
+              ...item,
+              batchNumber: batch.batchNumber,
+              batchStatus: batch.status
+            })
+          })
+          totalAmount += batch.totalAmount
+          
+          // 找到最新的創建時間
+          const batchDate = new Date(batch.createdAt)
+          if (!latestCreatedAt || batchDate > latestCreatedAt) {
+            latestCreatedAt = batchDate
+          }
+        })
+        
+        // 創建合併後的訂單顯示
+        currentOrder.value = {
+          orderNumber: `批次合併 (${batches.length} 批次)`,
+          items: allItems,
+          totalAmount: totalAmount,
+          createdAt: latestCreatedAt || new Date(),
+          status: 'pending', // 顯示為待處理，實際狀態由各批次決定
+          batches: batches, // 保存原始批次信息
+          batchCount: batches.length
         }
-        currentOrder.value = order
       }
     }
     
@@ -213,31 +253,42 @@ const formatDate = (date) => {
 }
 
 const proceedToCheckout = async () => {
-  if (!currentOrder.value || !currentOrder.value.items.length) {
-    alert('目前沒有任何餐點可以結帳')
-    return
-  }
+  try {
+    // 獲取桌子資訊
+    const storedTableInfo = sessionStorage.getItem('currentTable')
+    if (!storedTableInfo) {
+      alert('找不到桌子資訊，請重新掃描QR碼')
+      return
+    }
 
-  const totalAmount = currentOrder.value.totalAmount
-  
-  if (confirm(`確定要結帳嗎？\n總金額：NT$ ${totalAmount}`)) {
-    try {
-      // 獲取桌子資訊
-      const storedTableInfo = sessionStorage.getItem('currentTable')
-      if (!storedTableInfo) {
-        alert('找不到桌子資訊，請重新掃描QR碼')
-        return
-      }
+    const tableData = JSON.parse(storedTableInfo)
+    
+    // 獲取桌子的所有批次總金額
+    const totalResponse = await orderAPI.getTableTotal(tableData.id)
+    
+    if (!totalResponse.data || totalResponse.data.totalAmount === 0) {
+      alert('目前沒有任何餐點可以結帳')
+      return
+    }
 
-      const tableData = JSON.parse(storedTableInfo)
-      
-      // 調用後端結帳 API
-      const response = await orderAPI.checkout({
-        tableId: tableData.id
-      })
+    const totalAmount = totalResponse.data.totalAmount
+    const batchCount = totalResponse.data.batchCount
+    
+    const confirmMessage = batchCount > 1 
+      ? `確定要結帳嗎？\n共有 ${batchCount} 批次訂單\n總金額：NT$ ${totalAmount}`
+      : `確定要結帳嗎？\n總金額：NT$ ${totalAmount}`
+    
+    if (confirm(confirmMessage)) {
+      // 調用新的桌子結帳 API - 合併所有批次
+      const response = await orderAPI.checkoutTable(tableData.id)
       
       if (response.status === 'success') {
-        alert(`結帳成功！\n總金額：NT$ ${totalAmount}\n謝謝您的光臨！`)
+        const checkoutData = response.data
+        const message = checkoutData.batchCount > 1 
+          ? `結帳成功！\n合併了 ${checkoutData.batchCount} 批次訂單\n總金額：NT$ ${checkoutData.totalAmount}\n謝謝您的光臨！`
+          : `結帳成功！\n總金額：NT$ ${checkoutData.totalAmount}\n謝謝您的光臨！`
+        
+        alert(message)
         
         // 結帳完成後清空所有本地資料
         currentOrder.value = null
@@ -249,10 +300,10 @@ const proceedToCheckout = async () => {
       } else {
         alert('結帳失敗，請稍後再試')
       }
-    } catch (error) {
-      console.error('結帳失敗:', error)
-      alert('結帳失敗，請稍後再試')
     }
+  } catch (error) {
+    console.error('結帳失敗:', error)
+    alert('結帳失敗，請稍後再試')
   }
 }
 
