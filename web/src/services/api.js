@@ -82,4 +82,24 @@ export const authAPI = {
   updatePassword: (data) => api.patch('/auth/update-password', data),
 };
 
+export const tableAPI = {
+  // 獲取桌次列表
+  getTables: () => api.get('/tables'),
+  
+  // 創建新桌次
+  createTable: (data) => api.post('/tables', data),
+  
+  // 更新桌次
+  updateTable: (tableId, data) => api.put(`/tables/${tableId}`, data),
+  
+  // 刪除桌次
+  deleteTable: (tableId) => api.delete(`/tables/${tableId}`),
+  
+  // 更新桌次狀態
+  updateTableStatus: (tableId, statusData) => api.patch(`/tables/${tableId}/status`, statusData),
+  
+  // 重新生成 QR Code
+  regenerateQRCode: (tableId) => api.post(`/tables/${tableId}/regenerate-qr`),
+};
+
 export default api;

@@ -2,12 +2,16 @@ FROM node:18-alpine
 
 WORKDIR /app
 
+# 先複製 package 文件
 COPY package*.json ./
 
-RUN npm install
+# 使用 npm ci 進行快速安裝，並清理快取
+RUN npm ci --only=production=false --silent && \
+    npm cache clean --force
 
+# 複製源代碼
 COPY . .
 
 EXPOSE 5173
 
-CMD ["npm", "run", "dev", "--", "--host"]
+CMD ["npm", "run", "dev"]

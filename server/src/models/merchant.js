@@ -85,6 +85,11 @@ const merchantSchema = new mongoose.Schema({
     type: Boolean,
     default: false
   },
+  isActive: {
+    type: Boolean,
+    default: true,
+    select: false // 查詢時默認不返回
+  },
 
   // 時間戳
   createdAt: {

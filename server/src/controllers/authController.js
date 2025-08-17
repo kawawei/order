@@ -3,9 +3,9 @@ const Merchant = require('../models/merchant');
 const AppError = require('../utils/appError');
 const catchAsync = require('../utils/catchAsync');
 
-// 生成 JWT Token
-const signToken = id => {
-  return jwt.sign({ id }, process.env.JWT_SECRET, {
+// 生成 JWT Token - Generate JWT Token
+const signToken = (id, role = 'merchant') => {
+  return jwt.sign({ id, role }, process.env.JWT_SECRET, {
     expiresIn: process.env.JWT_EXPIRES_IN
   });
 };

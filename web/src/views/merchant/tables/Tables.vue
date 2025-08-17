@@ -20,45 +20,94 @@
         }"
       >
         <div class="table-header">
-          <h3>桌號 {{ table.number }}</h3>
+          <h3>桌號 {{ table.tableNumber }}</h3>
           <div class="table-actions">
             <button @click="editTable(table)" class="edit-btn">
               <font-awesome-icon icon="pen" />
             </button>
-            <button @click="deleteTable(table.id)" class="delete-btn">
+            <button @click="deleteTable(table._id || table.id)" class="delete-btn">
               <font-awesome-icon icon="trash" />
             </button>
           </div>
         </div>
         
         <div class="table-info">
-          <p><strong>座位數:</strong> {{ table.seats }}人</p>
+          <p><strong>座位數:</strong> {{ table.capacity }}人</p>
           <p><strong>狀態:</strong> 
             <span class="status-badge" :class="table.status">
               {{ getStatusText(table.status) }}
             </span>
           </p>
-          <p v-if="table.customerName"><strong>客戶:</strong> {{ table.customerName }}</p>
+          <p v-if="table.currentSession?.customerName"><strong>客戶:</strong> {{ table.currentSession.customerName }}</p>
+          
+          <!-- QR Code 和客戶端連結區域 -->
+          <div class="customer-access-section">
+            <div class="access-header">
+              <strong>客戶端連結</strong>
+              <button 
+                @click="toggleQRCode(table._id || table.id)" 
+                class="toggle-qr-btn"
+                :class="{ active: showQRCode[table._id || table.id] }"
+              >
+                <font-awesome-icon icon="qrcode" />
+              </button>
+            </div>
+            
+            <!-- QR Code 顯示區域 -->
+            <div v-if="showQRCode[table._id || table.id] && table.qrCodeDataUrl" class="qr-code-section">
+              <img :src="table.qrCodeDataUrl" alt="QR Code" class="qr-code-image" />
+              <p class="qr-description">客戶掃描此 QR Code 即可點餐</p>
+            </div>
+            
+            <!-- 連結操作區域 -->
+            <div class="link-actions">
+              <button 
+                @click="copyCustomerLink(table.customerUrl)" 
+                class="action-btn copy-btn"
+                title="複製連結"
+              >
+                <font-awesome-icon icon="copy" />
+                複製連結
+              </button>
+              <button 
+                v-if="table.qrCodeDataUrl"
+                @click="downloadQRCode(table, table.qrCodeDataUrl)" 
+                class="action-btn download-btn"
+                title="下載 QR Code"
+              >
+                <font-awesome-icon icon="download" />
+                下載 QR
+              </button>
+              <button 
+                @click="regenerateQRCode(table._id || table.id)" 
+                class="action-btn regenerate-btn"
+                title="重新生成 QR Code"
+              >
+                <font-awesome-icon icon="refresh" />
+                重新生成
+              </button>
+            </div>
+          </div>
         </div>
 
         <div class="table-footer">
           <button 
             v-if="table.status === 'available'" 
-            @click="setTableOccupied(table.id)"
+            @click="setTableOccupied(table._id || table.id)"
             class="status-btn occupy-btn"
           >
             設為已入座
           </button>
           <button 
             v-if="table.status === 'occupied'" 
-            @click="setTableAvailable(table.id)"
+            @click="setTableAvailable(table._id || table.id)"
             class="status-btn clear-btn"
           >
             清理桌次
           </button>
           <button 
             v-if="table.status === 'available'" 
-            @click="setTableReserved(table.id)"
+            @click="setTableReserved(table._id || table.id)"
             class="status-btn reserve-btn"
           >
             設為預約
@@ -82,8 +131,8 @@
             <label for="tableNumber">桌號</label>
             <input 
               id="tableNumber"
-              v-model="newTable.number" 
-              type="number" 
+              v-model="newTable.tableNumber" 
+              type="text" 
               required 
               min="1"
             />
@@ -93,7 +142,7 @@
             <label for="tableSeats">座位數</label>
             <input 
               id="tableSeats"
-              v-model="newTable.seats" 
+              v-model="newTable.capacity" 
               type="number" 
               required 
               min="1"
@@ -128,8 +177,8 @@
             <label for="editTableNumber">桌號</label>
             <input 
               id="editTableNumber"
-              v-model="editingTable.number" 
-              type="number" 
+              v-model="editingTable.tableNumber" 
+              type="text" 
               required 
               min="1"
             />
@@ -139,7 +188,7 @@
             <label for="editTableSeats">座位數</label>
             <input 
               id="editTableSeats"
-              v-model="editingTable.seats" 
+              v-model="editingTable.capacity" 
               type="number" 
               required 
               min="1"
@@ -163,32 +212,33 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
+import { tableAPI } from '@/services/api'
 import './Tables.css'
 
 // 響應式數據
 const tables = ref([])
 const showAddTableDialog = ref(false)
 const showEditTableDialog = ref(false)
+const showQRCode = ref({}) // 控制 QR Code 顯示狀態
 const newTable = ref({
-  number: '',
-  seats: ''
+  tableNumber: '',
+  capacity: ''
 })
 const editingTable = ref({
   id: null,
-  number: '',
-  seats: ''
+  tableNumber: '',
+  capacity: ''
 })
 
-// 初始化示例數據
-const initTables = () => {
-  tables.value = [
-    { id: 1, number: 1, seats: 2, status: 'available', customerName: null },
-    { id: 2, number: 2, seats: 4, status: 'occupied', customerName: '王小明' },
-    { id: 3, number: 3, seats: 6, status: 'reserved', customerName: '李小華' },
-    { id: 4, number: 4, seats: 2, status: 'available', customerName: null },
-    { id: 5, number: 5, seats: 8, status: 'available', customerName: null },
-    { id: 6, number: 6, seats: 4, status: 'occupied', customerName: '張三' }
-  ]
+// 載入桌次數據
+const loadTables = async () => {
+  try {
+    const response = await tableAPI.getTables()
+    tables.value = response.data.tables || []
+  } catch (error) {
+    console.error('載入桌次失敗:', error)
+    alert('載入桌次失敗：' + (error.message || '未知錯誤'))
+  }
 }
 
 // 取得狀態文字
@@ -202,114 +252,225 @@ const getStatusText = (status) => {
 }
 
 // 新增桌次
-const addTable = () => {
-  if (newTable.value.number && newTable.value.seats) {
-    // 檢查桌號是否已存在
-    const existingTable = tables.value.find(table => table.number === parseInt(newTable.value.number))
-    if (existingTable) {
-      alert('該桌號已存在！')
-      return
+const addTable = async () => {
+  if (newTable.value.tableNumber && newTable.value.capacity) {
+    try {
+      const tableData = {
+        tableNumber: newTable.value.tableNumber,
+        capacity: parseInt(newTable.value.capacity)
+      }
+      
+      await tableAPI.createTable(tableData)
+      
+      // 重新載入桌次列表
+      await loadTables()
+      
+      // 重置表單
+      newTable.value = { tableNumber: '', capacity: '' }
+      showAddTableDialog.value = false
+      
+      alert('桌次新增成功！')
+    } catch (error) {
+      console.error('新增桌次失敗:', error)
+      alert('新增桌次失敗：' + (error.message || '未知錯誤'))
     }
-
-    const table = {
-      id: Date.now(),
-      number: parseInt(newTable.value.number),
-      seats: parseInt(newTable.value.seats),
-      status: 'available',
-      customerName: null
-    }
-    
-    tables.value.push(table)
-    tables.value.sort((a, b) => a.number - b.number)
-    
-    // 重置表單
-    newTable.value = { number: '', seats: '' }
-    showAddTableDialog.value = false
   }
 }
 
 // 編輯桌次
 const editTable = (table) => {
   editingTable.value = {
-    id: table.id,
-    number: table.number,
-    seats: table.seats
+    id: table._id || table.id,
+    tableNumber: table.tableNumber,
+    capacity: table.capacity
   }
   showEditTableDialog.value = true
 }
 
 // 更新桌次
-const updateTable = () => {
-  if (editingTable.value.number && editingTable.value.seats) {
-    // 檢查桌號是否已被其他桌次使用
-    const existingTable = tables.value.find(table => 
-      table.number === parseInt(editingTable.value.number) && 
-      table.id !== editingTable.value.id
-    )
-    if (existingTable) {
-      alert('該桌號已被其他桌次使用！')
-      return
+const updateTable = async () => {
+  if (editingTable.value.tableNumber && editingTable.value.capacity) {
+    try {
+      const tableData = {
+        tableNumber: editingTable.value.tableNumber,
+        capacity: parseInt(editingTable.value.capacity)
+      }
+      
+      await tableAPI.updateTable(editingTable.value.id, tableData)
+      
+      // 重新載入桌次列表
+      await loadTables()
+      
+      showEditTableDialog.value = false
+      
+      alert('桌次更新成功！')
+    } catch (error) {
+      console.error('更新桌次失敗:', error)
+      alert('更新桌次失敗：' + (error.message || '未知錯誤'))
     }
-
-    const index = tables.value.findIndex(table => table.id === editingTable.value.id)
-    if (index !== -1) {
-      tables.value[index].number = parseInt(editingTable.value.number)
-      tables.value[index].seats = parseInt(editingTable.value.seats)
-      tables.value.sort((a, b) => a.number - b.number)
-    }
-    
-    showEditTableDialog.value = false
   }
 }
 
 // 刪除桌次
-const deleteTable = (tableId) => {
+const deleteTable = async (tableId) => {
   if (confirm('確定要刪除這個桌次嗎？')) {
-    const index = tables.value.findIndex(table => table.id === tableId)
-    if (index !== -1) {
-      tables.value.splice(index, 1)
+    try {
+      await tableAPI.deleteTable(tableId)
+      
+      // 重新載入桌次列表
+      await loadTables()
+      
+      alert('桌次刪除成功！')
+    } catch (error) {
+      console.error('刪除桌次失敗:', error)
+      alert('刪除桌次失敗：' + (error.message || '未知錯誤'))
     }
   }
 }
 
 // 設置桌次為已入座
-const setTableOccupied = (tableId) => {
+const setTableOccupied = async (tableId) => {
   const customerName = prompt('請輸入客戶姓名：')
   if (customerName) {
-    const table = tables.value.find(table => table.id === tableId)
-    if (table) {
-      table.status = 'occupied'
-      table.customerName = customerName
+    try {
+      const statusData = {
+        status: 'occupied',
+        sessionData: {
+          customerName: customerName,
+          customerCount: 1
+        }
+      }
+      
+      await tableAPI.updateTableStatus(tableId, statusData)
+      
+      // 重新載入桌次列表
+      await loadTables()
+      
+      alert('桌次狀態更新成功！')
+    } catch (error) {
+      console.error('更新桌次狀態失敗:', error)
+      alert('更新桌次狀態失敗：' + (error.message || '未知錯誤'))
     }
   }
 }
 
 // 設置桌次為可用
-const setTableAvailable = (tableId) => {
+const setTableAvailable = async (tableId) => {
   if (confirm('確定要清理此桌次嗎？')) {
-    const table = tables.value.find(table => table.id === tableId)
-    if (table) {
-      table.status = 'available'
-      table.customerName = null
+    try {
+      const statusData = {
+        status: 'available'
+      }
+      
+      await tableAPI.updateTableStatus(tableId, statusData)
+      
+      // 重新載入桌次列表
+      await loadTables()
+      
+      alert('桌次已清理！')
+    } catch (error) {
+      console.error('清理桌次失敗:', error)
+      alert('清理桌次失敗：' + (error.message || '未知錯誤'))
     }
   }
 }
 
 // 設置桌次為預約
-const setTableReserved = (tableId) => {
+const setTableReserved = async (tableId) => {
   const customerName = prompt('請輸入預約客戶姓名：')
   if (customerName) {
-    const table = tables.value.find(table => table.id === tableId)
-    if (table) {
-      table.status = 'reserved'
-      table.customerName = customerName
+    try {
+      const statusData = {
+        status: 'reserved',
+        sessionData: {
+          customerName: customerName,
+          customerCount: 1
+        }
+      }
+      
+      await tableAPI.updateTableStatus(tableId, statusData)
+      
+      // 重新載入桌次列表
+      await loadTables()
+      
+      alert('桌次預約成功！')
+    } catch (error) {
+      console.error('設置桌次預約失敗:', error)
+      alert('設置桌次預約失敗：' + (error.message || '未知錯誤'))
     }
   }
 }
 
-// 組件掛載時初始化數據
+// QR Code 相關功能
+// 切換 QR Code 顯示狀態
+const toggleQRCode = (tableId) => {
+  showQRCode.value[tableId] = !showQRCode.value[tableId]
+}
+
+// 複製客戶端連結
+const copyCustomerLink = async (customerUrl) => {
+  if (!customerUrl) {
+    alert('此桌次暫無客戶端連結')
+    return
+  }
+  
+  try {
+    await navigator.clipboard.writeText(customerUrl)
+    alert('連結已複製到剪貼板！')
+  } catch (error) {
+    // 如果 Clipboard API 不可用，使用備用方法
+    const textArea = document.createElement('textarea')
+    textArea.value = customerUrl
+    document.body.appendChild(textArea)
+    textArea.select()
+    document.execCommand('copy')
+    document.body.removeChild(textArea)
+    alert('連結已複製到剪貼板！')
+  }
+}
+
+// 下載 QR Code
+const downloadQRCode = (table, qrCodeDataUrl) => {
+  if (!qrCodeDataUrl) {
+    alert('此桌次暫無 QR Code')
+    return
+  }
+  
+  try {
+    const link = document.createElement('a')
+    link.href = qrCodeDataUrl
+    link.download = `桌號${table.tableNumber}_QRCode.png`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    alert('QR Code 下載成功！')
+  } catch (error) {
+    console.error('下載 QR Code 失敗:', error)
+    alert('下載 QR Code 失敗')
+  }
+}
+
+// 重新生成 QR Code
+const regenerateQRCode = async (tableId) => {
+  if (confirm('確定要重新生成此桌次的 QR Code 嗎？重新生成後舊的連結將失效。')) {
+    try {
+      // 調用後端 API 重新生成 QR Code
+      await tableAPI.regenerateQRCode(tableId)
+      
+      // 重新載入桌次列表
+      await loadTables()
+      
+      alert('QR Code 重新生成成功！')
+    } catch (error) {
+      console.error('重新生成 QR Code 失敗:', error)
+      alert('重新生成 QR Code 失敗：' + (error.message || '未知錯誤'))
+    }
+  }
+}
+
+// 組件掛載時載入數據
 onMounted(() => {
-  initTables()
+  loadTables()
 })
 </script>
 

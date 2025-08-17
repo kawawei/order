@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   mongodb:
     image: mongo:latest
@@ -13,12 +11,7 @@ services:
       - MONGO_INITDB_ROOT_PASSWORD=admin123
     networks:
       - order-system-network-dev
-    healthcheck:
-      test: mongosh --eval 'db.runCommand("ping").ok' --quiet
-      interval: 5s
-      timeout: 5s
-      retries: 3
-      start_period: 10s
+
 
   backend:
     build:
@@ -39,9 +32,8 @@ services:
       - SUPER_ADMIN_PASSWORD=Admin@123456
       - CORS_ORIGIN=http://localhost:5173
     depends_on:
-      mongodb:
-        condition: service_healthy
-    restart: always
+      - mongodb
+    restart: "no"
     networks:
       - order-system-network-dev
 
