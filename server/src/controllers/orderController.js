@@ -212,6 +212,50 @@ exports.createOrder = catchAsync(async (req, res, next) => {
   });
 });
 
+// 結帳功能 - 完成訂單並清空相關資料
+exports.checkoutOrder = catchAsync(async (req, res, next) => {
+  const { tableId } = req.body;
+
+  // 驗證桌子是否存在
+  const table = await Table.findById(tableId);
+  if (!table) {
+    return next(new AppError('桌子不存在', 404));
+  }
+
+  // 查找該桌子的未結帳訂單
+  const order = await Order.findOne({
+    tableId: table._id,
+    status: { $in: ['pending', 'confirmed', 'preparing', 'ready'] }
+  }).populate([
+    { path: 'tableId', select: 'number status' },
+    { path: 'merchantId', select: 'name' },
+    { path: 'items.dishId', select: 'name price category' }
+  ]);
+
+  if (!order) {
+    return next(new AppError('找不到待結帳的訂單', 404));
+  }
+
+  // 更新訂單狀態為已完成
+  await order.updateStatus('completed');
+
+  // 購物車資料存儲在前端 sessionStorage 中，不需要後端清空
+  // 前端會在結帳成功後自動清空購物車
+
+  // 可以選擇是否重置桌子狀態為可用
+  // 這裡暫時不重置，讓服務員手動重置桌子狀態
+  
+  res.status(200).json({
+    status: 'success',
+    message: '結帳成功',
+    data: {
+      order,
+      totalAmount: order.totalAmount,
+      completedAt: order.completedAt
+    }
+  });
+});
+
 // 獲取訂單詳情
 exports.getOrder = catchAsync(async (req, res, next) => {
   const order = await Order.findById(req.params.id)
@@ -341,7 +385,8 @@ exports.updateOrderStatus = catchAsync(async (req, res, next) => {
     'confirmed': ['preparing', 'cancelled'],
     'preparing': ['ready', 'cancelled'],
     'ready': ['served'],
-    'served': [],
+    'served': ['completed'],
+    'completed': [],
     'cancelled': []
   };
 
@@ -379,7 +424,7 @@ exports.cancelOrder = catchAsync(async (req, res, next) => {
     return next(new AppError('訂單不存在', 404));
   }
 
-  if (order.status === 'served') {
+  if (order.status === 'served' || order.status === 'completed') {
     return next(new AppError('已完成的訂單無法取消', 400));
   }
 

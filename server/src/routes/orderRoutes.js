@@ -5,6 +5,7 @@ const router = express.Router();
 
 // 公共路由（客戶端使用）
 router.post('/', orderController.createOrder);
+router.post('/checkout', orderController.checkoutOrder);
 router.get('/:id', orderController.getOrder);
 router.get('/table/:tableId', orderController.getOrdersByTable);
 

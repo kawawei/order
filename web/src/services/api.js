@@ -128,6 +128,9 @@ export const orderAPI = {
   // 創建訂單
   createOrder: (data) => api.post('/orders', data),
   
+  // 結帳功能
+  checkout: (data) => api.post('/orders/checkout', data),
+  
   // 獲取訂單詳情
   getOrder: (orderId) => api.get(`/orders/${orderId}`),
   

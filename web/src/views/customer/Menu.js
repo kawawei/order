@@ -32,6 +32,28 @@ export default {
     // 購物車 - Shopping Cart
     const cartItems = ref([])
     const showCart = ref(false)
+    
+    // 從 sessionStorage 載入購物車
+    const loadCartFromStorage = () => {
+      try {
+        const storedCart = sessionStorage.getItem('cartItems')
+        if (storedCart) {
+          cartItems.value = JSON.parse(storedCart)
+        }
+      } catch (error) {
+        console.error('載入購物車失敗:', error)
+        cartItems.value = []
+      }
+    }
+    
+    // 保存購物車到 sessionStorage
+    const saveCartToStorage = () => {
+      try {
+        sessionStorage.setItem('cartItems', JSON.stringify(cartItems.value))
+      } catch (error) {
+        console.error('保存購物車失敗:', error)
+      }
+    }
 
     // 選項對話框 - Options Dialog
     const showOptionsDialog = ref(false)
@@ -196,6 +218,7 @@ export default {
       
       // 加入購物車 - Add to cart
       cartItems.value.push(cartItem)
+      saveCartToStorage() // 保存到 sessionStorage
       console.log('新增購物車商品:', cartItem)
       console.log('目前購物車內容:', cartItems.value)
       
@@ -214,6 +237,7 @@ export default {
           Object.values(item.selectedOptions || {}).reduce((sum, opt) => sum + (opt.price || 0), 0)
         ) * newQuantity
       }
+      saveCartToStorage() // 保存到 sessionStorage
     }
 
     const proceedToCheckout = async () => {
@@ -257,6 +281,7 @@ export default {
           
           // 清空購物車
           cartItems.value = []
+          saveCartToStorage() // 清空 sessionStorage
           showCart.value = false
           
           // 顯示成功消息
@@ -476,6 +501,7 @@ export default {
     // 在組件掛載時初始化
     onMounted(async () => {
       initializeTable()
+      loadCartFromStorage() // 載入購物車資料
       await loadMenuData()
     })
 

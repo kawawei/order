@@ -89,7 +89,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { orderService } from '@/services/api'
+import { orderService, orderAPI } from '@/services/api'
 import BaseCard from '../../components/base/BaseCard.vue'
 import BaseButton from '../../components/base/BaseButton.vue'
 import BaseTag from '../../components/base/BaseTag.vue'
@@ -212,7 +212,7 @@ const formatDate = (date) => {
   }).format(dateObj)
 }
 
-const proceedToCheckout = () => {
+const proceedToCheckout = async () => {
   if (!currentOrder.value || !currentOrder.value.items.length) {
     alert('目前沒有任何餐點可以結帳')
     return
@@ -221,16 +221,38 @@ const proceedToCheckout = () => {
   const totalAmount = currentOrder.value.totalAmount
   
   if (confirm(`確定要結帳嗎？\n總金額：NT$ ${totalAmount}`)) {
-    // 這裡可以實現實際的結帳邏輯
-    // 例如：調用API、跳轉到付款頁面等
-    alert(`結帳成功！\n總金額：NT$ ${totalAmount}\n謝謝您的光臨！`)
-    
-    // 結帳完成後清空當前訂單和 localStorage
-    currentOrder.value = null
-    localStorage.removeItem('currentOrder')
-    
-    // 可選：跳轉到成功頁面或回到菜單
-    // router.push('/menu')
+    try {
+      // 獲取桌子資訊
+      const storedTableInfo = sessionStorage.getItem('currentTable')
+      if (!storedTableInfo) {
+        alert('找不到桌子資訊，請重新掃描QR碼')
+        return
+      }
+
+      const tableData = JSON.parse(storedTableInfo)
+      
+      // 調用後端結帳 API
+      const response = await orderAPI.checkout({
+        tableId: tableData.id
+      })
+      
+      if (response.status === 'success') {
+        alert(`結帳成功！\n總金額：NT$ ${totalAmount}\n謝謝您的光臨！`)
+        
+        // 結帳完成後清空所有本地資料
+        currentOrder.value = null
+        localStorage.removeItem('currentOrder')
+        sessionStorage.removeItem('cartItems') // 清空購物車
+        
+        // 跳轉回菜單頁面
+        router.push('/menu')
+      } else {
+        alert('結帳失敗，請稍後再試')
+      }
+    } catch (error) {
+      console.error('結帳失敗:', error)
+      alert('結帳失敗，請稍後再試')
+    }
   }
 }
 
