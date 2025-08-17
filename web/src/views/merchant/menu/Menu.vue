@@ -3,8 +3,8 @@
     <header class="page-header">
       <h1>菜單管理</h1>
       <BaseButton variant="primary" @click="handleAddCategory">
-        <font-awesome-icon icon="plus" />
-        添加種類
+        <font-awesome-icon icon="cog" />
+        種類管理
       </BaseButton>
     </header>
 
@@ -54,7 +54,7 @@
         <div class="empty-content">
           <font-awesome-icon icon="utensils" size="2x" />
           <h2>還沒有任何菜單種類</h2>
-          <p>點擊上方的「添加種類」按鈕開始建立您的菜單</p>
+          <p>點擊上方的「種類管理」按鈕開始建立您的菜單</p>
         </div>
       </div>
     </main>
@@ -64,6 +64,8 @@
       v-model="showAddCategoryDialog"
       :categories="categories"
       @confirm="handleConfirmAddCategory"
+      @update-category="handleUpdateCategory"
+      @delete-category="handleDeleteCategory"
     />
     
     <!-- 添加菜品對話框 -->
@@ -95,6 +97,8 @@ const {
   editingItem,
   handleAddCategory,
   handleConfirmAddCategory,
+  handleUpdateCategory,
+  handleDeleteCategory,
   handleAddMenuItem,
   handleConfirmAddMenuItem,
   handleEditMenuItem,

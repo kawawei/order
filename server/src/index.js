@@ -14,7 +14,8 @@ const corsOptions = {
   origin: process.env.CORS_ORIGIN || 'http://localhost:5173',
   credentials: true,
   optionsSuccessStatus: 200,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS']
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],  // 添加 PATCH 方法 - Add PATCH method
+  allowedHeaders: ['Content-Type', 'Authorization', 'Accept']  // 明確指定允許的標頭 - Explicitly specify allowed headers
 };
 
 // 初始化 Express 應用
@@ -55,10 +56,26 @@ app.use((err, req, res, next) => {
 
   // 處理重複鍵錯誤
   if (err.code === 11000) {
-    const field = Object.keys(err.keyValue)[0];
+    const keyValue = err.keyValue;
+    let message = '資料重複';
+    
+    // 處理不同的重複鍵情況
+    if (keyValue.email) {
+      message = '該電子郵件已被使用';
+    } else if (keyValue.businessName) {
+      message = '該商家名稱已被使用';
+    } else if (keyValue.name && keyValue.merchant) {
+      message = '該分類名稱已存在';
+    } else if (keyValue.name) {
+      message = '該名稱已被使用';
+    } else {
+      const field = Object.keys(keyValue)[0];
+      message = `該${field}已被使用`;
+    }
+    
     return res.status(400).json({
       success: false,
-      message: `該${field}已被使用`
+      message: message
     });
   }
 
@@ -76,7 +93,7 @@ app.use((err, req, res, next) => {
 });
 
 // 啟動服務器
-const PORT = process.env.PORT || 5173;
+const PORT = process.env.PORT || 3002;
 app.listen(PORT, () => {
   console.log(`服務器運行在端口 ${PORT}`);
 });

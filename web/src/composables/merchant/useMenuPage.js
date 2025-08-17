@@ -11,6 +11,8 @@ export function useMenuPage() {
     loadCategories,
     loadDishes,
     addCategory,
+    updateCategory,
+    removeCategory,
     addDish,
     updateDish,
     removeDish,
@@ -37,9 +39,11 @@ export function useMenuPage() {
 
   const handleConfirmAddCategory = async (categoryName) => {
     try {
-      // 創建分類數據對象
+      // 創建分類數據對象 - Create category data object
+      // 生成唯一的 name，使用時間戳確保唯一性
+      const timestamp = Date.now()
       const categoryData = {
-        name: categoryName.toLowerCase().replace(/\s+/g, '-'),
+        name: `${categoryName.trim().replace(/\s+/g, '-')}-${timestamp}`,
         label: categoryName,
         description: `${categoryName}類別菜品`
       }
@@ -47,7 +51,34 @@ export function useMenuPage() {
       showAddCategoryDialog.value = false
     } catch (err) {
       console.error('創建分類失敗:', err)
-      // 可以添加錯誤提示
+      // 可以添加錯誤提示 - Can add error notification
+    }
+  }
+
+  // 更新種類 - Update category
+  const handleUpdateCategory = async (updateData) => {
+    try {
+      const categoryData = {
+        name: updateData.name.toLowerCase().replace(/\s+/g, '-'),
+        label: updateData.name,
+        description: `${updateData.name}類別菜品`
+      }
+      await updateCategory(updateData.id, categoryData)
+      showAddCategoryDialog.value = false
+    } catch (err) {
+      console.error('更新分類失敗:', err)
+      // 可以添加錯誤提示 - Can add error notification
+    }
+  }
+
+  // 刪除種類 - Delete category
+  const handleDeleteCategory = async (categoryId) => {
+    try {
+      await removeCategory(categoryId)
+      showAddCategoryDialog.value = false
+    } catch (err) {
+      console.error('刪除分類失敗:', err)
+      // 可以添加錯誤提示 - Can add error notification
     }
   }
 
@@ -124,6 +155,8 @@ export function useMenuPage() {
     editingItem,
     handleAddCategory,
     handleConfirmAddCategory,
+    handleUpdateCategory,
+    handleDeleteCategory,
     handleAddMenuItem,
     handleConfirmAddMenuItem,
     handleEditMenuItem,
