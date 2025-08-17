@@ -330,27 +330,24 @@ const deleteTable = async (tableId) => {
 
 // 設置桌次為已入座
 const setTableOccupied = async (tableId) => {
-  const customerName = prompt('請輸入客戶姓名：')
-  if (customerName) {
-    try {
-      const statusData = {
-        status: 'occupied',
-        sessionData: {
-          customerName: customerName,
-          customerCount: 1
-        }
+  try {
+    const statusData = {
+      status: 'occupied',
+      sessionData: {
+        customerName: null, // 不需要客户姓名
+        customerCount: 1
       }
-      
-      await tableAPI.updateTableStatus(tableId, statusData)
-      
-      // 重新載入桌次列表
-      await loadTables()
-      
-      alert('桌次狀態更新成功！')
-    } catch (error) {
-      console.error('更新桌次狀態失敗:', error)
-      alert('更新桌次狀態失敗：' + (error.message || '未知錯誤'))
     }
+    
+    await tableAPI.updateTableStatus(tableId, statusData)
+    
+    // 重新載入桌次列表
+    await loadTables()
+    
+    alert('桌次狀態更新成功！')
+  } catch (error) {
+    console.error('更新桌次狀態失敗:', error)
+    alert('更新桌次狀態失敗：' + (error.message || '未知錯誤'))
   }
 }
 
