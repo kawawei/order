@@ -1,5 +1,5 @@
 // Customer Menu Script - 客戶菜單腳本
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { menuService } from '@/services/api'
 
 export default {
@@ -43,7 +43,11 @@ export default {
       size: '份量',
       extra: '加料',
       sugar: '甜度',
-      ice: '冰塊'
+      ice: '冰塊',
+      sweetness: '甜度',  // 可能的後端甜度選項名
+      iceCube: '冰塊',    // 可能的後端冰塊選項名
+      '甜度': '甜度',      // 中文選項名
+      '冰塊': '冰塊'       // 中文選項名
     }
 
     // 選項數據 - Option Data
@@ -77,9 +81,8 @@ export default {
         return menuItems.value
       }
       
-      // 根據分類ID篩選菜品
-      const selectedCategoryData = allMenuData.value.find(cat => cat._id === selectedCategory.value)
-      return selectedCategoryData ? selectedCategoryData.dishes : []
+      // 根據分類ID篩選菜品（從已轉換的menuItems中篩選）
+      return menuItems.value.filter(dish => dish.category === selectedCategory.value)
     })
 
     const cartTotal = computed(() => {
@@ -96,21 +99,43 @@ export default {
     }
 
     const getOptions = (type) => {
+      // 如果有選中的菜品且該菜品有自定義選項數據
+      if (selectedItem.value && selectedItem.value.customOptionsData) {
+        // 找到對應類型的自定義選項
+        const customOption = selectedItem.value.customOptionsData.find(opt => opt.name === type)
+        if (customOption && customOption.options) {
+          // 轉換自定義選項格式為前端需要的格式
+          return customOption.options.map(opt => ({
+            name: opt.value || opt.label,
+            label: opt.label,
+            price: opt.price || 0
+          }))
+        }
+      }
+      
+      // 如果沒有自定義選項，使用預設選項
       return optionData[type] || []
     }
 
     const showItemOptions = (item) => {
+      console.log('顯示菜品選項:', item)
+      console.log('菜品的options:', item.options)
+      console.log('菜品的customOptionsData:', item.customOptionsData)
+      
       selectedItem.value = item
       selectedOptions.value = {}
       
       // 設置默認選項 - Set Default Options
       item.options.forEach(optionType => {
+        console.log('處理選項類型:', optionType)
         const options = getOptions(optionType)
+        console.log('獲取到的選項:', options)
         if (options.length > 0) {
           selectedOptions.value[optionType] = options.find(opt => opt.price === 0) || options[0]
         }
       })
       
+      console.log('最終選中的選項:', selectedOptions.value)
       showOptionsDialog.value = true
     }
 
@@ -150,51 +175,32 @@ export default {
         return
       }
       
-      // 如果有選項，先執行點餐動作（加入購物車），然後顯示選項對話框 - If has options, first order then show options dialog
-      const cartItem = {
-        id: item.id,
-        name: item.name,
-        basePrice: item.basePrice,
-        quantity: 1,
-        totalPrice: item.basePrice,
-        selectedOptions: null // 初始時沒有選項 - No options initially
-      }
-      
-      // 先加入購物車 - Add to cart first
-      cartItems.value.push(cartItem)
-      
-      // 然後顯示選項對話框 - Then show options dialog
+      // 如果有選項，直接顯示選項對話框 - If has options, show options dialog directly
       showItemOptions(item)
     }
 
     const addConfiguredItemToCart = () => {
-      // 找到最後一個相同 ID 的商品（剛剛加入的）- Find the last item with same ID (just added)
-      let lastItemIndex = -1
-      for (let i = cartItems.value.length - 1; i >= 0; i--) {
-        if (cartItems.value[i].id === selectedItem.value.id && cartItems.value[i].selectedOptions === null) {
-          lastItemIndex = i
-          break
-        }
+      console.log('加入配置好的商品到購物車')
+      console.log('選中的商品:', selectedItem.value)
+      console.log('選中的選項:', selectedOptions.value)
+      
+      // 直接創建新的購物車商品 - Create new cart item directly
+      const cartItem = {
+        id: selectedItem.value.id,
+        name: selectedItem.value.name,
+        basePrice: selectedItem.value.basePrice,
+        quantity: 1,
+        totalPrice: calculateItemPrice(),
+        selectedOptions: { ...selectedOptions.value }
       }
       
-      if (lastItemIndex !== -1) {
-        // 更新已存在的商品選項 - Update existing item options
-        const item = cartItems.value[lastItemIndex]
-        item.selectedOptions = { ...selectedOptions.value }
-        item.totalPrice = calculateItemPrice()
-      } else {
-        // 如果找不到，則新增商品（備用方案）- If not found, add new item (fallback)
-        const cartItem = {
-          id: selectedItem.value.id,
-          name: selectedItem.value.name,
-          basePrice: selectedItem.value.basePrice,
-          quantity: 1,
-          totalPrice: calculateItemPrice(),
-          selectedOptions: { ...selectedOptions.value }
-        }
-        cartItems.value.push(cartItem)
-      }
+      // 加入購物車 - Add to cart
+      cartItems.value.push(cartItem)
+      console.log('新增購物車商品:', cartItem)
+      console.log('目前購物車內容:', cartItems.value)
       
+      // 重置選項和關閉對話框 - Reset options and close dialog
+      selectedOptions.value = {}
       showOptionsDialog.value = false
     }
 
@@ -297,13 +303,21 @@ export default {
               id: dish._id,
               basePrice: dish.price,
               category: category._id,
-              // 轉換自定義選項格式
-              options: dish.customOptions?.map(opt => opt.name) || []
+              // 處理自定義選項 - 如果有後端選項就用後端的，否則用預設選項
+              options: dish.customOptions?.length > 0 
+                ? dish.customOptions.map(opt => opt.name)
+                : ['sugar', 'ice'], // 預設為奶茶類商品提供甜度和冰塊選項
+              // 保存原始的自定義選項數據以供使用
+              customOptionsData: dish.customOptions || []
             }))
             return allDishes.concat(dishesWithCategory)
           }, [])
           
           console.log('菜單數據加載成功:', response.data.menu)
+          // 檢查第一個菜品的自定義選項結構
+          if (response.data.menu.length > 0 && response.data.menu[0].dishes.length > 0) {
+            console.log('第一個菜品的customOptions:', response.data.menu[0].dishes[0].customOptions)
+          }
         } else {
           throw new Error('菜單數據格式錯誤')
         }
@@ -434,6 +448,13 @@ export default {
       
       return null
     }
+
+    // 監聽購物車顯示狀態
+    watch(showCart, (newValue) => {
+      if (newValue) {
+        console.log('購物車被打開，當前內容:', cartItems.value)
+      }
+    })
 
     // 在組件掛載時初始化
     onMounted(async () => {

@@ -44,12 +44,12 @@
     <div class="category-tabs">
       <BaseTag
         v-for="category in categories"
-        :key="category.id"
-        :variant="selectedCategory === category.id ? 'primary' : 'default'"
-        :onClick="() => selectCategory(category.id)"
+        :key="category._id"
+        :variant="selectedCategory === category._id ? 'primary' : 'default'"
+        :onClick="() => selectCategory(category._id)"
         size="medium"
       >
-        {{ category.name }}
+        {{ category.label }}
       </BaseTag>
     </div>
 
@@ -137,7 +137,7 @@
                   size="small"
                 >
                   {{ option.label }}
-                  <span v-if="option.price">+{{ option.price }}</span>
+                  <span v-if="option.price && option.price !== 0">+NT$ {{ option.price }}</span>
                 </BaseTag>
               </div>
             </div>

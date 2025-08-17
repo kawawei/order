@@ -118,6 +118,9 @@ export const menuAPI = {
   // 菜單相關
   getMenu: (params = {}) => api.get('/menu', { params }),
   updateMenuStructure: (data) => api.put('/menu/structure', data),
+  
+  // 客戶端公開菜單
+  getPublicMenu: (merchantId) => api.get(`/menu/public/${merchantId}`),
 };
 
 // 為了向後兼容，創建 menuService 對象
@@ -137,6 +140,9 @@ export const menuService = {
   // 菜單相關方法
   getMenu: menuAPI.getMenu,
   updateMenuStructure: menuAPI.updateMenuStructure,
+  
+  // 客戶端公開菜單
+  getPublicMenu: menuAPI.getPublicMenu,
 };
 
 export default api;
