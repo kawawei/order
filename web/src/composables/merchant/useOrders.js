@@ -346,6 +346,53 @@ export function useOrders() {
     }
   }
 
+  // 確認訂單
+  const confirmOrder = async (orderId) => {
+    try {
+      const response = await orderService.updateOrderStatus(orderId, {
+        status: 'confirmed'
+      })
+      
+      if (response.status === 'success') {
+        // 更新本地數據
+        const order = liveOrders.value.find(o => o._id === orderId)
+        if (order) {
+          order.status = 'confirmed'
+          // 觸發響應式更新
+          liveOrders.value = [...liveOrders.value]
+        }
+        console.log(`訂單已確認`)
+      }
+    } catch (error) {
+      console.error('確認訂單失敗:', error)
+      alert('確認訂單失敗，請重試')
+    }
+  }
+
+  // 開始製作
+  const startPreparing = async (orderId) => {
+    try {
+      const response = await orderService.updateOrderStatus(orderId, {
+        status: 'preparing'
+      })
+      
+      if (response.status === 'success') {
+        // 更新本地數據
+        const order = liveOrders.value.find(o => o._id === orderId)
+        if (order) {
+          order.status = 'preparing'
+          // 觸發響應式更新
+          liveOrders.value = [...liveOrders.value]
+        }
+        console.log(`訂單已開始製作`)
+      }
+    } catch (error) {
+      console.error('開始製作失敗:', error)
+      alert('開始製作失敗，請重試')
+    }
+  }
+
+  // 製作完成，標記為準備好
   const markAsReady = async (orderId) => {
     try {
       const response = await orderService.updateOrderStatus(orderId, {
@@ -358,8 +405,10 @@ export function useOrders() {
         if (order) {
           order.status = 'ready'
           order.readyAt = new Date()
+          // 觸發響應式更新
+          liveOrders.value = [...liveOrders.value]
         }
-        console.log(`訂單已標記為準備完成`)
+        console.log(`訂單已標記為準備好`)
       }
     } catch (error) {
       console.error('更新訂單狀態失敗:', error)
@@ -370,17 +419,19 @@ export function useOrders() {
   const markAsDelivered = async (orderId) => {
     try {
       const response = await orderService.updateOrderStatus(orderId, {
-        status: 'served'
+        status: 'delivered'
       })
       
       if (response.status === 'success') {
         // 更新本地數據
         const order = liveOrders.value.find(o => o._id === orderId)
         if (order) {
-          order.status = 'served'
+          order.status = 'delivered'
           order.deliveredAt = new Date()
+          // 觸發響應式更新
+          liveOrders.value = [...liveOrders.value]
         }
-        console.log(`訂單已標記為已送達`)
+        console.log(`訂單已標記為已送出`)
       }
     } catch (error) {
       console.error('更新訂單狀態失敗:', error)
@@ -515,6 +566,8 @@ export function useOrders() {
     
     // 方法
     refreshOrders,
+    confirmOrder,
+    startPreparing,
     markAsReady,
     markAsDelivered,
     viewOrderDetails,

@@ -107,9 +107,33 @@
                   <span class="total-amount">NT$ {{ batch.totalAmount }}</span>
                 </div>
                 <div class="batch-actions">
-                  <BaseButton variant="primary" size="small" @click="markAsReady(batch._id)">
-                    <font-awesome-icon icon="bell" />
-                    完成批次
+                  <!-- 根據訂單狀態顯示不同的按鈕 -->
+                  <BaseButton 
+                    v-if="batch.status === 'pending'" 
+                    variant="primary" 
+                    size="small" 
+                    @click="confirmOrder(batch._id)"
+                  >
+                    <font-awesome-icon icon="check" />
+                    確認訂單
+                  </BaseButton>
+                  <BaseButton 
+                    v-else-if="batch.status === 'confirmed'" 
+                    variant="danger" 
+                    size="small" 
+                    @click="startPreparing(batch._id)"
+                  >
+                    <font-awesome-icon icon="clock" />
+                    開始製作
+                  </BaseButton>
+                  <BaseButton 
+                    v-else-if="batch.status === 'preparing'" 
+                    variant="primary" 
+                    size="small" 
+                    @click="markAsReady(batch._id)"
+                  >
+                    <font-awesome-icon icon="check-circle" />
+                    製作完成
                   </BaseButton>
                 </div>
               </div>
@@ -150,7 +174,7 @@
                 <div class="batch-actions">
                   <BaseButton variant="secondary" size="small" @click="markAsDelivered(batch._id)">
                     <font-awesome-icon icon="truck" />
-                    送出批次
+                    出餐
                   </BaseButton>
                 </div>
               </div>
@@ -403,6 +427,8 @@ const {
   
   // 方法
   refreshOrders,
+  confirmOrder,
+  startPreparing,
   markAsReady,
   markAsDelivered,
   viewOrderDetails,

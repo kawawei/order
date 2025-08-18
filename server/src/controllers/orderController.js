@@ -336,7 +336,8 @@ exports.updateOrderStatus = catchAsync(async (req, res, next) => {
     'pending': ['confirmed', 'cancelled'],
     'confirmed': ['preparing', 'cancelled'],
     'preparing': ['ready', 'cancelled'],
-    'ready': ['served'],
+    'ready': ['delivered', 'cancelled'],
+    'delivered': ['completed'],
     'served': ['completed'],
     'completed': [],
     'cancelled': []

@@ -80,7 +80,7 @@ const orderSchema = new mongoose.Schema({
   },
   status: {
     type: String,
-    enum: ['pending', 'confirmed', 'preparing', 'ready', 'served', 'completed', 'cancelled'],
+    enum: ['pending', 'confirmed', 'preparing', 'ready', 'delivered', 'served', 'completed', 'cancelled'],
     default: 'pending'
   },
   customerNotes: {
@@ -100,6 +100,8 @@ const orderSchema = new mongoose.Schema({
     default: Date.now
   },
   confirmedAt: Date,
+  readyAt: Date,
+  deliveredAt: Date,
   servedAt: Date,
   completedAt: Date
 }, {
@@ -182,6 +184,10 @@ orderSchema.methods.updateStatus = function(newStatus) {
   
   if (newStatus === 'confirmed') {
     this.confirmedAt = new Date();
+  } else if (newStatus === 'ready') {
+    this.readyAt = new Date();
+  } else if (newStatus === 'delivered') {
+    this.deliveredAt = new Date();
   } else if (newStatus === 'served') {
     this.servedAt = new Date();
   } else if (newStatus === 'completed') {
