@@ -97,8 +97,16 @@
               </div>
               <div class="batch-items">
                 <div v-for="item in batch.items" :key="item._id" class="batch-item">
-                  <span class="item-name">{{ item.name }}</span>
-                  <span class="item-quantity">x{{ item.quantity }}</span>
+                  <div class="item-main">
+                    <span class="item-name">{{ item.name }}</span>
+                    <!-- 選項標籤橫排在菜名右邊 -->
+                    <div v-if="item.processedOptions && item.processedOptions.length > 0" class="item-options-inline">
+                      <span v-for="option in item.processedOptions" :key="option.key" class="option-tag">
+                        {{ option.valueLabel }}
+                      </span>
+                    </div>
+                    <span class="item-quantity">x{{ item.quantity }}</span>
+                  </div>
                 </div>
               </div>
               <div class="batch-footer">
@@ -162,8 +170,16 @@
               </div>
               <div class="batch-items">
                 <div v-for="item in batch.items" :key="item._id" class="batch-item">
-                  <span class="item-name">{{ item.name }}</span>
-                  <span class="item-quantity">x{{ item.quantity }}</span>
+                  <div class="item-main">
+                    <span class="item-name">{{ item.name }}</span>
+                    <!-- 選項標籤橫排在菜名右邊 -->
+                    <div v-if="item.processedOptions && item.processedOptions.length > 0" class="item-options-inline">
+                      <span v-for="option in item.processedOptions" :key="option.key" class="option-tag">
+                        {{ option.valueLabel }}
+                      </span>
+                    </div>
+                    <span class="item-quantity">x{{ item.quantity }}</span>
+                  </div>
                 </div>
               </div>
               <div class="batch-footer">
@@ -203,8 +219,16 @@
               </div>
               <div class="batch-items">
                 <div v-for="item in batch.items" :key="item._id" class="batch-item">
-                  <span class="item-name">{{ item.name }}</span>
-                  <span class="item-quantity">x{{ item.quantity }}</span>
+                  <div class="item-main">
+                    <span class="item-name">{{ item.name }}</span>
+                    <!-- 選項標籤橫排在菜名右邊 -->
+                    <div v-if="item.processedOptions && item.processedOptions.length > 0" class="item-options-inline">
+                      <span v-for="option in item.processedOptions" :key="option.key" class="option-tag">
+                        {{ option.valueLabel }}
+                      </span>
+                    </div>
+                    <span class="item-quantity">x{{ item.quantity }}</span>
+                  </div>
                 </div>
               </div>
               <div class="batch-footer">

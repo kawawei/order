@@ -91,7 +91,13 @@ export function useOrders() {
         totalAmount: order.totalAmount,
         itemCount: order.items.length,
         createdAt: order.createdAt,
-        items: order.items,
+        items: processOrderItems(order.items.map(item => ({
+          ...item,
+          // 確保選項信息被正確傳遞
+          selectedOptions: item.selectedOptions || {},
+          // 如果 dishId 是對象，提取名稱
+          name: item.dishId?.name || item.name
+        }))),
         orderNumber: order.orderNumber
       }
       
@@ -111,6 +117,110 @@ export function useOrders() {
     }
     
     return String(tableId)
+  }
+
+  // 獲取選項的中文標籤
+  const getOptionLabel = (optionName) => {
+    const optionLabels = {
+      'sweetness': '甜度',
+      'ice': '冰塊',
+      'size': '尺寸',
+      'temperature': '溫度',
+      'spiceLevel': '辣度',
+      'sugar': '糖度',
+      'milk': '奶精',
+      'toppings': '配料',
+      'sauce': '醬料',
+      'cooking': '烹調方式'
+    }
+    return optionLabels[optionName] || optionName
+  }
+
+  // 獲取選項值的中文標籤
+  const getOptionValueLabel = (optionName, optionValue) => {
+    const valueLabels = {
+      'sweetness': {
+        'no-sugar': '無糖',
+        'less-sugar': '微糖',
+        'half-sugar': '半糖',
+        'normal-sugar': '正常糖',
+        'more-sugar': '多糖'
+      },
+      'ice': {
+        'no-ice': '去冰',
+        'less-ice': '微冰',
+        'normal-ice': '正常冰',
+        'more-ice': '多冰'
+      },
+      'size': {
+        'small': '小杯',
+        'medium': '中杯',
+        'large': '大杯'
+      },
+      'temperature': {
+        'hot': '熱',
+        'warm': '溫',
+        'cold': '冷'
+      },
+      'spiceLevel': {
+        '0': '不辣',
+        '1': '微辣',
+        '2': '小辣',
+        '3': '中辣',
+        '4': '大辣',
+        '5': '特辣'
+      }
+    }
+    
+    const labels = valueLabels[optionName]
+    if (labels && labels[optionValue]) {
+      return labels[optionValue]
+    }
+    
+    // 如果沒有預定義的標籤，嘗試智能匹配
+    if (typeof optionValue === 'string') {
+      if (optionValue.includes('no') || optionValue.includes('0')) return '無'
+      if (optionValue.includes('less') || optionValue.includes('1')) return '微'
+      if (optionValue.includes('half') || optionValue.includes('2')) return '半'
+      if (optionValue.includes('normal') || optionValue.includes('3')) return '正常'
+      if (optionValue.includes('more') || optionValue.includes('4')) return '多'
+      if (optionValue.includes('5')) return '特'
+      if (optionValue.includes('small')) return '小'
+      if (optionValue.includes('medium')) return '中'
+      if (optionValue.includes('large')) return '大'
+      if (optionValue.includes('hot')) return '熱'
+      if (optionValue.includes('warm')) return '溫'
+      if (optionValue.includes('cold')) return '冷'
+    }
+    
+    return optionValue
+  }
+
+  // 處理訂單項目，添加選項標籤
+  const processOrderItems = (items) => {
+    return items.map(item => ({
+      ...item,
+      // 處理選項，添加中文標籤
+      processedOptions: item.selectedOptions ? 
+        Object.entries(item.selectedOptions).map(([key, value]) => {
+          // 如果 value 是對象且包含 name 屬性，直接使用
+          if (typeof value === 'object' && value !== null && value.name) {
+            return {
+              key,
+              value: value.name,
+              label: getOptionLabel(key),
+              valueLabel: value.name
+            }
+          }
+          // 否則使用原有的邏輯
+          return {
+            key,
+            value,
+            label: getOptionLabel(key),
+            valueLabel: getOptionValueLabel(key, value)
+          }
+        }) : []
+    }))
   }
 
   // 將同桌訂單按批次分組 (保留原有函數以備用)
@@ -143,7 +253,13 @@ export function useOrders() {
         }
       }
       
-      grouped[tableKey].batches.push(order)
+      // 處理訂單項目的選項
+      const processedOrder = {
+        ...order,
+        items: processOrderItems(order.items)
+      }
+      
+      grouped[tableKey].batches.push(processedOrder)
       grouped[tableKey].totalAmount += order.totalAmount
       grouped[tableKey].itemCount += order.items.length
       

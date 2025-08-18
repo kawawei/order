@@ -301,6 +301,7 @@ exports.getOrdersByMerchant = catchAsync(async (req, res, next) => {
       { path: 'tableId', select: 'tableNumber status' },
       { path: 'items.dishId', select: 'name price category image' }
     ])
+    .select('+items.selectedOptions') // 確保選項信息被包含
     .sort({ createdAt: -1 })
     .limit(parseInt(limit))
     .skip(skip);
