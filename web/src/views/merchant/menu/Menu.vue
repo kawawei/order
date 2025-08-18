@@ -79,11 +79,23 @@
 </template>
 
 <script setup>
+import { useRoute, useRouter } from 'vue-router'
 import { useMenuPage } from '../../../composables/merchant/useMenuPage'
+import { useAuth } from '../../../composables/useAuth'
 import AddCategoryDialog from '../../../components/merchant/menu/AddCategoryDialog.vue'
 import AddMenuItemDialog from '../../../components/merchant/menu/AddMenuItemDialog.vue'
 import MenuItemCard from '../../../components/merchant/menu/MenuItemCard.vue'
 import '../../../assets/styles/menu.css'
+
+const route = useRoute()
+const router = useRouter()
+const { user } = useAuth()
+
+// 檢查超級管理員是否有餐廳ID參數
+if (user.value?.role === 'admin' && !route.query.restaurantId) {
+  console.warn('超級管理員訪問菜單頁面缺少 restaurantId 參數，重定向到餐廳列表')
+  router.push({ name: 'AdminRestaurants' })
+}
 
 const {
   categories,
@@ -103,7 +115,7 @@ const {
   handleConfirmAddMenuItem,
   handleEditMenuItem,
   handleDeleteMenuItem
-} = useMenuPage()
+} = useMenuPage(route.query.restaurantId)
 </script>
 
 <style>

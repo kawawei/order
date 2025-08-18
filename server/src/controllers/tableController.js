@@ -1,3 +1,4 @@
+const mongoose = require('mongoose');
 const Table = require('../models/table');
 const Merchant = require('../models/merchant');
 const Order = require('../models/order');
@@ -5,9 +6,26 @@ const catchAsync = require('../utils/catchAsync');
 const AppError = require('../utils/appError');
 const QRCode = require('qrcode');
 
+// 輔助函數：獲取商家ID（支持超級管理員訪問特定商家）
+const getMerchantId = (req) => {
+  // 如果是超級管理員且指定了商家ID，使用指定的商家ID
+  if (req.admin && req.query.merchantId) {
+    return req.query.merchantId;
+  }
+  // 如果是超級管理員但沒有指定商家ID，返回錯誤信息
+  if (req.admin && !req.query.merchantId) {
+    throw new AppError('超級管理員訪問商家後台需要指定merchantId參數', 400);
+  }
+  // 否則使用當前登入的商家ID
+  if (!req.merchant) {
+    throw new AppError('無法獲取商家信息', 401);
+  }
+  return req.merchant.id;
+};
+
 // 獲取商家的所有桌次
 exports.getAllTables = catchAsync(async (req, res, next) => {
-  const merchantId = req.merchant.id;
+  const merchantId = getMerchantId(req);
   
   // 支援查詢參數
   const queryObj = { merchant: merchantId };
@@ -65,8 +83,8 @@ exports.getTable = catchAsync(async (req, res, next) => {
     return next(new AppError('找不到指定的桌次', 404));
   }
   
-  // 檢查桌次是否屬於當前商家
-  if (table.merchant._id.toString() !== req.merchant.id) {
+  // 檢查桌次是否屬於當前商家（超級管理員可以訪問所有桌次）
+  if (req.merchant && table.merchant._id.toString() !== req.merchant.id) {
     return next(new AppError('您沒有權限訪問此桌次', 403));
   }
   
@@ -151,7 +169,7 @@ exports.startOrdering = catchAsync(async (req, res, next) => {
 
 // 創建新桌次
 exports.createTable = catchAsync(async (req, res, next) => {
-  const merchantId = req.merchant.id;
+  const merchantId = getMerchantId(req);
   
   // 檢查桌號是否已存在
   const existingTable = await Table.findOne({
@@ -204,15 +222,15 @@ exports.updateTable = catchAsync(async (req, res, next) => {
     return next(new AppError('找不到指定的桌次', 404));
   }
   
-  // 檢查桌次是否屬於當前商家
-  if (table.merchant.toString() !== req.merchant.id) {
+  // 檢查桌次是否屬於當前商家（超級管理員可以修改所有桌次）
+  if (req.merchant && table.merchant.toString() !== req.merchant.id) {
     return next(new AppError('您沒有權限修改此桌次', 403));
   }
   
   // 如果修改了桌號，檢查是否與其他桌次衝突
   if (req.body.tableNumber && req.body.tableNumber !== table.tableNumber) {
     const existingTable = await Table.findOne({
-      merchant: req.merchant.id,
+      merchant: getMerchantId(req),
       tableNumber: req.body.tableNumber,
       _id: { $ne: table._id }
     });
@@ -251,8 +269,8 @@ exports.deleteTable = catchAsync(async (req, res, next) => {
     return next(new AppError('找不到指定的桌次', 404));
   }
   
-  // 檢查桌次是否屬於當前商家
-  if (table.merchant.toString() !== req.merchant.id) {
+  // 檢查桌次是否屬於當前商家（超級管理員可以刪除所有桌次）
+  if (req.merchant && table.merchant.toString() !== req.merchant.id) {
     return next(new AppError('您沒有權限刪除此桌次', 403));
   }
   
@@ -279,8 +297,8 @@ exports.updateTableStatus = catchAsync(async (req, res, next) => {
     return next(new AppError('找不到指定的桌次', 404));
   }
   
-  // 檢查桌次是否屬於當前商家
-  if (table.merchant.toString() !== req.merchant.id) {
+  // 檢查桌次是否屬於當前商家（超級管理員可以修改所有桌次狀態）
+  if (req.merchant && table.merchant.toString() !== req.merchant.id) {
     return next(new AppError('您沒有權限修改此桌次狀態', 403));
   }
   
@@ -342,7 +360,7 @@ exports.batchUpdateStatus = catchAsync(async (req, res, next) => {
   
   const tables = await Table.find({
     _id: { $in: tableIds },
-    merchant: req.merchant.id
+    merchant: getMerchantId(req)
   });
   
   if (tables.length !== tableIds.length) {
@@ -369,8 +387,8 @@ exports.regenerateQRCode = catchAsync(async (req, res, next) => {
     return next(new AppError('找不到指定的桌次', 404));
   }
   
-  // 檢查桌次是否屬於當前商家
-  if (table.merchant.toString() !== req.merchant.id) {
+  // 檢查桌次是否屬於當前商家（超級管理員可以操作所有桌次）
+  if (req.merchant && table.merchant.toString() !== req.merchant.id) {
     return next(new AppError('您沒有權限操作此桌次', 403));
   }
   
@@ -406,7 +424,7 @@ exports.regenerateQRCode = catchAsync(async (req, res, next) => {
 
 // 獲取桌次統計
 exports.getTableStats = catchAsync(async (req, res, next) => {
-  const merchantId = req.merchant.id;
+  const merchantId = getMerchantId(req);
   
   const mongoose = require('mongoose');
   const stats = await Table.aggregate([

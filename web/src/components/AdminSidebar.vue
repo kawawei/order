@@ -32,8 +32,7 @@ const isCollapsed = ref(false)
 
 const menuItems = [
   { path: '/admin/dashboard', icon: 'chart-line', label: '儀表板' },
-  { path: '/admin/users', icon: 'users', label: '用戶管理' },
-  { path: '/admin/settings', icon: 'cog', label: '系統設置' }
+  { path: '/admin/restaurants', icon: 'utensils', label: '餐廳管理' }
 ]
 
 const toggleSidebar = () => {

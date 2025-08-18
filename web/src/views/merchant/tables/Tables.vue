@@ -212,8 +212,11 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
+import { useRoute } from 'vue-router'
 import { tableAPI } from '@/services/api'
 import './Tables.css'
+
+const route = useRoute()
 
 // 響應式數據
 const tables = ref([])
@@ -233,7 +236,11 @@ const editingTable = ref({
 // 載入桌次數據
 const loadTables = async () => {
   try {
-    const response = await tableAPI.getTables()
+    const params = {}
+    if (route.query.restaurantId) {
+      params.merchantId = route.query.restaurantId
+    }
+    const response = await tableAPI.getTables(params)
     tables.value = response.data.tables || []
   } catch (error) {
     console.error('載入桌次失敗:', error)

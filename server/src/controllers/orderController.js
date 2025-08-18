@@ -5,6 +5,23 @@ const Dish = require('../models/dish');
 const catchAsync = require('../utils/catchAsync');
 const AppError = require('../utils/appError');
 
+// 輔助函數：獲取商家ID（支持超級管理員訪問特定商家）
+const getMerchantId = (req) => {
+  // 如果是超級管理員且指定了商家ID，使用指定的商家ID
+  if (req.admin && req.query.merchantId) {
+    return req.query.merchantId;
+  }
+  // 如果是超級管理員但沒有指定商家ID，返回錯誤信息
+  if (req.admin && !req.query.merchantId) {
+    throw new AppError('超級管理員訪問商家後台需要指定merchantId參數', 400);
+  }
+  // 否則使用當前登入的商家ID
+  if (!req.merchant) {
+    throw new AppError('無法獲取商家信息', 401);
+  }
+  return req.merchant.id;
+};
+
 // 創建新訂單或更新現有未結帳訂單
 exports.createOrder = catchAsync(async (req, res, next) => {
   const { tableId, items, customerNotes } = req.body;

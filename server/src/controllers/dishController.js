@@ -4,9 +4,38 @@ const MenuCategory = require('../models/menuCategory');
 const catchAsync = require('../utils/catchAsync');
 const AppError = require('../utils/appError');
 
+// 輔助函數：獲取商家ID（支持超級管理員訪問特定商家）
+const getMerchantId = (req) => {
+  console.log('=== getMerchantId 調試信息 ===');
+  console.log('req.admin:', req.admin);
+  console.log('req.merchant:', req.merchant);
+  console.log('req.query:', req.query);
+  console.log('req.query.merchantId:', req.query.merchantId);
+  console.log('req.params:', req.params);
+  console.log('==============================');
+  
+  // 如果是超級管理員且指定了商家ID，使用指定的商家ID
+  if (req.admin && req.query.merchantId) {
+    console.log('超級管理員訪問，使用指定的商家ID:', req.query.merchantId);
+    return req.query.merchantId;
+  }
+  // 如果是超級管理員但沒有指定商家ID，返回錯誤信息
+  if (req.admin && !req.query.merchantId) {
+    console.log('超級管理員訪問但沒有指定merchantId參數');
+    throw new AppError('超級管理員訪問商家後台需要指定merchantId參數', 400);
+  }
+  // 否則使用當前登入的商家ID
+  if (!req.merchant) {
+    console.log('無法獲取商家信息');
+    throw new AppError('無法獲取商家信息', 401);
+  }
+  console.log('使用當前登入的商家ID:', req.merchant.id);
+  return req.merchant.id;
+};
+
 // 獲取商家的所有菜品
 exports.getAllDishes = catchAsync(async (req, res, next) => {
-  const merchantId = req.merchant.id;
+  const merchantId = getMerchantId(req);
   
   const queryObj = { merchant: merchantId };
   
@@ -144,8 +173,8 @@ exports.getDish = catchAsync(async (req, res, next) => {
     return next(new AppError('找不到指定的菜品', 404));
   }
   
-  // 檢查菜品是否屬於當前商家
-  if (dish.merchant._id.toString() !== req.merchant.id) {
+  // 檢查菜品是否屬於當前商家（超級管理員可以訪問所有菜品）
+  if (req.merchant && dish.merchant._id.toString() !== req.merchant.id) {
     return next(new AppError('您沒有權限訪問此菜品', 403));
   }
   
@@ -160,18 +189,18 @@ exports.getDish = catchAsync(async (req, res, next) => {
 // 創建新菜品
 exports.createDish = catchAsync(async (req, res, next) => {
   // 確保菜品關聯到當前商家
-  req.body.merchant = req.merchant.id;
+  req.body.merchant = getMerchantId(req);
   
   // 驗證分類是否屬於當前商家
   const category = await MenuCategory.findById(req.body.category);
-  if (!category || category.merchant.toString() !== req.merchant.id) {
+  if (!category || category.merchant.toString() !== getMerchantId(req)) {
     return next(new AppError('無效的分類或分類不屬於您的商家', 400));
   }
   
   // 如果沒有提供排序順序，設置為分類中最大值+1
   if (!req.body.sortOrder) {
     const lastDish = await Dish.findOne({ 
-      merchant: req.merchant.id,
+      merchant: getMerchantId(req),
       category: req.body.category
     }).sort({ sortOrder: -1 });
     req.body.sortOrder = lastDish ? lastDish.sortOrder + 1 : 1;
@@ -203,15 +232,15 @@ exports.updateDish = catchAsync(async (req, res, next) => {
     return next(new AppError('找不到指定的菜品', 404));
   }
   
-  // 檢查菜品是否屬於當前商家
-  if (dish.merchant.toString() !== req.merchant.id) {
+  // 檢查菜品是否屬於當前商家（超級管理員可以修改所有菜品）
+  if (req.merchant && dish.merchant.toString() !== req.merchant.id) {
     return next(new AppError('您沒有權限修改此菜品', 403));
   }
   
   // 如果要修改分類，驗證新分類是否屬於當前商家
   if (req.body.category && req.body.category !== dish.category.toString()) {
     const category = await MenuCategory.findById(req.body.category);
-    if (!category || category.merchant.toString() !== req.merchant.id) {
+    if (!category || category.merchant.toString() !== getMerchantId(req)) {
       return next(new AppError('無效的分類或分類不屬於您的商家', 400));
     }
   }
@@ -243,8 +272,8 @@ exports.deleteDish = catchAsync(async (req, res, next) => {
     return next(new AppError('找不到指定的菜品', 404));
   }
   
-  // 檢查菜品是否屬於當前商家
-  if (dish.merchant.toString() !== req.merchant.id) {
+  // 檢查菜品是否屬於當前商家（超級管理員可以刪除所有菜品）
+  if (req.merchant && dish.merchant.toString() !== req.merchant.id) {
     return next(new AppError('您沒有權限刪除此菜品', 403));
   }
   
@@ -267,7 +296,7 @@ exports.batchUpdateDishes = catchAsync(async (req, res, next) => {
   // 驗證所有菜品都屬於當前商家
   const dishes = await Dish.find({
     _id: { $in: dishIds },
-    merchant: req.merchant.id
+    merchant: getMerchantId(req)
   });
   
   if (dishes.length !== dishIds.length) {
@@ -294,7 +323,7 @@ exports.batchUpdateDishes = catchAsync(async (req, res, next) => {
 
 // 獲取菜品統計信息
 exports.getDishStats = catchAsync(async (req, res, next) => {
-  const merchantId = req.merchant.id;
+  const merchantId = getMerchantId(req);
   
   const stats = await Dish.aggregate([
     { $match: { merchant: new mongoose.Types.ObjectId(merchantId) } },

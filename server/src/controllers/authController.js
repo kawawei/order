@@ -117,14 +117,35 @@ exports.protect = catchAsync(async (req, res, next) => {
   // 驗證 Token
   const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
-  // 檢查商家是否仍然存在
-  const merchant = await Merchant.findById(decoded.id);
-  if (!merchant) {
-    return next(new AppError('此 Token 對應的商家不存在', 401));
+  // 檢查用戶是否仍然存在
+  if (decoded.role === 'merchant') {
+    const merchant = await Merchant.findById(decoded.id);
+    if (!merchant) {
+      return next(new AppError('此 Token 對應的商家不存在', 401));
+    }
+    // 將商家信息添加到請求對象
+    req.merchant = merchant;
+    req.user = merchant;
+  } else if (decoded.role === 'admin' || decoded.role === 'superadmin') {
+    const Admin = require('../models/admin');
+    const admin = await Admin.findById(decoded.id);
+    if (!admin) {
+      return next(new AppError('此 Token 對應的管理員不存在', 401));
+    }
+    // 將管理員信息添加到請求對象
+    req.admin = admin;
+    req.user = admin;
+  } else {
+    // 默認情況下，假設是商家用戶（向後兼容）
+    const merchant = await Merchant.findById(decoded.id);
+    if (!merchant) {
+      return next(new AppError('此 Token 對應的用戶不存在', 401));
+    }
+    // 將商家信息添加到請求對象
+    req.merchant = merchant;
+    req.user = merchant;
   }
-
-  // 將商家信息添加到請求對象
-  req.merchant = merchant;
+  
   next();
 });
 

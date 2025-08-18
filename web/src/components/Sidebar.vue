@@ -6,35 +6,35 @@
       </button>
     </div>
     <nav class="sidebar-nav">
-      <router-link to="/merchant/dashboard" class="nav-item">
+      <router-link :to="{ path: '/merchant/dashboard', query: route.query }" class="nav-item">
         <div class="icon-wrapper">
           <font-awesome-icon icon="chart-line" />
         </div>
         <span class="nav-text">儀表板</span>
       </router-link>
 
-      <router-link to="/merchant/menu" class="nav-item">
+      <router-link :to="{ path: '/merchant/menu', query: route.query }" class="nav-item">
         <div class="icon-wrapper">
           <font-awesome-icon icon="utensils" />
         </div>
         <span class="nav-text">菜單管理</span>
       </router-link>
 
-      <router-link to="/merchant/tables" class="nav-item">
+      <router-link :to="{ path: '/merchant/tables', query: route.query }" class="nav-item">
         <div class="icon-wrapper">
           <font-awesome-icon icon="table" />
         </div>
         <span class="nav-text">桌次管理</span>
       </router-link>
 
-      <router-link to="/merchant/orders" class="nav-item">
+      <router-link :to="{ path: '/merchant/orders', query: route.query }" class="nav-item">
         <div class="icon-wrapper">
           <font-awesome-icon icon="receipt" />
         </div>
         <span class="nav-text">查看訂單</span>
       </router-link>
 
-      <router-link to="/merchant/settings" class="nav-item">
+      <router-link :to="{ path: '/merchant/settings', query: route.query }" class="nav-item">
         <div class="icon-wrapper">
           <font-awesome-icon icon="cog" />
         </div>
@@ -46,7 +46,9 @@
 
 <script setup>
 import { ref } from 'vue'
+import { useRoute } from 'vue-router'
 
+const route = useRoute()
 const isCollapsed = ref(false)
 
 const toggleSidebar = () => {

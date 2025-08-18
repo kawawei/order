@@ -418,8 +418,11 @@
 </template>
 
 <script setup>
+import { useRoute } from 'vue-router'
 import { useOrders } from '../../../composables/merchant/useOrders'
 import './Orders.css'
+
+const route = useRoute()
 
 const {
   // 響應式數據
@@ -462,5 +465,5 @@ const {
   getStatVariant,
   getOrderStatusVariant,
   getOrderStatusText
-} = useOrders()
+} = useOrders(route.query.restaurantId)
 </script>

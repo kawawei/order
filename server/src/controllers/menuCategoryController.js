@@ -4,9 +4,38 @@ const Dish = require('../models/dish');
 const catchAsync = require('../utils/catchAsync');
 const AppError = require('../utils/appError');
 
+// 輔助函數：獲取商家ID（支持超級管理員訪問特定商家）
+const getMerchantId = (req) => {
+  console.log('=== menuCategoryController getMerchantId 調試信息 ===');
+  console.log('req.admin:', req.admin);
+  console.log('req.merchant:', req.merchant);
+  console.log('req.query:', req.query);
+  console.log('req.query.merchantId:', req.query.merchantId);
+  console.log('req.params:', req.params);
+  console.log('================================================');
+  
+  // 如果是超級管理員且指定了商家ID，使用指定的商家ID
+  if (req.admin && req.query.merchantId) {
+    console.log('超級管理員訪問，使用指定的商家ID:', req.query.merchantId);
+    return req.query.merchantId;
+  }
+  // 如果是超級管理員但沒有指定商家ID，返回錯誤信息
+  if (req.admin && !req.query.merchantId) {
+    console.log('超級管理員訪問但沒有指定merchantId參數');
+    throw new AppError('超級管理員訪問商家後台需要指定merchantId參數', 400);
+  }
+  // 否則使用當前登入的商家ID
+  if (!req.merchant) {
+    console.log('無法獲取商家信息');
+    throw new AppError('無法獲取商家信息', 401);
+  }
+  console.log('使用當前登入的商家ID:', req.merchant.id);
+  return req.merchant.id;
+};
+
 // 獲取商家的所有菜單分類
 exports.getAllCategories = catchAsync(async (req, res, next) => {
-  const merchantId = req.merchant.id;
+  const merchantId = getMerchantId(req);
   
   const queryObj = { merchant: merchantId };
   
@@ -41,8 +70,8 @@ exports.getCategory = catchAsync(async (req, res, next) => {
     return next(new AppError('找不到指定的分類', 404));
   }
   
-  // 檢查分類是否屬於當前商家
-  if (category.merchant._id.toString() !== req.merchant.id) {
+  // 檢查分類是否屬於當前商家（超級管理員可以訪問所有分類）
+  if (req.merchant && category.merchant._id.toString() !== req.merchant.id) {
     return next(new AppError('您沒有權限訪問此分類', 403));
   }
   
@@ -57,11 +86,11 @@ exports.getCategory = catchAsync(async (req, res, next) => {
 // 創建新分類
 exports.createCategory = catchAsync(async (req, res, next) => {
   // 確保分類關聯到當前商家
-  req.body.merchant = req.merchant.id;
+  req.body.merchant = getMerchantId(req);
   
   // 如果沒有提供排序順序，設置為最大值+1
   if (!req.body.sortOrder) {
-    const lastCategory = await MenuCategory.findOne({ merchant: req.merchant.id })
+    const lastCategory = await MenuCategory.findOne({ merchant: getMerchantId(req) })
       .sort({ sortOrder: -1 });
     req.body.sortOrder = lastCategory ? lastCategory.sortOrder + 1 : 1;
   }
@@ -84,8 +113,8 @@ exports.updateCategory = catchAsync(async (req, res, next) => {
     return next(new AppError('找不到指定的分類', 404));
   }
   
-  // 檢查分類是否屬於當前商家
-  if (category.merchant.toString() !== req.merchant.id) {
+  // 檢查分類是否屬於當前商家（超級管理員可以修改所有分類）
+  if (req.merchant && category.merchant.toString() !== req.merchant.id) {
     return next(new AppError('您沒有權限修改此分類', 403));
   }
   
@@ -114,8 +143,8 @@ exports.deleteCategory = catchAsync(async (req, res, next) => {
     return next(new AppError('找不到指定的分類', 404));
   }
   
-  // 檢查分類是否屬於當前商家
-  if (category.merchant.toString() !== req.merchant.id) {
+  // 檢查分類是否屬於當前商家（超級管理員可以刪除所有分類）
+  if (req.merchant && category.merchant.toString() !== req.merchant.id) {
     return next(new AppError('您沒有權限刪除此分類', 403));
   }
   
@@ -144,7 +173,7 @@ exports.updateCategoriesOrder = catchAsync(async (req, res, next) => {
   // 批量更新排序
   const updates = categories.map(async (item) => {
     const category = await MenuCategory.findById(item.id);
-    if (!category || category.merchant.toString() !== req.merchant.id) {
+    if (!category || category.merchant.toString() !== getMerchantId(req)) {
       throw new AppError('無效的分類ID或權限不足', 400);
     }
     
@@ -167,7 +196,7 @@ exports.updateCategoriesOrder = catchAsync(async (req, res, next) => {
 
 // 獲取分類統計信息
 exports.getCategoryStats = catchAsync(async (req, res, next) => {
-  const merchantId = req.merchant.id;
+  const merchantId = getMerchantId(req);
   
   const stats = await MenuCategory.aggregate([
     { $match: { merchant: new mongoose.Types.ObjectId(merchantId) } },

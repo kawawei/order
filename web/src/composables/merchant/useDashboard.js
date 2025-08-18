@@ -2,7 +2,7 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { orderService } from '@/services/api'
 import api from '@/services/api'
 
-export function useDashboard() {
+export function useDashboard(restaurantId = null) {
   const currentDate = ref('')
   const loading = ref(false)
   const error = ref(null)
@@ -59,10 +59,31 @@ export function useDashboard() {
   // 獲取商家ID
   const getMerchantId = () => {
     try {
-      // 首先嘗試從localStorage獲取用戶信息
+      // 優先使用傳入的restaurantId參數（超級管理員查看特定商家時使用）
+      if (restaurantId) {
+        console.log(`使用傳入的餐廳ID: ${restaurantId}`)
+        return restaurantId
+      }
+      
+      // 其次嘗試從URL查詢參數獲取restaurantId（超級管理員從餐廳管理頁面跳轉過來）
+      const urlParams = new URLSearchParams(window.location.search)
+      const urlRestaurantId = urlParams.get('restaurantId')
+      if (urlRestaurantId) {
+        console.log(`使用URL查詢參數中的餐廳ID: ${urlRestaurantId}`)
+        return urlRestaurantId
+      }
+      
+      // 再次嘗試從localStorage獲取用戶信息
       const storedUser = localStorage.getItem('user')
       if (storedUser) {
         const userData = JSON.parse(storedUser)
+        // 如果是超級管理員，需要從其他地方獲取商家ID
+        if (userData.role === 'admin' || userData.role === 'superadmin') {
+          // 超級管理員查看商家後台時，應該有 restaurantId 參數
+          // 如果沒有，則無法獲取商家ID
+          console.warn('超級管理員查看商家後台需要指定餐廳ID')
+          return null
+        }
         return userData._id || userData.id
       }
       
@@ -164,13 +185,32 @@ export function useDashboard() {
   const loadBusinessStats = async () => {
     try {
       const merchantId = getMerchantId()
-      if (!merchantId) return
+      if (!merchantId) {
+        console.warn('無法載入營業統計：商家ID不存在')
+        return
+      }
       
       // 調用桌台統計API
-      const tableResponse = await api.get('/tables/stats')
+      // 如果是超級管理員，需要傳遞merchantId參數
+      const storedUser = localStorage.getItem('user')
+      let tableResponse
+      
+      if (storedUser) {
+        const userData = JSON.parse(storedUser)
+        if (userData.role === 'admin' || userData.role === 'superadmin') {
+          // 超級管理員需要傳遞merchantId參數
+          tableResponse = await api.get(`/tables/stats?merchantId=${merchantId}`)
+        } else {
+          // 商家直接呼叫自己的API
+          tableResponse = await api.get(`/tables/stats`)
+        }
+      } else {
+        // 默認情況，直接呼叫API
+        tableResponse = await api.get(`/tables/stats`)
+      }
       
       if (tableResponse.status === 'success') {
-        const stats = tableResponse.data.stats
+        const stats = tableResponse.data
         businessStats.value = {
           tablesInUse: stats.occupiedTables || 0,
           totalTables: stats.totalTables || 0,

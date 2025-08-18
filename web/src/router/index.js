@@ -5,7 +5,7 @@ import { useAuth } from '../composables/useAuth'
 import AdminLayout from '../layouts/AdminLayout.vue'
 import AdminDashboard from '../views/admin/dashboard/Dashboard.vue'
 import AdminLogin from '../views/auth/admin/Login.vue'
-import AdminUsers from '../views/admin/users/Users.vue'
+// Removed legacy users import to avoid case-sensitive duplicate and missing file
 
 const routes = [
   // 餐廳管理員路由
@@ -80,11 +80,7 @@ const routes = [
         name: 'AdminRestaurants',
         component: () => import('../views/admin/restaurants/Restaurants.vue')
       },
-      {
-        path: 'users',
-        name: 'AdminUsers',
-        component: AdminUsers
-      },
+
       {
         path: '',
         redirect: { name: 'AdminDashboard' }
@@ -167,6 +163,9 @@ router.beforeEach((to, from, next) => {
     // 驗證用戶角色
     const userRole = getUserRole()
     if (userRole === routeRole) {
+      next()
+    } else if (userRole === 'admin' && routeRole === 'merchant') {
+      // 超級管理員可以訪問商家後台
       next()
     } else {
       // 無權訪問時重定向到對應的登入頁面

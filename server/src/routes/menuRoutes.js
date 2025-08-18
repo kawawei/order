@@ -1,16 +1,16 @@
 const express = require('express');
 const menuCategoryController = require('../controllers/menuCategoryController');
 const dishController = require('../controllers/dishController');
-const { protect, restrictTo } = require('../middleware/auth');
+const { protectMerchantOrAdmin, restrictTo } = require('../middleware/auth');
 
 const router = express.Router();
 
 // 公開路由 - 客戶端獲取菜單
 router.get('/public/:merchantId', dishController.getPublicMenu);
 
-// 商家登入後才能訪問的路由
-router.use(protect);
-router.use(restrictTo('merchant'));
+// 商家或超級管理員登入後才能訪問的路由
+router.use(protectMerchantOrAdmin);
+router.use(restrictTo('merchant', 'admin'));
 
 // 菜單分類路由
 router.route('/categories')

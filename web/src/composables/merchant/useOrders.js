@@ -1,7 +1,7 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { orderService } from '@/services/api'
 
-export function useOrders() {
+export function useOrders(restaurantId = null) {
   // 響應式數據
   const activeTab = ref('live')
   const selectedTimeRange = ref('today')
@@ -63,49 +63,30 @@ export function useOrders() {
 
   // 將訂單按批次分組，每個批次一張卡片，按時間順序排列
   const groupOrdersByBatch = (orders) => {
-    const batchCards = []
+    const batchMap = new Map()
     
     orders.forEach(order => {
-      // 每個訂單就是一個批次卡片
-      const tableNumber = getTableNumber(order.tableId)
-      
-      // 從訂單號解析批次號
-      let batchNumber = order.batchNumber || 1
-      if (order.orderNumber && order.orderNumber.includes('-')) {
-        const parts = order.orderNumber.split('-')
-        if (parts.length >= 2) {
-          const dateGroupBatch = parts[1]
-          if (dateGroupBatch.length >= 12) {
-            const batchPart = dateGroupBatch.substring(12, 15)
-            batchNumber = parseInt(batchPart)
-          }
-        }
+      const batchKey = order.batchNumber || order._id
+      if (!batchMap.has(batchKey)) {
+        batchMap.set(batchKey, {
+          _id: batchKey,
+          batchNumber: order.batchNumber || '單一訂單',
+          tableNumber: order.tableNumber,
+          createdAt: order.createdAt,
+          items: [],
+          totalAmount: 0,
+          status: order.status
+        })
       }
       
-      const batchCard = {
-        _id: order._id,
-        tableId: order.tableId?._id || order.tableId,
-        tableNumber: tableNumber,
-        batchNumber: batchNumber,
-        status: order.status,
-        totalAmount: order.totalAmount,
-        itemCount: order.items.length,
-        createdAt: order.createdAt,
-        items: processOrderItems(order.items.map(item => ({
-          ...item,
-          // 確保選項信息被正確傳遞
-          selectedOptions: item.selectedOptions || {},
-          // 如果 dishId 是對象，提取名稱
-          name: item.dishId?.name || item.name
-        }))),
-        orderNumber: order.orderNumber
-      }
-      
-      batchCards.push(batchCard)
+      const batch = batchMap.get(batchKey)
+      batch.items.push(...(order.items || []))
+      batch.totalAmount += order.totalAmount || 0
     })
     
-    // 按時間順序排列，最新的在最上面
-    return batchCards.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+    return Array.from(batchMap.values()).sort((a, b) => 
+      new Date(b.createdAt) - new Date(a.createdAt)
+    )
   }
 
   // 輔助函數：獲取桌號
@@ -378,10 +359,23 @@ export function useOrders() {
   // 獲取商家ID - 從localStorage中的用戶信息獲取
   const getMerchantId = () => {
     try {
-      // 首先嘗試從localStorage獲取用戶信息
+      // 優先使用傳入的restaurantId參數（超級管理員查看特定商家時使用）
+      if (restaurantId) {
+        console.log(`使用傳入的餐廳ID: ${restaurantId}`)
+        return restaurantId
+      }
+      
+      // 其次嘗試從localStorage獲取用戶信息
       const storedUser = localStorage.getItem('user')
       if (storedUser) {
         const userData = JSON.parse(storedUser)
+        // 如果是超級管理員，需要從其他地方獲取商家ID
+        if (userData.role === 'admin' || userData.role === 'superadmin') {
+          // 超級管理員查看商家後台時，應該有 restaurantId 參數
+          // 如果沒有，則無法獲取商家ID
+          console.warn('超級管理員查看商家後台需要指定餐廳ID')
+          return null
+        }
         return userData._id || userData.id
       }
       

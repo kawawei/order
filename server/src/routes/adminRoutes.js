@@ -26,4 +26,17 @@ router.route('/')
   .get(adminController.getAllAdmins)
   .post(adminController.createAdmin);
 
+// 商家管理路由
+router.route('/merchants')
+  .get(adminController.getAllMerchants);
+
+router.route('/merchants/:id')
+  .get(adminController.getMerchant)
+  .patch(adminController.updateMerchantStatus)
+  .delete(adminController.deleteMerchant);
+
+// 超級管理員查看特定商家統計信息
+router.get('/merchants/:id/tables/stats', adminController.getMerchantTableStats);
+router.get('/merchants/:id/orders/stats', adminController.getMerchantOrderStats);
+
 module.exports = router;

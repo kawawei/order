@@ -18,7 +18,7 @@ const defaultOptions = {
   ]
 }
 
-export function useMenu() {
+export function useMenu(restaurantId = null) {
   const categories = ref([])
   const dishes = ref([])
   const activeCategory = ref('')
@@ -29,7 +29,15 @@ export function useMenu() {
   const loadCategories = async () => {
     try {
       loading.value = true
-      const response = await menuService.getCategories({ isActive: true })
+      const params = { isActive: true }
+      if (restaurantId) {
+        params.merchantId = restaurantId
+      }
+      console.log('=== loadCategories 調試信息 ===');
+      console.log('restaurantId:', restaurantId);
+      console.log('params:', params);
+      console.log('==============================');
+      const response = await menuService.getCategories(params)
       if (response.status === 'success') {
         categories.value = response.data.categories
         if (categories.value.length > 0 && !activeCategory.value) {
@@ -52,6 +60,14 @@ export function useMenu() {
       if (categoryId) {
         params.category = categoryId
       }
+      if (restaurantId) {
+        params.merchantId = restaurantId
+      }
+      console.log('=== loadDishes 調試信息 ===');
+      console.log('restaurantId:', restaurantId);
+      console.log('categoryId:', categoryId);
+      console.log('params:', params);
+      console.log('==============================');
       const response = await menuService.getDishes(params)
       if (response.status === 'success') {
         dishes.value = response.data.dishes

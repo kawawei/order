@@ -1,19 +1,34 @@
 <template>
   <div class="dashboard">
-    <header class="dashboard-header">
-      <div class="header-main">
-        <h1>儀表板</h1>
-        <BaseTag variant="info" size="medium">
-          <font-awesome-icon icon="clock" class="mr-1" />
-          {{ currentDate }}
-        </BaseTag>
-      </div>
-      <div class="header-actions">
-        <BaseButton variant="secondary" size="small" icon="print">
-          匯出報表
+    <!-- 檢查是否有餐廳ID參數 -->
+    <div v-if="!route.query.restaurantId" class="error-state">
+      <div class="error-content">
+        <font-awesome-icon icon="exclamation-triangle" size="3x" class="error-icon" />
+        <h2>無法載入餐廳數據</h2>
+        <p>缺少餐廳ID參數，請從餐廳管理頁面進入</p>
+        <BaseButton variant="primary" @click="goToRestaurants">
+          <font-awesome-icon icon="arrow-left" class="mr-2" />
+          返回餐廳管理
         </BaseButton>
       </div>
-    </header>
+    </div>
+
+    <!-- 儀表板內容 -->
+    <div v-else>
+      <header class="dashboard-header">
+        <div class="header-main">
+          <h1>儀表板</h1>
+          <BaseTag variant="info" size="medium">
+            <font-awesome-icon icon="clock" class="mr-1" />
+            {{ currentDate }}
+          </BaseTag>
+        </div>
+        <div class="header-actions">
+          <BaseButton variant="secondary" size="small" icon="print">
+            匯出報表
+          </BaseButton>
+        </div>
+      </header>
     
     <div class="dashboard-grid">
       <!-- 即時訂單 -->
@@ -191,11 +206,17 @@
         />
       </BaseCard>
     </div>
+      </div>
   </div>
 </template>
 
 <script setup>
+import { onMounted } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { useDashboard } from '../../../composables/merchant/useDashboard'
+
+const route = useRoute()
+const router = useRouter()
 
 const {
   currentDate,
@@ -208,7 +229,18 @@ const {
   popularItems,
   popularItemsColumns,
   refreshItems
-} = useDashboard()
+} = useDashboard(route.query.restaurantId)
+
+// 處理來自超級管理員的查詢參數
+onMounted(() => {
+  const restaurantId = route.query.restaurantId
+  const restaurantName = route.query.restaurantName
+  
+  if (restaurantId && restaurantName) {
+    console.log(`超級管理員正在查看餐廳: ${restaurantName} (ID: ${restaurantId})`)
+    // 這裡可以根據需要設置特定的餐廳數據或顯示提示
+  }
+})
 
 // 格式化貨幣
 const formatCurrency = (amount) => {
@@ -233,6 +265,11 @@ const getStatusLabel = (status) => {
     'ready': '待送達'
   }
   return labels[status] || status
+}
+
+// 返回餐廳管理頁面
+const goToRestaurants = () => {
+  router.push({ name: 'AdminRestaurants' })
 }
 </script>
 

@@ -1,6 +1,6 @@
 const express = require('express');
 const tableController = require('../controllers/tableController');
-const { protect, restrictTo } = require('../middleware/auth');
+const { protectMerchantOrAdmin, restrictTo } = require('../middleware/auth');
 
 const router = express.Router();
 
@@ -10,9 +10,9 @@ router.get('/public/:code', tableController.getTableByCode);
 // 公開路由 - 客戶端開始點餐
 router.post('/:id/start-ordering', tableController.startOrdering);
 
-// 商家登入後才能訪問的路由
-router.use(protect);
-router.use(restrictTo('merchant'));
+// 商家或超級管理員登入後才能訪問的路由
+router.use(protectMerchantOrAdmin);
+router.use(restrictTo('merchant', 'admin'));
 
 // 統計信息 - 必須在 /:id 路由之前
 router.get('/stats', tableController.getTableStats);

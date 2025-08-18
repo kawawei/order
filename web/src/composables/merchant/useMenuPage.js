@@ -1,7 +1,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useMenu } from './useMenu'
 
-export function useMenuPage() {
+export function useMenuPage(restaurantId = null) {
   const {
     categories,
     dishes,
@@ -17,7 +17,7 @@ export function useMenuPage() {
     updateDish,
     removeDish,
     initializeData
-  } = useMenu()
+  } = useMenu(restaurantId)
 
   // 根據分類組織菜品數據
   const menuItems = computed(() => {

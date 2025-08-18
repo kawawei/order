@@ -84,7 +84,7 @@ export const authAPI = {
 
 export const tableAPI = {
   // 獲取桌次列表
-  getTables: () => api.get('/tables'),
+  getTables: (params = {}) => api.get('/tables', { params }),
   
   // 創建新桌次
   createTable: (data) => api.post('/tables', data),
@@ -157,6 +157,21 @@ export const orderAPI = {
   
   // 獲取訂單統計
   getOrderStats: (merchantId, params = {}) => api.get(`/orders/merchant/${merchantId}/stats`, { params }),
+};
+
+// 商家管理 API（超級管理員專用）
+export const merchantAPI = {
+  // 獲取所有商家
+  getAllMerchants: (params = {}) => api.get('/admin/merchants', { params }),
+  
+  // 獲取單個商家
+  getMerchant: (merchantId) => api.get(`/admin/merchants/${merchantId}`),
+  
+  // 更新商家狀態
+  updateMerchantStatus: (merchantId, status) => api.patch(`/admin/merchants/${merchantId}`, { status }),
+  
+  // 刪除商家
+  deleteMerchant: (merchantId) => api.delete(`/admin/merchants/${merchantId}`)
 };
 
 export const menuService = {
