@@ -34,6 +34,13 @@
         <span class="nav-text">查看訂單</span>
       </router-link>
 
+      <router-link :to="{ path: '/merchant/reports', query: route.query }" class="nav-item">
+        <div class="icon-wrapper">
+          <font-awesome-icon icon="chart-bar" />
+        </div>
+        <span class="nav-text">報表統計</span>
+      </router-link>
+
       <router-link :to="{ path: '/merchant/settings', query: route.query }" class="nav-item">
         <div class="icon-wrapper">
           <font-awesome-icon icon="cog" />

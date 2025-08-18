@@ -70,7 +70,10 @@ import {
   faPlay,
   faSearch,
   faSpinner,
-  faArrowLeft
+  faArrowLeft,
+  faChartBar,
+  faCalculator,
+  faPercent
 } from '@fortawesome/free-solid-svg-icons'
 
 /* Import Base Components */
@@ -137,7 +140,10 @@ library.add(
   faPlay,
   faSearch,
   faSpinner,
-  faArrowLeft
+  faArrowLeft,
+  faChartBar,
+  faCalculator,
+  faPercent
 )
 
 const app = createApp(App)
