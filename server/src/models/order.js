@@ -219,6 +219,22 @@ orderSchema.pre('save', function(next) {
   next();
 });
 
+// 虛擬字段：簡化的訂單號顯示格式
+orderSchema.virtual('displayOrderNumber').get(function() {
+  // 從完整訂單號中提取桌號和組別號
+  const match = this.orderNumber.match(/^T(\d+)-(\d{8})(\d{4})/);
+  if (match) {
+    const tableNumber = match[1];
+    const groupNumber = parseInt(match[3]);
+    return `T${tableNumber}-${groupNumber.toString().padStart(3, '0')}`;
+  }
+  return this.orderNumber; // 如果無法解析，返回原始訂單號
+});
+
+// 確保虛擬字段在 JSON 序列化時被包含
+orderSchema.set('toJSON', { virtuals: true });
+orderSchema.set('toObject', { virtuals: true });
+
 // 計算總金額的方法
 orderSchema.methods.calculateTotal = function() {
   this.totalAmount = this.items.reduce((total, item) => {

@@ -25,8 +25,8 @@ exports.createOrder = catchAsync(async (req, res, next) => {
     return next(new AppError('桌子狀態不正確', 400));
   }
 
-  // 新的編號系統會自動處理批次號碼，這裡設置為1
-  const nextBatchNumber = 1;
+  // 獲取下一個批次號碼
+  const nextBatchNumber = await Order.getNextBatchNumber(table._id);
 
   // 驗證商品並計算價格
   const validatedItems = [];

@@ -69,11 +69,24 @@ export function useOrders() {
       // 每個訂單就是一個批次卡片
       const tableNumber = getTableNumber(order.tableId)
       
+      // 從訂單號解析批次號
+      let batchNumber = order.batchNumber || 1
+      if (order.orderNumber && order.orderNumber.includes('-')) {
+        const parts = order.orderNumber.split('-')
+        if (parts.length >= 2) {
+          const dateGroupBatch = parts[1]
+          if (dateGroupBatch.length >= 12) {
+            const batchPart = dateGroupBatch.substring(12, 15)
+            batchNumber = parseInt(batchPart)
+          }
+        }
+      }
+      
       const batchCard = {
         _id: order._id,
         tableId: order.tableId?._id || order.tableId,
         tableNumber: tableNumber,
-        batchNumber: order.batchNumber || 1,
+        batchNumber: batchNumber,
         status: order.status,
         totalAmount: order.totalAmount,
         itemCount: order.items.length,
@@ -403,7 +416,7 @@ export function useOrders() {
           tableNumber: tableNumber,
           customerGroup: customerGroup,
           orders: [],
-          batchCount: 0,
+          batchNumbers: new Set(), // 使用 Set 來收集批次號
           totalAmount: 0,
           itemCount: 0,
           firstOrderTime: order.createdAt,
@@ -414,7 +427,7 @@ export function useOrders() {
       
       const group = tableGroups[groupKey]
       group.orders.push(order)
-      group.batchCount += 1
+      group.batchNumbers.add(batchNumber) // 添加批次號到 Set
       group.totalAmount += order.totalAmount
       group.itemCount += order.items.length
       
@@ -432,12 +445,28 @@ export function useOrders() {
     })
     
     // 轉換為數組並生成桌次訂單號
-    return Object.values(tableGroups).map(group => ({
-      ...group,
-      tableOrderNumber: `T${group.tableNumber}-${group.customerGroup}組-${group.batchCount}批次`,
-      completedAt: group.lastOrderTime, // 使用最後訂單時間作為結帳時間
-      _id: `table_${group.tableId}_${group.customerGroup}_${group.lastOrderTime}` // 創建唯一ID
-    }))
+    return Object.values(tableGroups).map(group => {
+      // 將批次號 Set 轉換為排序後的數組，並顯示為 "1,2,3批次" 格式
+      const sortedBatchNumbers = Array.from(group.batchNumbers).sort((a, b) => parseInt(a) - parseInt(b))
+      const batchDisplay = sortedBatchNumbers.join(',') + '批次'
+      
+      // 使用後端提供的 displayOrderNumber 字段，如果沒有則使用自定義格式
+      let tableOrderNumber
+      if (group.orders[0] && group.orders[0].displayOrderNumber) {
+        // 使用後端的簡化格式，例如：T1-001
+        tableOrderNumber = group.orders[0].displayOrderNumber
+      } else {
+        // 備用格式：T1-1組-1,2批次
+        tableOrderNumber = `T${group.tableNumber}-${group.customerGroup}組-${batchDisplay}`
+      }
+      
+      return {
+        ...group,
+        tableOrderNumber: tableOrderNumber,
+        completedAt: group.lastOrderTime, // 使用最後訂單時間作為結帳時間
+        _id: `table_${group.tableId}_${group.customerGroup}_${group.lastOrderTime}` // 創建唯一ID
+      }
+    })
   }
 
   // 方法
