@@ -1,20 +1,7 @@
 <template>
   <div class="dashboard">
-    <!-- 檢查是否有餐廳ID參數 -->
-    <div v-if="!route.query.restaurantId" class="error-state">
-      <div class="error-content">
-        <font-awesome-icon icon="exclamation-triangle" size="3x" class="error-icon" />
-        <h2>無法載入餐廳數據</h2>
-        <p>缺少餐廳ID參數，請從餐廳管理頁面進入</p>
-        <BaseButton variant="primary" @click="goToRestaurants">
-          <font-awesome-icon icon="arrow-left" class="mr-2" />
-          返回餐廳管理
-        </BaseButton>
-      </div>
-    </div>
-
     <!-- 儀表板內容 -->
-    <div v-else>
+    <div>
       <header class="dashboard-header">
         <div class="header-main">
           <h1>儀表板</h1>
@@ -229,7 +216,7 @@ const {
   popularItems,
   popularItemsColumns,
   refreshItems
-} = useDashboard(route.query.restaurantId)
+} = useDashboard()
 
 // 處理來自超級管理員的查詢參數
 onMounted(() => {
@@ -267,10 +254,7 @@ const getStatusLabel = (status) => {
   return labels[status] || status
 }
 
-// 返回餐廳管理頁面
-const goToRestaurants = () => {
-  router.push({ name: 'AdminRestaurants' })
-}
+
 </script>
 
 <style>

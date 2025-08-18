@@ -84,6 +84,8 @@ export function useDashboard(restaurantId = null) {
           console.warn('超級管理員查看商家後台需要指定餐廳ID')
           return null
         }
+        // 普通商家用戶，直接返回用戶ID
+        console.log(`使用商家用戶ID: ${userData._id || userData.id}`)
         return userData._id || userData.id
       }
       
@@ -91,6 +93,7 @@ export function useDashboard(restaurantId = null) {
       const storedMerchant = localStorage.getItem('merchant')
       if (storedMerchant) {
         const merchantData = JSON.parse(storedMerchant)
+        console.log(`使用merchant存儲中的ID: ${merchantData._id || merchantData.id}`)
         return merchantData._id || merchantData.id
       }
       
