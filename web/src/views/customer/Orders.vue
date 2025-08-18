@@ -284,19 +284,23 @@ const proceedToCheckout = async () => {
       
       if (response.status === 'success') {
         const checkoutData = response.data
-        const message = checkoutData.batchCount > 1 
-          ? `結帳成功！\n合併了 ${checkoutData.batchCount} 批次訂單\n總金額：NT$ ${checkoutData.totalAmount}\n謝謝您的光臨！`
-          : `結帳成功！\n總金額：NT$ ${checkoutData.totalAmount}\n謝謝您的光臨！`
-        
-        alert(message)
         
         // 結帳完成後清空所有本地資料
         currentOrder.value = null
         localStorage.removeItem('currentOrder')
         sessionStorage.removeItem('cartItems') // 清空購物車
         
-        // 跳轉回菜單頁面
-        router.push('/menu')
+        // 跳轉到謝謝光臨頁面，並傳遞結帳資料
+        router.push({
+          name: 'CustomerThankYou',
+          query: {
+            checkoutData: JSON.stringify({
+              totalAmount: checkoutData.totalAmount,
+              batchCount: checkoutData.batchCount,
+              checkoutTime: new Date().toISOString()
+            })
+          }
+        })
       } else {
         alert('結帳失敗，請稍後再試')
       }

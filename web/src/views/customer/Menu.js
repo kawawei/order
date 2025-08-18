@@ -309,9 +309,19 @@ export default {
     const getMerchantId = () => {
       try {
         const storedTableInfo = sessionStorage.getItem('currentTable')
+        console.log('getMerchantId - sessionStorage currentTable:', storedTableInfo)
+        
         if (storedTableInfo) {
           const tableData = JSON.parse(storedTableInfo)
-          return tableData.merchant?._id || tableData.merchant?.id
+          console.log('getMerchantId - 解析後的 tableData:', tableData)
+          console.log('getMerchantId - merchant 對象:', tableData.merchant)
+          
+          const merchantId = tableData.merchant?._id || tableData.merchant?.id
+          console.log('getMerchantId - 提取的 merchantId:', merchantId)
+          
+          return merchantId
+        } else {
+          console.warn('getMerchantId - sessionStorage 中沒有 currentTable 數據')
         }
       } catch (error) {
         console.error('獲取商家ID失敗:', error)
@@ -326,8 +336,14 @@ export default {
         error.value = null
         
         const merchantId = getMerchantId()
+        console.log('嘗試獲取菜單，商家ID:', merchantId)
+        
         if (!merchantId) {
-          throw new Error('無法獲取商家信息')
+          console.error('無法獲取商家信息，sessionStorage 內容:', {
+            currentTable: sessionStorage.getItem('currentTable'),
+            allKeys: Object.keys(sessionStorage)
+          })
+          throw new Error('無法獲取商家信息，請重新掃描QR碼或刷新頁面')
         }
 
         const response = await menuService.getPublicMenu(merchantId)
@@ -462,11 +478,17 @@ export default {
 
     // 初始化桌號 - Initialize Table Number
     const initializeTable = () => {
+      console.log('initializeTable - 開始初始化桌號')
+      
       // 首先檢查 sessionStorage 中是否有桌次資訊（來自 QR Code 掃描）
       try {
         const storedTableInfo = sessionStorage.getItem('currentTable')
+        console.log('initializeTable - sessionStorage currentTable:', storedTableInfo)
+        
         if (storedTableInfo) {
           const tableData = JSON.parse(storedTableInfo)
+          console.log('initializeTable - 解析後的 tableData:', tableData)
+          
           tableInfo.value.tableNumber = tableData.tableNumber
           tableInfo.value.tableName = tableData.tableName || null
           tableInfo.value.capacity = tableData.capacity
@@ -474,14 +496,21 @@ export default {
           
           // 更新餐廳資訊
           if (tableData.merchant) {
+            console.log('initializeTable - 設置餐廳信息:', tableData.merchant)
             restaurantInfo.value.name = tableData.merchant.businessName || '餐廳'
             restaurantInfo.value.description = `${tableData.merchant.businessType || ''}` + 
               (tableData.merchant.address ? ` | ${tableData.merchant.address}` : '')
             restaurantInfo.value.phone = tableData.merchant.phone
             restaurantInfo.value.businessHours = tableData.merchant.businessHours
+            
+            const merchantId = tableData.merchant._id || tableData.merchant.id
+            console.log('initializeTable - 返回商家ID:', merchantId)
+            return merchantId
+          } else {
+            console.warn('initializeTable - tableData 中沒有 merchant 信息')
           }
-          
-          return tableData.merchant?._id || tableData.merchant?.id // 返回商家ID
+        } else {
+          console.warn('initializeTable - sessionStorage 中沒有 currentTable 數據')
         }
       } catch (error) {
         console.error('解析 sessionStorage 中的桌次資訊失敗:', error)
@@ -492,9 +521,11 @@ export default {
       const tableFromUrl = urlParams.get('table')
       
       if (tableFromUrl) {
+        console.log('initializeTable - 從 URL 參數獲取桌號:', tableFromUrl)
         tableInfo.value.tableNumber = parseInt(tableFromUrl)
       }
       
+      console.log('initializeTable - 無法獲取商家ID，返回 null')
       return null
     }
 
@@ -545,7 +576,15 @@ export default {
 
     // 在組件掛載時初始化
     onMounted(async () => {
-      initializeTable()
+      // 先初始化桌號和商家信息
+      const merchantId = initializeTable()
+      
+      // 如果沒有商家ID，嘗試從其他地方獲取或使用默認值
+      if (!merchantId) {
+        console.warn('無法獲取商家ID，將使用默認菜單')
+        // 可以嘗試從其他來源獲取商家ID，或者直接使用默認菜單
+      }
+      
       loadCartFromStorage() // 載入購物車資料
       await loadMenuData()
       

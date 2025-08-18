@@ -121,6 +121,13 @@ const routes = [
       }
     ]
   },
+  
+  // 謝謝光臨頁面（獨立路由，不使用布局）
+  {
+    path: '/customer/thank-you',
+    name: 'CustomerThankYou',
+    component: () => import('../views/customer/ThankYou.vue')
+  },
   // 直接訪問 /menu 也會導向客戶點餐頁面
   {
     path: '/menu',
@@ -129,6 +136,10 @@ const routes = [
   {
     path: '/orders',
     redirect: { name: 'CustomerOrders' }
+  },
+  {
+    path: '/thank-you',
+    redirect: { name: 'CustomerThankYou' }
   },
 
   // 根路由重定向
