@@ -393,10 +393,11 @@ exports.cancelOrder = catchAsync(async (req, res, next) => {
 // 獲取訂單統計
 exports.getOrderStats = catchAsync(async (req, res, next) => {
   const { merchantId } = req.params;
-  const { date } = req.query;
+  const { date, startDate, endDate } = req.query;
 
-  let matchQuery = { merchantId: mongoose.Types.ObjectId(merchantId) };
+  let matchQuery = { merchantId: new mongoose.Types.ObjectId(merchantId) };
 
+  // 支援單一日期查詢
   if (date) {
     const startDate = new Date(date);
     const endDate = new Date(date);
@@ -404,6 +405,17 @@ exports.getOrderStats = catchAsync(async (req, res, next) => {
     matchQuery.createdAt = {
       $gte: startDate,
       $lt: endDate
+    };
+  }
+  
+  // 支援日期範圍查詢
+  if (startDate && endDate) {
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    end.setDate(end.getDate() + 1); // 包含結束日期
+    matchQuery.createdAt = {
+      $gte: start,
+      $lt: end
     };
   }
 

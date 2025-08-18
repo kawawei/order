@@ -119,8 +119,8 @@
 
 .stat-icon {
   font-size: 1.25rem;
-  color: #007AFF;
-  background: white;
+  color: white;
+  background: #007AFF;
   padding: 0.75rem;
   border-radius: 12px;
   box-shadow: 0 2px 4px rgba(0,0,0,0.05);
@@ -274,6 +274,26 @@
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
+}
+
+.no-orders {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem 1rem;
+  color: #86868b;
+  text-align: center;
+}
+
+.no-orders svg {
+  font-size: 2rem;
+  margin-bottom: 0.5rem;
+  opacity: 0.5;
+}
+
+.no-orders span {
+  font-size: 0.875rem;
 }
 
 .live-order-item {

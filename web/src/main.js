@@ -64,7 +64,8 @@ import {
   faDownload,
   faDollarSign,
   faTruck,
-  faCheckCircle
+  faCheckCircle,
+  faInbox
 } from '@fortawesome/free-solid-svg-icons'
 
 /* Import Base Components */
@@ -125,7 +126,8 @@ library.add(
   faDownload,
   faDollarSign,
   faTruck,
-  faCheckCircle
+  faCheckCircle,
+  faInbox
 )
 
 const app = createApp(App)

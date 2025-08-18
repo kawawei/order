@@ -27,15 +27,15 @@
         <div class="orders-content">
           <div class="order-stat">
             <div class="stat-item">
-              <span class="stat-number highlight-primary">8</span>
+              <span class="stat-number highlight-primary">{{ orderStats.pending }}</span>
               <span class="stat-label">待處理</span>
             </div>
             <div class="stat-item">
-              <span class="stat-number highlight-success">12</span>
+              <span class="stat-number highlight-success">{{ orderStats.preparing }}</span>
               <span class="stat-label">製作中</span>
             </div>
             <div class="stat-item">
-              <span class="stat-number highlight-info">5</span>
+              <span class="stat-number highlight-info">{{ orderStats.ready }}</span>
               <span class="stat-label">待送達</span>
             </div>
           </div>
@@ -46,7 +46,11 @@
               <span>即時點餐</span>
             </div>
             <div class="live-orders-list">
-              <div v-for="order in liveOrders" :key="order.id" class="live-order-item">
+              <div v-if="liveOrders.length === 0" class="no-orders">
+                <font-awesome-icon icon="inbox" />
+                <span>目前沒有進行中的訂單</span>
+              </div>
+              <div v-else v-for="order in liveOrders.slice(0, 5)" :key="order._id" class="live-order-item">
                 <div class="table-info">
                   <font-awesome-icon icon="chair" />
                   <span>{{ order.tableNumber }}號桌</span>
@@ -59,17 +63,17 @@
                   </span>
                 </div>
                 <BaseTag 
-                  :variant="order.status === '待處理' ? 'primary' : order.status === '製作中' ? 'success' : 'info'"
+                  :variant="getStatusVariant(order.status)"
                   size="small"
                 >
-                  {{ order.status }}
+                  {{ getStatusLabel(order.status) }}
                 </BaseTag>
               </div>
             </div>
           </div>
 
           <div class="total-orders">
-            <span class="total-number">25</span>
+            <span class="total-number">{{ orderStats.totalToday }}</span>
             <span class="total-label">今日總訂單</span>
           </div>
         </div>
@@ -90,7 +94,7 @@
                 <font-awesome-icon icon="chair" />
               </div>
               <div class="stat-info">
-                <span class="stat-value">15/20</span>
+                <span class="stat-value">{{ businessStats.tablesInUse }}/{{ businessStats.totalTables }}</span>
                 <span class="stat-label">使用中/總桌數</span>
               </div>
             </div>
@@ -99,7 +103,7 @@
                 <font-awesome-icon icon="users" />
               </div>
               <div class="stat-info">
-                <span class="stat-value">45</span>
+                <span class="stat-value">{{ businessStats.currentGuests }}</span>
                 <span class="stat-label">目前客人數</span>
               </div>
             </div>
@@ -110,12 +114,12 @@
                 <font-awesome-icon icon="chart-line" />
               </div>
               <div class="stat-info">
-                <span class="stat-value">75%</span>
+                <span class="stat-value">{{ businessStats.seatUtilization }}%</span>
                 <span class="stat-label">座位使用率</span>
               </div>
             </div>
             <div class="capacity-bar">
-              <div class="capacity-fill" :style="{ width: '75%' }"></div>
+              <div class="capacity-fill" :style="{ width: businessStats.seatUtilization + '%' }"></div>
             </div>
           </div>
         </div>
@@ -126,7 +130,7 @@
         <template #header>
           <div class="card-header-content">
             <h3>營業額統計</h3>
-            <BaseTag variant="primary" size="small">+8.3%</BaseTag>
+            <BaseTag variant="primary" size="small">+{{ revenueStats.todayGrowth }}%</BaseTag>
           </div>
         </template>
         <div class="revenue-stats">
@@ -134,17 +138,17 @@
             <div class="revenue-card">
               <div class="revenue-header">
                 <span class="revenue-label">今日營業額</span>
-                <BaseTag variant="primary" size="small">+8.3%</BaseTag>
+                <BaseTag variant="primary" size="small">+{{ revenueStats.todayGrowth }}%</BaseTag>
               </div>
-              <span class="revenue-number">15,280</span>
+              <span class="revenue-number">{{ formatCurrency(revenueStats.todayRevenue) }}</span>
               <div class="revenue-details">
                 <div class="revenue-item">
-                  <span class="item-label">平均單價</span>
-                  <span class="item-value">580元</span>
+                  <span class="item-label">平均客單價</span>
+                  <span class="item-value">{{ revenueStats.avgOrderValue }}元</span>
                 </div>
                 <div class="revenue-item">
                   <span class="item-label">尖峰時段</span>
-                  <span class="item-value">12:00-13:00</span>
+                  <span class="item-value">{{ revenueStats.peakHour }}</span>
                 </div>
               </div>
             </div>
@@ -152,17 +156,17 @@
             <div class="revenue-card">
               <div class="revenue-header">
                 <span class="revenue-label">當月營業額</span>
-                <BaseTag variant="success" size="small">+12.5%</BaseTag>
+                <BaseTag variant="success" size="small">+{{ revenueStats.monthGrowth }}%</BaseTag>
               </div>
-              <span class="revenue-number">342,600</span>
+              <span class="revenue-number">{{ formatCurrency(revenueStats.monthRevenue) }}</span>
               <div class="revenue-details">
                 <div class="revenue-item">
                   <span class="item-label">日均營業額</span>
-                  <span class="item-value">11,420元</span>
+                  <span class="item-value">{{ formatCurrency(revenueStats.dailyAvg) }}元</span>
                 </div>
                 <div class="revenue-item">
                   <span class="item-label">預期達成率</span>
-                  <span class="item-value">89%</span>
+                  <span class="item-value">{{ revenueStats.targetAchievement }}%</span>
                 </div>
               </div>
             </div>
@@ -175,7 +179,7 @@
         <template #header>
           <div class="card-header-content">
             <h3>熱門品項</h3>
-            <BaseButton variant="text" size="small" icon="refresh" @click="refreshItems">
+            <BaseButton variant="text" size="small" icon="refresh" @click="refreshItems" :loading="loading">
               更新
             </BaseButton>
           </div>
@@ -195,11 +199,41 @@ import { useDashboard } from '../../../composables/merchant/useDashboard'
 
 const {
   currentDate,
+  loading,
+  error,
   liveOrders,
-  popularItemsColumns,
+  orderStats,
+  businessStats,
+  revenueStats,
   popularItems,
+  popularItemsColumns,
   refreshItems
 } = useDashboard()
+
+// 格式化貨幣
+const formatCurrency = (amount) => {
+  return new Intl.NumberFormat('zh-TW').format(amount)
+}
+
+// 獲取狀態變體
+const getStatusVariant = (status) => {
+  const variants = {
+    'pending': 'primary',
+    'preparing': 'success',
+    'ready': 'info'
+  }
+  return variants[status] || 'default'
+}
+
+// 獲取狀態標籤
+const getStatusLabel = (status) => {
+  const labels = {
+    'pending': '待處理',
+    'preparing': '製作中',
+    'ready': '待送達'
+  }
+  return labels[status] || status
+}
 </script>
 
 <style>

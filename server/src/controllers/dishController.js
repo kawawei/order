@@ -297,7 +297,7 @@ exports.getDishStats = catchAsync(async (req, res, next) => {
   const merchantId = req.merchant.id;
   
   const stats = await Dish.aggregate([
-    { $match: { merchant: mongoose.Types.ObjectId(merchantId) } },
+    { $match: { merchant: new mongoose.Types.ObjectId(merchantId) } },
     {
       $group: {
         _id: null,
@@ -321,7 +321,7 @@ exports.getDishStats = catchAsync(async (req, res, next) => {
   
   // 按分類統計
   const categoryStats = await Dish.aggregate([
-    { $match: { merchant: mongoose.Types.ObjectId(merchantId) } },
+    { $match: { merchant: new mongoose.Types.ObjectId(merchantId) } },
     {
       $group: {
         _id: '$category',

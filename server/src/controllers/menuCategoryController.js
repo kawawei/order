@@ -170,7 +170,7 @@ exports.getCategoryStats = catchAsync(async (req, res, next) => {
   const merchantId = req.merchant.id;
   
   const stats = await MenuCategory.aggregate([
-    { $match: { merchant: mongoose.Types.ObjectId(merchantId) } },
+    { $match: { merchant: new mongoose.Types.ObjectId(merchantId) } },
     {
       $lookup: {
         from: 'dishes',
