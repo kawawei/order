@@ -206,4 +206,13 @@ export const orderService = {
   getOrderStats: orderAPI.getOrderStats,
 };
 
+// 報表 API
+export const reportAPI = {
+  // 獲取詳細報表統計
+  getReportStats: (params = {}) => api.get('/reports/stats', { params }),
+  
+  // 獲取簡化版報表統計（用於儀表板）
+  getSimpleReportStats: (params = {}) => api.get('/reports/simple', { params })
+};
+
 export default api;

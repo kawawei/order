@@ -9,6 +9,7 @@ const adminRoutes = require('./routes/adminRoutes');
 const tableRoutes = require('./routes/tableRoutes');
 const menuRoutes = require('./routes/menuRoutes');
 const orderRoutes = require('./routes/orderRoutes');
+const reportRoutes = require('./routes/reportRoutes');
 
 // 配置 CORS 選項
 const corsOptions = {
@@ -36,6 +37,7 @@ app.use('/api/v1/admin', adminRoutes);
 app.use('/api/v1/tables', tableRoutes);
 app.use('/api/v1/menu', menuRoutes);
 app.use('/api/v1/orders', orderRoutes);
+app.use('/api/v1/reports', reportRoutes);
 
 // 處理未找到的路由
 app.all('*', (req, res, next) => {

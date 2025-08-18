@@ -1,10 +1,17 @@
 // 報表統計頁面的 JavaScript 邏輯
 import { ref, onMounted, watch } from 'vue'
+import { reportAPI } from '@/services/api'
 
 export function useReports() {
   // 響應式數據
   const selectedPeriod = ref('day')
   const isLoading = ref(false)
+  
+  // 時間導航相關
+  const currentDate = ref(new Date())
+  const selectedDate = ref(new Date())
+  const selectedMonth = ref(new Date())
+  const selectedYear = ref(new Date())
   
   // 財務統計數據
   const financialStats = ref({
@@ -37,158 +44,143 @@ export function useReports() {
   // 切換時間週期
   const changePeriod = (period) => {
     selectedPeriod.value = period
+    // 重置時間選擇到當前時間
+    const now = new Date()
+    selectedDate.value = new Date(now)
+    selectedMonth.value = new Date(now)
+    selectedYear.value = new Date(now)
     loadReportData()
   }
   
+  // 時間導航功能
+  const navigateTime = (direction) => {
+    const current = getCurrentTimeSelection()
+    
+    if (selectedPeriod.value === 'day') {
+      // 切換日期
+      const newDate = new Date(current)
+      newDate.setDate(newDate.getDate() + (direction === 'next' ? 1 : -1))
+      selectedDate.value = newDate
+    } else if (selectedPeriod.value === 'month') {
+      // 切換月份
+      const newDate = new Date(current)
+      newDate.setMonth(newDate.getMonth() + (direction === 'next' ? 1 : -1))
+      selectedMonth.value = newDate
+    } else if (selectedPeriod.value === 'year') {
+      // 切換年份
+      const newDate = new Date(current)
+      newDate.setFullYear(newDate.getFullYear() + (direction === 'next' ? 1 : -1))
+      selectedYear.value = newDate
+    }
+    
+    loadReportData()
+  }
+  
+  // 獲取當前選中的時間
+  const getCurrentTimeSelection = () => {
+    if (selectedPeriod.value === 'day') {
+      return selectedDate.value
+    } else if (selectedPeriod.value === 'month') {
+      return selectedMonth.value
+    } else {
+      return selectedYear.value
+    }
+  }
+  
   // 載入報表數據
-  const loadReportData = async () => {
+  const loadReportData = async (customDate = null) => {
     try {
       isLoading.value = true
-      // 這裡應該調用 API 獲取數據
-      await simulateDataLoading()
-      generateChartData()
+      
+      // 構建查詢參數
+      const params = {
+        period: selectedPeriod.value
+      }
+      
+      if (selectedPeriod.value === 'day') {
+        const date = customDate || selectedDate.value
+        params.date = date.toISOString().split('T')[0]
+      } else if (selectedPeriod.value === 'month') {
+        const month = customDate || selectedMonth.value
+        const startDate = new Date(month.getFullYear(), month.getMonth(), 1)
+        const endDate = new Date(month.getFullYear(), month.getMonth() + 1, 0)
+        params.startDate = startDate.toISOString().split('T')[0]
+        params.endDate = endDate.toISOString().split('T')[0]
+      } else if (selectedPeriod.value === 'year') {
+        const year = customDate || selectedYear.value
+        const startDate = new Date(year.getFullYear(), 0, 1)
+        const endDate = new Date(year.getFullYear(), 11, 31)
+        params.startDate = startDate.toISOString().split('T')[0]
+        params.endDate = endDate.toISOString().split('T')[0]
+      }
+      
+      // 調用真實的 API
+      const response = await reportAPI.getReportStats(params)
+      
+      if (response.status === 'success') {
+        const data = response.data
+        
+        // 更新財務統計
+        financialStats.value = {
+          revenue: data.financial.totalRevenue || 0,
+          profit: data.financial.totalRevenue * 0.7, // 假設利潤率為 70%
+          cost: data.financial.totalRevenue * 0.3, // 假設成本率為 30%
+          revenueChange: data.financial.revenueChange || 0,
+          profitChange: data.financial.revenueChange || 0, // 假設利潤變化與營收變化一致
+          costChange: 0 // 成本變化可以根據需要計算
+        }
+        
+        // 更新人流量統計
+        trafficStats.value = {
+          totalCustomers: data.traffic.totalCustomers || 0,
+          customerChange: data.traffic.customerChange || 0,
+          peakHours: data.traffic.peakHours || [],
+          averageStayTime: data.traffic.averageStayTime || 45
+        }
+        
+        // 更新熱門餐點
+        popularDishes.value = data.popularDishes || []
+        
+        // 更新圖表數據
+        chartData.value = {
+          revenue: data.timeSeries.revenue || [],
+          traffic: data.timeSeries.traffic || [],
+          dishes: data.popularDishes || []
+        }
+      }
     } catch (error) {
       console.error('載入報表數據失敗:', error)
+      // 如果 API 調用失敗，使用預設數據
+      setDefaultData()
     } finally {
       isLoading.value = false
     }
   }
   
-  // 模擬數據載入
-  const simulateDataLoading = async () => {
-    // 模擬 API 延遲
-    await new Promise(resolve => setTimeout(resolve, 800))
-    
-    if (selectedPeriod.value === 'day') {
-      financialStats.value = {
-        revenue: 12500,
-        profit: 8500,
-        cost: 4000,
-        revenueChange: 12.5,
-        profitChange: 8.3,
-        costChange: -2.1
-      }
-      trafficStats.value = {
-        totalCustomers: 156,
-        customerChange: 15.2,
-        peakHours: ['12:00-13:00', '18:00-19:00'],
-        averageStayTime: 45
-      }
-      popularDishes.value = [
-        { id: 1, name: '紅燒牛肉麵', category: '麵食', orderCount: 45, revenue: 2250 },
-        { id: 2, name: '宮保雞丁', category: '熱炒', orderCount: 38, revenue: 1900 },
-        { id: 3, name: '麻婆豆腐', category: '熱炒', orderCount: 32, revenue: 1280 },
-        { id: 4, name: '酸菜魚', category: '湯品', orderCount: 28, revenue: 1400 },
-        { id: 5, name: '糖醋里脊', category: '熱炒', orderCount: 25, revenue: 1250 }
-      ]
-    } else if (selectedPeriod.value === 'month') {
-      financialStats.value = {
-        revenue: 285000,
-        profit: 195000,
-        cost: 90000,
-        revenueChange: 8.7,
-        profitChange: 12.3,
-        costChange: 3.2
-      }
-      trafficStats.value = {
-        totalCustomers: 3240,
-        customerChange: 6.8,
-        peakHours: ['週末 12:00-14:00', '週末 18:00-20:00'],
-        averageStayTime: 52
-      }
-      popularDishes.value = [
-        { id: 1, name: '紅燒牛肉麵', category: '麵食', orderCount: 890, revenue: 44500 },
-        { id: 2, name: '宮保雞丁', category: '熱炒', orderCount: 756, revenue: 37800 },
-        { id: 3, name: '麻婆豆腐', category: '熱炒', orderCount: 634, revenue: 25360 },
-        { id: 4, name: '酸菜魚', category: '湯品', orderCount: 598, revenue: 29900 },
-        { id: 5, name: '糖醋里脊', category: '熱炒', orderCount: 523, revenue: 26150 }
-      ]
-    } else {
-      financialStats.value = {
-        revenue: 2850000,
-        profit: 1950000,
-        cost: 900000,
-        revenueChange: 15.2,
-        profitChange: 18.7,
-        costChange: 8.9
-      }
-      trafficStats.value = {
-        totalCustomers: 32400,
-        customerChange: 12.3,
-        peakHours: ['節假日 12:00-14:00', '節假日 18:00-20:00'],
-        averageStayTime: 48
-      }
-      popularDishes.value = [
-        { id: 1, name: '紅燒牛肉麵', category: '麵食', orderCount: 8900, revenue: 445000 },
-        { id: 2, name: '宮保雞丁', category: '熱炒', orderCount: 7560, revenue: 378000 },
-        { id: 3, name: '麻婆豆腐', category: '熱炒', orderCount: 6340, revenue: 253600 },
-        { id: 4, name: '酸菜魚', category: '湯品', orderCount: 5980, revenue: 299000 },
-        { id: 5, name: '糖醋里脊', category: '熱炒', orderCount: 5230, revenue: 261500 }
-      ]
+  // 設置預設數據（當 API 調用失敗時使用）
+  const setDefaultData = () => {
+    financialStats.value = {
+      revenue: 0,
+      profit: 0,
+      cost: 0,
+      revenueChange: 0,
+      profitChange: 0,
+      costChange: 0
     }
-  }
-  
-  // 生成圖表數據
-  const generateChartData = () => {
-    if (selectedPeriod.value === 'day') {
-      chartData.value.revenue = [
-        { time: '06:00', value: 0 },
-        { time: '09:00', value: 1200 },
-        { time: '12:00', value: 4500 },
-        { time: '15:00', value: 1800 },
-        { time: '18:00', value: 3800 },
-        { time: '21:00', value: 1200 }
-      ]
-      chartData.value.traffic = [
-        { time: '06:00', value: 0 },
-        { time: '09:00', value: 15 },
-        { time: '12:00', value: 45 },
-        { time: '15:00', value: 18 },
-        { time: '18:00', value: 38 },
-        { time: '21:00', value: 12 }
-      ]
-    } else if (selectedPeriod.value === 'month') {
-      chartData.value.revenue = [
-        { time: '第1週', value: 65000 },
-        { time: '第2週', value: 72000 },
-        { time: '第3週', value: 68000 },
-        { time: '第4週', value: 80000 }
-      ]
-      chartData.value.traffic = [
-        { time: '第1週', value: 780 },
-        { time: '第2週', value: 820 },
-        { time: '第3週', value: 760 },
-        { time: '第4週', value: 880 }
-      ]
-    } else {
-      chartData.value.revenue = [
-        { time: '1月', value: 220000 },
-        { time: '2月', value: 180000 },
-        { time: '3月', value: 250000 },
-        { time: '4月', value: 280000 },
-        { time: '5月', value: 300000 },
-        { time: '6月', value: 320000 },
-        { time: '7月', value: 350000 },
-        { time: '8月', value: 380000 },
-        { time: '9月', value: 360000 },
-        { time: '10月', value: 390000 },
-        { time: '11月', value: 420000 },
-        { time: '12月', value: 450000 }
-      ]
-      chartData.value.traffic = [
-        { time: '1月', value: 2200 },
-        { time: '2月', value: 1800 },
-        { time: '3月', value: 2500 },
-        { time: '4月', value: 2800 },
-        { time: '5月', value: 3000 },
-        { time: '6月', value: 3200 },
-        { time: '7月', value: 3500 },
-        { time: '8月', value: 3800 },
-        { time: '9月', value: 3600 },
-        { time: '10月', value: 3900 },
-        { time: '11月', value: 4200 },
-        { time: '12月', value: 4500 }
-      ]
+    
+    trafficStats.value = {
+      totalCustomers: 0,
+      customerChange: 0,
+      peakHours: [],
+      averageStayTime: 0
+    }
+    
+    popularDishes.value = []
+    
+    chartData.value = {
+      revenue: [],
+      traffic: [],
+      dishes: []
     }
   }
   
@@ -208,19 +200,19 @@ export function useReports() {
   
   // 獲取趨勢圖標
   const getTrendIcon = (change) => {
-    if (change > 0) return '↗'
-    if (change < 0) return '↘'
+    if (change > 0) return '↗️'
+    if (change < 0) return '↘️'
     return '→'
   }
   
   // 獲取趨勢顏色
   const getTrendColor = (change) => {
-    if (change > 0) return '#10b981'
-    if (change < 0) return '#ef4444'
-    return '#6b7280'
+    if (change > 0) return 'success'
+    if (change < 0) return 'error'
+    return 'default'
   }
   
-  // 計算毛利率
+  // 計算利潤率
   const calculateProfitMargin = () => {
     if (financialStats.value.revenue === 0) return 0
     return ((financialStats.value.profit / financialStats.value.revenue) * 100).toFixed(1)
@@ -259,9 +251,109 @@ export function useReports() {
     URL.revokeObjectURL(url)
   }
   
+  // 檢查是否可以切換到上一個時間
+  const canGoPrevious = () => {
+    const current = getCurrentTimeSelection()
+    const now = new Date()
+    
+    if (selectedPeriod.value === 'day') {
+      // 允許查看過去30天
+      const thirtyDaysAgo = new Date(now)
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
+      return current > thirtyDaysAgo
+    } else if (selectedPeriod.value === 'month') {
+      // 允許查看過去12個月
+      const twelveMonthsAgo = new Date(now)
+      twelveMonthsAgo.setMonth(twelveMonthsAgo.getMonth() - 12)
+      return current > twelveMonthsAgo
+    } else {
+      // 允許查看過去5年
+      const fiveYearsAgo = new Date(now)
+      fiveYearsAgo.setFullYear(fiveYearsAgo.getFullYear() - 5)
+      return current > fiveYearsAgo
+    }
+  }
+  
+  // 檢查是否可以切換到下一個時間
+  const canGoNext = () => {
+    const current = getCurrentTimeSelection()
+    const now = new Date()
+    
+    if (selectedPeriod.value === 'day') {
+      // 不允許查看未來日期
+      return current < now
+    } else if (selectedPeriod.value === 'month') {
+      // 不允許查看未來月份
+      return current.getFullYear() < now.getFullYear() || 
+             (current.getFullYear() === now.getFullYear() && current.getMonth() < now.getMonth())
+    } else {
+      // 不允許查看未來年份
+      return current.getFullYear() < now.getFullYear()
+    }
+  }
+  
+  // 獲取顯示時間
+  const getDisplayTime = () => {
+    const current = getCurrentTimeSelection()
+    
+    if (selectedPeriod.value === 'day') {
+      return current.toLocaleDateString('zh-TW', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        weekday: 'long'
+      })
+    } else if (selectedPeriod.value === 'month') {
+      return current.toLocaleDateString('zh-TW', {
+        year: 'numeric',
+        month: 'long'
+      })
+    } else {
+      return current.toLocaleDateString('zh-TW', {
+        year: 'numeric'
+      })
+    }
+  }
+  
+  // 獲取日期選擇器標題
+  const getDatePickerTitle = () => {
+    if (selectedPeriod.value === 'day') {
+      return '選擇日期'
+    } else if (selectedPeriod.value === 'month') {
+      return '選擇月份'
+    } else {
+      return '選擇年份'
+    }
+  }
+  
+  // 獲取日期選擇器標籤
+  const getDatePickerLabel = () => {
+    if (selectedPeriod.value === 'day') {
+      return '選擇日期'
+    } else if (selectedPeriod.value === 'month') {
+      return '選擇月份'
+    } else {
+      return '選擇年份'
+    }
+  }
+  
+  // 獲取日期輸入框類型
+  const getDateInputType = () => {
+    if (selectedPeriod.value === 'day') {
+      return 'date'
+    } else if (selectedPeriod.value === 'month') {
+      return 'month'
+    } else {
+      return 'number'
+    }
+  }
+  
   return {
     // 響應式數據
     selectedPeriod,
+    selectedDate,
+    selectedMonth,
+    selectedYear,
     isLoading,
     financialStats,
     trafficStats,
@@ -278,6 +370,13 @@ export function useReports() {
     calculateProfitMargin,
     calculateCostRatio,
     getPeakHours,
-    exportReport
+    exportReport,
+    navigateTime,
+    canGoPrevious,
+    canGoNext,
+    getDisplayTime,
+    getDatePickerTitle,
+    getDatePickerLabel,
+    getDateInputType
   }
 }

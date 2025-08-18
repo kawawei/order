@@ -31,6 +31,86 @@
   gap: 1rem;
 }
 
+/* 時間導航樣式 */
+.time-navigation {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: white;
+  border: 1px solid #e9ecef;
+  border-radius: 8px;
+  padding: 0.25rem;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.nav-btn {
+  width: 36px;
+  height: 36px;
+  border: none;
+  background: #ffffff;
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #000;
+  transition: all 0.3s ease;
+  font-size: 0.9rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.nav-btn:hover:not(.disabled) {
+  background: #e9ecef;
+  color: #1a73e8;
+  transform: translateY(-1px);
+}
+
+.nav-btn:not(.disabled) {
+  color: #000;
+}
+
+.nav-btn.disabled {
+  background: #f1f3f4;
+  color: #9ca3af;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.current-time-display {
+  padding: 0.5rem 1rem;
+  min-width: 120px;
+  text-align: center;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+  position: relative;
+}
+
+.current-time-display:hover {
+  background: #f8f9fa;
+}
+
+.time-label {
+  font-weight: 600;
+  color: #333;
+  font-size: 0.95rem;
+  white-space: nowrap;
+}
+
+.dropdown-icon {
+  font-size: 0.8rem;
+  color: #666;
+  transition: transform 0.2s ease;
+}
+
+.current-time-display:hover .dropdown-icon {
+  transform: translateY(1px);
+}
+
 .period-selector {
   display: flex;
   gap: 0.5rem;
@@ -386,14 +466,31 @@
     gap: 1rem;
   }
   
+  .time-navigation {
+    width: 100%;
+    justify-content: center;
+    order: 1;
+  }
+  
+  .current-time-display {
+    min-width: 100px;
+    padding: 0.5rem 0.75rem;
+  }
+  
+  .time-label {
+    font-size: 0.9rem;
+  }
+  
   .period-selector {
     width: 100%;
     justify-content: center;
+    order: 2;
   }
   
   .export-btn {
     width: 100%;
     justify-content: center;
+    order: 3;
   }
   
   .stats-grid {
@@ -464,5 +561,117 @@
   
   .dish-stats {
     text-align: center;
+  }
+}
+
+/* 日期選擇器樣式 */
+.date-picker-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.date-picker-modal {
+  background: white;
+  border-radius: 12px;
+  padding: 1.5rem;
+  min-width: 320px;
+  max-width: 90vw;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  animation: slideIn 0.2s ease-out;
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-20px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.date-picker-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.date-picker-header h4 {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #111827;
+}
+
+.close-btn {
+  background: none;
+  border: none;
+  color: #6b7280;
+  cursor: pointer;
+  padding: 0.5rem;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.close-btn:hover {
+  background: #f3f4f6;
+  color: #374151;
+}
+
+.date-picker-content {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.date-input-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.date-input-group label {
+  font-weight: 500;
+  color: #374151;
+  font-size: 0.9rem;
+}
+
+.date-input {
+  padding: 0.75rem;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  font-size: 1rem;
+  transition: border-color 0.2s ease;
+}
+
+.date-input:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+
+
+/* 響應式設計 */
+@media (max-width: 480px) {
+  .date-picker-modal {
+    margin: 1rem;
+    padding: 1rem;
+    min-width: auto;
   }
 }
