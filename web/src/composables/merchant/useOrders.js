@@ -32,13 +32,12 @@ export function useOrders() {
     { name: 'history', label: '歷史訂單' }
   ]
 
-  // 歷史訂單表格欄位
+  // 歷史訂單表格欄位 - 簡化顯示
   const historyOrdersColumns = [
-    { key: 'orderNumber', label: '訂單號', width: '120px' },
+    { key: 'tableOrderNumber', label: '訂單號', width: '140px' },
     { key: 'tableNumber', label: '桌號', width: '80px' },
-    { key: 'createdAt', label: '下單時間', width: '150px' },
-    { key: 'status', label: '狀態', width: '100px' },
-    { key: 'totalAmount', label: '金額', width: '100px' },
+    { key: 'completedAt', label: '結帳時間', width: '150px' },
+    { key: 'totalAmount', label: '總金額', width: '120px' },
     { key: 'actions', label: '操作', width: '120px' }
   ]
 
@@ -164,7 +163,8 @@ export function useOrders() {
   })
 
   const historyStats = computed(() => {
-    const completedOrders = historyOrders.value.filter(order => order.status === 'completed')
+    // 歷史訂單都是已完成的桌次訂單
+    const completedOrders = historyOrders.value
     const totalRevenue = completedOrders.reduce((sum, order) => sum + order.totalAmount, 0)
     const averageOrderValue = completedOrders.length > 0 
       ? Math.round(totalRevenue / completedOrders.length) 
@@ -180,30 +180,70 @@ export function useOrders() {
 
   const filteredHistoryOrders = computed(() => {
     let filtered = historyOrders.value
+    console.log('filteredHistoryOrders 計算 - 原始數據:', filtered)
 
-    // 搜尋過濾
+    // 搜尋過濾 - 修改為使用合併後的桌次訂單屬性
     if (searchTerm.value) {
       const term = searchTerm.value.toLowerCase()
       filtered = filtered.filter(order => 
-        order.orderNumber.toLowerCase().includes(term) ||
+        order.tableOrderNumber.toLowerCase().includes(term) ||
         order.tableNumber.toLowerCase().includes(term)
       )
+      console.log('搜尋過濾後:', filtered)
     }
 
-    // 時間範圍過濾
+    // 時間範圍過濾 - 使用 completedAt 進行過濾
     const now = new Date()
     if (selectedTimeRange.value === 'today') {
       const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-      filtered = filtered.filter(order => new Date(order.createdAt) >= today)
+      filtered = filtered.filter(order => {
+        try {
+          const orderTime = new Date(order.completedAt)
+          return orderTime >= today
+        } catch (error) {
+          console.warn('時間過濾失敗:', order, error)
+          return false
+        }
+      })
+      console.log('今日過濾後:', filtered)
     } else if (selectedTimeRange.value === 'week') {
       const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
-      filtered = filtered.filter(order => new Date(order.createdAt) >= weekAgo)
+      filtered = filtered.filter(order => {
+        try {
+          const orderTime = new Date(order.completedAt)
+          return orderTime >= weekAgo
+        } catch (error) {
+          console.warn('時間過濾失敗:', order, error)
+          return false
+        }
+      })
+      console.log('本週過濾後:', filtered)
     } else if (selectedTimeRange.value === 'month') {
       const monthAgo = new Date(now.getFullYear(), now.getMonth() - 1, now.getDate())
-      filtered = filtered.filter(order => new Date(order.createdAt) >= monthAgo)
+      filtered = filtered.filter(order => {
+        try {
+          const orderTime = new Date(order.completedAt)
+          return orderTime >= monthAgo
+        } catch (error) {
+          console.warn('時間過濾失敗:', order, error)
+          return false
+        }
+      })
+      console.log('本月過濾後:', filtered)
     }
 
-    return filtered.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+    const sorted = filtered.sort((a, b) => {
+      try {
+        const timeA = new Date(a.completedAt)
+        const timeB = new Date(b.completedAt)
+        return timeB - timeA
+      } catch (error) {
+        console.warn('排序失敗:', a, b, error)
+          return 0
+        }
+      })
+    console.log('最終過濾結果:', sorted)
+    return sorted
   })
 
   // 獲取商家ID - 從localStorage中的用戶信息獲取
@@ -241,7 +281,7 @@ export function useOrders() {
       }
       
       const response = await orderService.getOrdersByMerchant(merchantId, {
-        status: 'pending,confirmed,preparing,ready,delivered',
+        status: 'pending,confirmed,preparing,ready,delivered,served',
         limit: 50,
         sortBy: 'createdAt',
         sortOrder: 'desc'
@@ -281,7 +321,7 @@ export function useOrders() {
     }
   }
 
-  // 載入歷史訂單數據
+  // 載入歷史訂單數據 - 修改為按桌次合併顯示
   const loadHistoryOrders = async () => {
     try {
       const merchantId = getMerchantId()
@@ -292,41 +332,112 @@ export function useOrders() {
       
       const response = await orderService.getOrdersByMerchant(merchantId, {
         status: 'completed,cancelled',
-        limit: 100,
+        limit: 200, // 增加限制以獲取更多數據進行合併
         sortBy: 'createdAt',
         sortOrder: 'desc'
       })
       
       if (response.status === 'success') {
-        // 處理訂單數據，確保日期格式正確
-        const orders = response.data.orders.map(order => {
-          // 處理桌號顯示邏輯
-          let tableNumber = '未知桌號'
-          if (order.tableId) {
-            if (typeof order.tableId === 'object' && order.tableId !== null) {
-              // 如果是對象，優先使用 tableNumber，其次是 displayName
-              tableNumber = order.tableId.tableNumber || order.tableId.displayName || '未知桌號'
-            } else {
-              // 如果是字符串或其他類型，直接使用
-              tableNumber = String(order.tableId)
-            }
-          }
-          
+        // 按桌次分組合併訂單
+        const tableOrders = mergeOrdersByTable(response.data.orders)
+        
+        // 處理合併後的桌次訂單數據
+        const processedOrders = tableOrders.map(tableOrder => {
           return {
-            ...order,
-            createdAt: new Date(order.createdAt),
-            completedAt: order.completedAt ? new Date(order.completedAt) : null,
-            cancelledAt: order.cancelledAt ? new Date(order.cancelledAt) : null,
-            tableNumber: tableNumber
+            ...tableOrder,
+            firstOrderTime: new Date(tableOrder.firstOrderTime),
+            lastOrderTime: new Date(tableOrder.lastOrderTime),
+            tableNumber: tableOrder.tableNumber
           }
         })
         
-        historyOrders.value = orders
-        console.log('歷史訂單載入成功:', orders.length, '筆訂單')
+        historyOrders.value = processedOrders
+        console.log('歷史訂單載入成功:', processedOrders.length, '筆桌次訂單')
+        console.log('歷史訂單數據:', processedOrders)
       }
     } catch (error) {
       console.error('載入歷史訂單失敗:', error)
     }
+  }
+
+  // 按桌次和客人組別合併訂單的方法
+  const mergeOrdersByTable = (orders) => {
+    const tableGroups = {}
+    
+    orders.forEach(order => {
+      const tableId = order.tableId?._id || order.tableId
+      const tableNumber = getTableNumber(order.tableId)
+      
+      // 從訂單號解析客人組別和批次號
+      let customerGroup = '1' // 預設組別
+      let batchNumber = '1' // 預設批次號
+      
+      if (order.orderNumber && order.orderNumber.includes('-')) {
+        const parts = order.orderNumber.split('-')
+        if (parts.length >= 2) {
+          // 訂單號格式：T1-202508180001001
+          // parts[0] = T1, parts[1] = 202508180001001
+          const dateGroupBatch = parts[1]
+          
+          if (dateGroupBatch.length >= 12) {
+            // 202508180001001 中：
+            // 前8位是日期：20250818
+            // 中間4位是客人組別：0001
+            // 後3位是批次號：001
+            const groupPart = dateGroupBatch.substring(8, 12)
+            const batchPart = dateGroupBatch.substring(12, 15)
+            
+            // 去掉前導零
+            customerGroup = parseInt(groupPart).toString()
+            batchNumber = parseInt(batchPart).toString()
+          }
+        }
+      }
+      
+      // 使用桌次+客人組別作為分組鍵
+      const groupKey = `${tableId}_${customerGroup}`
+      
+      if (!tableGroups[groupKey]) {
+        tableGroups[groupKey] = {
+          tableId: tableId,
+          tableNumber: tableNumber,
+          customerGroup: customerGroup,
+          orders: [],
+          batchCount: 0,
+          totalAmount: 0,
+          itemCount: 0,
+          firstOrderTime: order.createdAt,
+          lastOrderTime: order.createdAt,
+          status: 'completed' // 歷史訂單都是已完成狀態
+        }
+      }
+      
+      const group = tableGroups[groupKey]
+      group.orders.push(order)
+      group.batchCount += 1
+      group.totalAmount += order.totalAmount
+      group.itemCount += order.items.length
+      
+      // 更新時間範圍
+      const orderTime = new Date(order.createdAt)
+      const firstTime = new Date(group.firstOrderTime)
+      const lastTime = new Date(group.lastOrderTime)
+      
+      if (orderTime < firstTime) {
+        group.firstOrderTime = order.createdAt
+      }
+      if (orderTime > lastTime) {
+        group.lastOrderTime = order.createdAt
+      }
+    })
+    
+    // 轉換為數組並生成桌次訂單號
+    return Object.values(tableGroups).map(group => ({
+      ...group,
+      tableOrderNumber: `T${group.tableNumber}-${group.customerGroup}組-${group.batchCount}批次`,
+      completedAt: group.lastOrderTime, // 使用最後訂單時間作為結帳時間
+      _id: `table_${group.tableId}_${group.customerGroup}_${group.lastOrderTime}` // 創建唯一ID
+    }))
   }
 
   // 方法
@@ -445,9 +556,16 @@ export function useOrders() {
   }
 
   const printReceipt = (order) => {
-    console.log(`列印訂單 ${order.orderNumber} 的收據`)
+    if (order.tableOrderNumber) {
+      // 桌次訂單
+      console.log(`列印桌次訂單 ${order.tableOrderNumber} 的收據`)
+      alert(`正在列印桌次訂單 ${order.tableOrderNumber} 的收據...\n桌號：${order.tableNumber}\n批次數：${order.batchCount}\n總金額：NT$ ${order.totalAmount}`)
+    } else {
+      // 單個批次訂單
+      console.log(`列印訂單 ${order.orderNumber} 的收據`)
+      alert(`正在列印訂單 ${order.orderNumber} 的收據...`)
+    }
     // 這裡可以實現真實的列印邏輯
-    alert(`正在列印訂單 ${order.orderNumber} 的收據...`)
   }
 
   const formatTime = (date) => {

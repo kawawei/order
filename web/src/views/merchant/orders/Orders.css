@@ -576,3 +576,81 @@
     width: 100%;
   }
 }
+
+/* 桌次訂單相關樣式 */
+.table-number {
+  font-weight: 600;
+  color: #1a1a1a;
+}
+
+.batch-count {
+  font-weight: 500;
+  color: #6b7280;
+  background-color: #f3f4f6;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.875rem;
+}
+
+.order-time {
+  color: #6b7280;
+  font-size: 0.875rem;
+}
+
+.batches-summary {
+  margin-top: 1rem;
+}
+
+.batch-summary {
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  margin-bottom: 1rem;
+  overflow: hidden;
+}
+
+.batch-header {
+  background-color: #f9fafb;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid #e5e7eb;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.batch-header h5 {
+  margin: 0;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #374151;
+}
+
+.batch-amount {
+  font-weight: 600;
+  color: #059669;
+  font-size: 0.875rem;
+}
+
+.order-number-link {
+  color: #3b82f6;
+  cursor: pointer;
+  font-weight: 500;
+  text-decoration: none;
+}
+
+.order-number-link:hover {
+  text-decoration: underline;
+  color: #2563eb;
+}
+
+/* 響應式調整 */
+@media (max-width: 768px) {
+  .history-orders-section .stat-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  
+  .batch-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+}

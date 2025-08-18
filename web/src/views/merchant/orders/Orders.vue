@@ -300,15 +300,13 @@
           :loading="loading"
           hoverable
         >
-          <template #orderNumber="{ row }">
+          <template #tableOrderNumber="{ row }">
             <span class="order-number-link" @click="viewOrderDetails(row)">
-              #{{ row.orderNumber }}
+              {{ row.tableOrderNumber }}
             </span>
           </template>
-          <template #status="{ row }">
-            <BaseTag :variant="getOrderStatusVariant(row.status)" size="small">
-              {{ getOrderStatusText(row.status) }}
-            </BaseTag>
+          <template #completedAt="{ row }">
+            <span>{{ formatDateTime(row.completedAt) }}</span>
           </template>
           <template #totalAmount="{ row }">
             <span class="amount">${{ row.totalAmount }}</span>
@@ -334,49 +332,51 @@
       <div v-if="selectedOrder" class="order-details">
         <div class="order-basic-info">
           <div class="info-row">
-            <span class="label">訂單號:</span>
-            <span class="value">#{{ selectedOrder.orderNumber }}</span>
+            <span class="label">桌次訂單號:</span>
+            <span class="value">{{ selectedOrder.tableOrderNumber }}</span>
           </div>
           <div class="info-row">
             <span class="label">桌號:</span>
             <span class="value">{{ selectedOrder.tableNumber }}號桌</span>
           </div>
           <div class="info-row">
-            <span class="label">下單時間:</span>
-            <span class="value">{{ formatDateTime(selectedOrder.createdAt) }}</span>
+            <span class="label">客人組別:</span>
+            <span class="value">{{ selectedOrder.customerGroup }}組</span>
           </div>
           <div class="info-row">
-            <span class="label">狀態:</span>
-            <BaseTag :variant="getOrderStatusVariant(selectedOrder.status)" size="small">
-              {{ getOrderStatusText(selectedOrder.status) }}
-            </BaseTag>
+            <span class="label">結帳時間:</span>
+            <span class="value">{{ formatDateTime(selectedOrder.completedAt) }}</span>
+          </div>
+          <div class="info-row">
+            <span class="label">批次數:</span>
+            <span class="value">{{ selectedOrder.batchCount }}</span>
+          </div>
+          <div class="info-row">
+            <span class="label">總金額:</span>
+            <span class="value">${{ selectedOrder.totalAmount }}</span>
           </div>
         </div>
         
         <div class="order-items-detail">
-          <h4>訂單項目</h4>
-          <div class="items-list">
-            <div v-for="item in selectedOrder.items" :key="item.id" class="item-detail">
-              <div class="item-info">
-                <span class="item-name">{{ item.name }}</span>
-                <span class="item-price">${{ item.price }}</span>
+          <h4>批次訂單詳情</h4>
+          <div v-for="(order, index) in selectedOrder.orders" :key="order._id" class="batch-order">
+            <div class="batch-header">
+              <h5>批次 {{ index + 1 }} - {{ order.orderNumber }}</h5>
+              <span class="batch-time">{{ formatDateTime(order.createdAt) }}</span>
+            </div>
+            <div class="items-list">
+              <div v-for="item in order.items" :key="item._id" class="item-detail">
+                <div class="item-info">
+                  <span class="item-name">{{ item.name }}</span>
+                  <span class="item-price">${{ item.price }}</span>
+                </div>
+                <div class="item-quantity">x{{ item.quantity }}</div>
+                <div class="item-subtotal">${{ item.price * item.quantity }}</div>
               </div>
-              <div class="item-quantity">x{{ item.quantity }}</div>
-              <div class="item-subtotal">${{ item.price * item.quantity }}</div>
             </div>
-          </div>
-          <div class="total-section">
-            <div class="total-row">
-              <span class="total-label">小計:</span>
-              <span class="total-value">${{ selectedOrder.subtotal }}</span>
-            </div>
-            <div class="total-row">
-              <span class="total-label">服務費:</span>
-              <span class="total-value">${{ selectedOrder.serviceCharge || 0 }}</span>
-            </div>
-            <div class="total-row final">
-              <span class="total-label">總計:</span>
-              <span class="total-value">${{ selectedOrder.totalAmount }}</span>
+            <div class="batch-total">
+              <span class="total-label">批次小計:</span>
+              <span class="total-value">${{ order.totalAmount }}</span>
             </div>
           </div>
         </div>

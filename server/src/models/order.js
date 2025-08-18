@@ -109,59 +109,108 @@ const orderSchema = new mongoose.Schema({
 });
 
 // 生成訂單編號的靜態方法
-orderSchema.statics.generateOrderNumber = async function() {
+orderSchema.statics.generateOrderNumber = async function(tableId, tableNumber) {
   const today = new Date();
   const dateStr = today.toISOString().slice(0, 10).replace(/-/g, '');
   
-  // 使用重試機制來處理併發情況
-  let attempts = 0;
-  const maxAttempts = 10;
+  // 獲取桌號（去掉可能的T前綴）
+  const cleanTableNumber = tableNumber.replace(/^T/i, '');
   
-  while (attempts < maxAttempts) {
-    try {
-      // 使用 findOneAndUpdate 的原子操作來獲取下一個序號
-      // 先嘗試找到今天的計數器文檔，如果不存在則創建
-      const counterCollection = this.db.collection('ordercounters');
-      
-      const result = await counterCollection.findOneAndUpdate(
-        { date: dateStr },
-        { $inc: { sequence: 1 } },
-        { 
-          upsert: true, 
-          returnDocument: 'after',
-          returnOriginal: false 
-        }
-      );
-      
-      const sequence = result.value ? result.value.sequence : 1;
-      const orderNumber = `${dateStr}${sequence.toString().padStart(4, '0')}`;
-      
-      // 檢查這個訂單號是否已經存在（雙重檢查）
-      const existingOrder = await this.findOne({ orderNumber });
-      if (!existingOrder) {
-        return orderNumber;
-      }
-      
-      // 如果還是重複，繼續重試
-      attempts++;
-    } catch (error) {
-      attempts++;
-      if (attempts >= maxAttempts) {
-        // 如果重試次數用完，回退到時間戳方案
-        const timestamp = Date.now().toString();
-        const randomSuffix = Math.random().toString(36).substring(2, 6);
-        return `${dateStr}${timestamp.slice(-4)}${randomSuffix}`.toUpperCase();
-      }
-      
-      // 短暫延遲後重試
-      await new Promise(resolve => setTimeout(resolve, Math.random() * 50));
+  // 查找該桌今天的最後一組客人編號
+  const todayOrders = await this.find({
+    tableId: tableId,
+    createdAt: {
+      $gte: new Date(today.getFullYear(), today.getMonth(), today.getDate()),
+      $lt: new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1)
     }
+  }).sort({ createdAt: -1 });
+  
+  let currentGroupNumber = 1;
+  let currentBatchNumber = 1;
+  
+  if (todayOrders.length > 0) {
+    // 檢查最後一個訂單的編號格式
+    const lastOrder = todayOrders[0];
+    const orderNumberMatch = lastOrder.orderNumber.match(/^T\d+-\d{8}(\d{4})(\d{3})$/);
+    
+    if (orderNumberMatch) {
+      // 檢查最後一個訂單的狀態，如果已完成或取消，則是新的一組客人
+      if (['completed', 'cancelled'].includes(lastOrder.status)) {
+        // 新的一組客人，組別號+1，批次號重置為1
+        currentGroupNumber = parseInt(orderNumberMatch[1]) + 1;
+        currentBatchNumber = 1;
+      } else {
+        // 同一組客人加點，批次號+1
+        currentGroupNumber = parseInt(orderNumberMatch[1]);
+        currentBatchNumber = parseInt(orderNumberMatch[2]) + 1;
+      }
+    }
+  } else {
+    // 如果沒有今天的訂單，從第1組第1批次開始
+    currentGroupNumber = 1;
+    currentBatchNumber = 1;
   }
   
-  // 最後的備用方案：使用時間戳和隨機數
-  const timestamp = Date.now().toString();
-  const randomSuffix = Math.random().toString(36).substring(2, 6);
-  return `${dateStr}${timestamp.slice(-4)}${randomSuffix}`.toUpperCase();
+  // 生成新的訂單編號
+  const orderNumber = `T${cleanTableNumber}-${dateStr}${currentGroupNumber.toString().padStart(4, '0')}${currentBatchNumber.toString().padStart(3, '0')}`;
+  
+  // 檢查這個訂單號是否已經存在
+  const existingOrder = await this.findOne({ orderNumber });
+  if (existingOrder) {
+    // 如果重複，批次號+1
+    currentBatchNumber++;
+    return `T${cleanTableNumber}-${dateStr}${currentGroupNumber.toString().padStart(4, '0')}${currentBatchNumber.toString().padStart(3, '0')}`;
+  }
+  
+  return orderNumber;
+};
+
+// 獲取同一桌同一組客人的所有批次訂單
+orderSchema.statics.getOrdersByGroup = async function(tableId, groupNumber) {
+  const today = new Date();
+  const dateStr = today.toISOString().slice(0, 10).replace(/-/g, '');
+  
+  const table = await this.findOne({ tableId }).populate('tableId');
+  const tableNumber = table?.tableId?.tableNumber || '1';
+  const cleanTableNumber = tableNumber.replace(/^T/i, '');
+  
+  const groupPattern = `T${cleanTableNumber}-${dateStr}${groupNumber.toString().padStart(4, '0')}`;
+  
+  return this.find({
+    orderNumber: { $regex: `^${groupPattern}` },
+    status: { $nin: ['completed', 'cancelled'] }
+  }).sort({ createdAt: 1 });
+};
+
+// 獲取同一桌今天的所有組別
+orderSchema.statics.getTodayGroupsByTable = async function(tableId) {
+  const today = new Date();
+  const dateStr = today.toISOString().slice(0, 10).replace(/-/g, '');
+  
+  const table = await this.findOne({ tableId }).populate('tableId');
+  const tableNumber = table?.tableId?.tableNumber || '1';
+  const cleanTableNumber = tableNumber.replace(/^T/i, '');
+  
+  const groupPattern = `T${cleanTableNumber}-${dateStr}`;
+  
+  const orders = await this.find({
+    orderNumber: { $regex: `^${groupPattern}` },
+    createdAt: {
+      $gte: new Date(today.getFullYear(), today.getMonth(), today.getDate()),
+      $lt: new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1)
+    }
+  }).sort({ createdAt: -1 });
+  
+  // 提取組別號碼
+  const groups = new Set();
+  orders.forEach(order => {
+    const match = order.orderNumber.match(/^T\d+-\d{8}(\d{4})/);
+    if (match) {
+      groups.add(parseInt(match[1]));
+    }
+  });
+  
+  return Array.from(groups).sort((a, b) => a - b);
 };
 
 // 更新時間的中間件
