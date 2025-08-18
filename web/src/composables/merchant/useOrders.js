@@ -47,22 +47,61 @@ export function useOrders() {
     const orders = liveOrders.value.filter(order => 
       ['pending', 'confirmed', 'preparing'].includes(order.status)
     )
-    return groupOrdersByTable(orders)
+    return groupOrdersByBatch(orders)
   })
 
   const readyOrders = computed(() => {
     const orders = liveOrders.value.filter(order => order.status === 'ready')
-    return groupOrdersByTable(orders)
+    return groupOrdersByBatch(orders)
   })
 
   const deliveredOrders = computed(() => {
     const orders = liveOrders.value.filter(order => 
       ['served', 'delivered'].includes(order.status)
     )
-    return groupOrdersByTable(orders)
+    return groupOrdersByBatch(orders)
   })
 
-  // 將同桌訂單按批次分組
+  // 將訂單按批次分組，每個批次一張卡片，按時間順序排列
+  const groupOrdersByBatch = (orders) => {
+    const batchCards = []
+    
+    orders.forEach(order => {
+      // 每個訂單就是一個批次卡片
+      const tableNumber = getTableNumber(order.tableId)
+      
+      const batchCard = {
+        _id: order._id,
+        tableId: order.tableId?._id || order.tableId,
+        tableNumber: tableNumber,
+        batchNumber: order.batchNumber || 1,
+        status: order.status,
+        totalAmount: order.totalAmount,
+        itemCount: order.items.length,
+        createdAt: order.createdAt,
+        items: order.items,
+        orderNumber: order.orderNumber
+      }
+      
+      batchCards.push(batchCard)
+    })
+    
+    // 按時間順序排列，最新的在最上面
+    return batchCards.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+  }
+
+  // 輔助函數：獲取桌號
+  const getTableNumber = (tableId) => {
+    if (!tableId) return '未知桌號'
+    
+    if (typeof tableId === 'object' && tableId !== null) {
+      return tableId.tableNumber || tableId.displayName || '未知桌號'
+    }
+    
+    return String(tableId)
+  }
+
+  // 將同桌訂單按批次分組 (保留原有函數以備用)
   const groupOrdersByTable = (orders) => {
     const grouped = {}
     

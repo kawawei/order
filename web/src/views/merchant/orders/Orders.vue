@@ -85,35 +85,31 @@
             </div>
           </template>
           <div class="orders-list">
-            <div v-for="tableGroup in preparingOrders" :key="tableGroup.tableId" class="table-group preparing">
-              <div class="table-header">
+            <div v-for="batch in preparingOrders" :key="batch._id" class="batch-card preparing">
+              <div class="batch-header">
                 <div class="table-info">
-                  <span class="table-number">{{ tableGroup.tableNumber }}號桌</span>
-                  <BaseTag variant="info" size="small" v-if="tableGroup.batches.length > 1">
-                    {{ tableGroup.batches.length }} 批次
+                  <span class="table-number">{{ batch.tableNumber }}號桌</span>
+                  <BaseTag variant="info" size="small">
+                    批次 {{ batch.batchNumber }}
                   </BaseTag>
                 </div>
-                <div class="table-stats">
-                  <span class="total-items">{{ tableGroup.itemCount }} 項</span>
-                  <span class="total-amount">NT$ {{ tableGroup.totalAmount }}</span>
+                <div class="batch-time">{{ formatTime(batch.createdAt) }}</div>
+              </div>
+              <div class="batch-items">
+                <div v-for="item in batch.items" :key="item._id" class="batch-item">
+                  <span class="item-name">{{ item.name }}</span>
+                  <span class="item-quantity">x{{ item.quantity }}</span>
                 </div>
               </div>
-              
-              <div v-for="batch in tableGroup.batches" :key="batch._id" class="batch-card">
-                <div class="batch-header">
-                  <span class="batch-number">批次 {{ batch.batchNumber }}</span>
-                  <span class="batch-time">{{ formatTime(batch.createdAt) }}</span>
-                </div>
-                <div class="batch-items">
-                  <div v-for="item in batch.items" :key="item._id" class="batch-item">
-                    <span class="item-name">{{ item.name }}</span>
-                    <span class="item-quantity">x{{ item.quantity }}</span>
-                  </div>
+              <div class="batch-footer">
+                <div class="batch-stats">
+                  <span class="total-items">{{ batch.itemCount }} 項</span>
+                  <span class="total-amount">NT$ {{ batch.totalAmount }}</span>
                 </div>
                 <div class="batch-actions">
                   <BaseButton variant="primary" size="small" @click="markAsReady(batch._id)">
                     <font-awesome-icon icon="bell" />
-                    完成批次 {{ batch.batchNumber }}
+                    完成批次
                   </BaseButton>
                 </div>
               </div>
@@ -130,35 +126,31 @@
             </div>
           </template>
           <div class="orders-list">
-            <div v-for="tableGroup in readyOrders" :key="tableGroup.tableId" class="table-group ready">
-              <div class="table-header">
+            <div v-for="batch in readyOrders" :key="batch._id" class="batch-card ready">
+              <div class="batch-header">
                 <div class="table-info">
-                  <span class="table-number">{{ tableGroup.tableNumber }}號桌</span>
-                  <BaseTag variant="success" size="small" v-if="tableGroup.batches.length > 1">
-                    {{ tableGroup.batches.length }} 批次完成
+                  <span class="table-number">{{ batch.tableNumber }}號桌</span>
+                  <BaseTag variant="success" size="small">
+                    批次 {{ batch.batchNumber }}
                   </BaseTag>
                 </div>
-                <div class="table-stats">
-                  <span class="total-items">{{ tableGroup.itemCount }} 項</span>
-                  <span class="total-amount">NT$ {{ tableGroup.totalAmount }}</span>
+                <div class="batch-time">{{ formatTime(batch.createdAt) }}</div>
+              </div>
+              <div class="batch-items">
+                <div v-for="item in batch.items" :key="item._id" class="batch-item">
+                  <span class="item-name">{{ item.name }}</span>
+                  <span class="item-quantity">x{{ item.quantity }}</span>
                 </div>
               </div>
-              
-              <div v-for="batch in tableGroup.batches" :key="batch._id" class="batch-card">
-                <div class="batch-header">
-                  <span class="batch-number">批次 {{ batch.batchNumber }}</span>
-                  <span class="batch-time">{{ formatTime(batch.readyAt || batch.createdAt) }}</span>
-                </div>
-                <div class="batch-items">
-                  <div v-for="item in batch.items" :key="item._id" class="batch-item">
-                    <span class="item-name">{{ item.name }}</span>
-                    <span class="item-quantity">x{{ item.quantity }}</span>
-                  </div>
+              <div class="batch-footer">
+                <div class="batch-stats">
+                  <span class="total-items">{{ batch.itemCount }} 項</span>
+                  <span class="total-amount">NT$ {{ batch.totalAmount }}</span>
                 </div>
                 <div class="batch-actions">
                   <BaseButton variant="secondary" size="small" @click="markAsDelivered(batch._id)">
                     <font-awesome-icon icon="truck" />
-                    送出批次 {{ batch.batchNumber }}
+                    送出批次
                   </BaseButton>
                 </div>
               </div>
@@ -175,33 +167,32 @@
             </div>
           </template>
           <div class="orders-list">
-            <div v-for="tableGroup in deliveredOrders" :key="tableGroup.tableId" class="table-group delivered">
-              <div class="table-header">
+            <div v-for="batch in deliveredOrders" :key="batch._id" class="batch-card delivered">
+              <div class="batch-header">
                 <div class="table-info">
-                  <span class="table-number">{{ tableGroup.tableNumber }}號桌</span>
-                  <BaseTag variant="success" size="small" v-if="tableGroup.batches.length > 1">
-                    {{ tableGroup.batches.length }} 批次已送達
+                  <span class="table-number">{{ batch.tableNumber }}號桌</span>
+                  <BaseTag variant="success" size="small">
+                    批次 {{ batch.batchNumber }}
                   </BaseTag>
                 </div>
-                <div class="table-stats">
-                  <span class="total-items">{{ tableGroup.itemCount }} 項</span>
-                  <span class="total-amount">NT$ {{ tableGroup.totalAmount }}</span>
+                <div class="batch-time">{{ formatTime(batch.createdAt) }}</div>
+              </div>
+              <div class="batch-items">
+                <div v-for="item in batch.items" :key="item._id" class="batch-item">
+                  <span class="item-name">{{ item.name }}</span>
+                  <span class="item-quantity">x{{ item.quantity }}</span>
                 </div>
               </div>
-              
-              <div v-for="batch in tableGroup.batches" :key="batch._id" class="batch-card">
-                <div class="batch-header">
-                  <span class="batch-number">批次 {{ batch.batchNumber }}</span>
-                  <span class="batch-time">{{ formatTime(batch.deliveredAt || batch.servedAt || batch.createdAt) }}</span>
+              <div class="batch-footer">
+                <div class="batch-stats">
+                  <span class="total-items">{{ batch.itemCount }} 項</span>
+                  <span class="total-amount">NT$ {{ batch.totalAmount }}</span>
                 </div>
-                <div class="batch-items">
-                  <div v-for="item in batch.items" :key="item._id" class="batch-item">
-                    <span class="item-name">{{ item.name }}</span>
-                    <span class="item-quantity">x{{ item.quantity }}</span>
-                  </div>
-                </div>
-                <div class="batch-total">
-                  <span class="batch-amount">NT$ {{ batch.totalAmount }}</span>
+                <div class="batch-actions">
+                  <BaseButton variant="text" size="small" disabled>
+                    <font-awesome-icon icon="check" />
+                    已送出
+                  </BaseButton>
                 </div>
               </div>
             </div>
