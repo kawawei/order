@@ -161,10 +161,14 @@ const startOrdering = async () => {
     // 呼叫後端 API 開始點餐，更新桌次狀態為已入座
     await api.post(`/tables/${tableData.value.id}/start-ordering`)
     
-    // 更新 sessionStorage 中的桌次狀態
+    // 更新 sessionStorage 中的桌次狀態，保留完整的桌次信息
     const currentTable = JSON.parse(sessionStorage.getItem('currentTable') || '{}')
-    currentTable.status = 'occupied'
-    sessionStorage.setItem('currentTable', JSON.stringify(currentTable))
+    // 確保保留所有原始數據，只更新狀態
+    const updatedTableData = {
+      ...currentTable,
+      status: 'occupied'
+    }
+    sessionStorage.setItem('currentTable', JSON.stringify(updatedTableData))
     
     // 跳轉到菜單頁面
     router.push({

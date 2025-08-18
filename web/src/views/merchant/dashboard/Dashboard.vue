@@ -205,6 +205,9 @@ import { useDashboard } from '../../../composables/merchant/useDashboard'
 const route = useRoute()
 const router = useRouter()
 
+// 從路由查詢參數獲取餐廳ID（超級管理員查看特定商家時使用）
+const restaurantId = route.query.restaurantId
+
 const {
   currentDate,
   loading,
@@ -216,7 +219,7 @@ const {
   popularItems,
   popularItemsColumns,
   refreshItems
-} = useDashboard()
+} = useDashboard(restaurantId)
 
 // 處理來自超級管理員的查詢參數
 onMounted(() => {

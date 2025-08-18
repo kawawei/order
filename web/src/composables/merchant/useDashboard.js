@@ -59,6 +59,9 @@ export function useDashboard(restaurantId = null) {
   // 獲取商家ID
   const getMerchantId = () => {
     try {
+      console.log('=== getMerchantId 調試信息 ===') // 添加調試日誌
+      console.log('傳入的 restaurantId 參數:', restaurantId) // 添加調試日誌
+      
       // 優先使用傳入的restaurantId參數（超級管理員查看特定商家時使用）
       if (restaurantId) {
         console.log(`使用傳入的餐廳ID: ${restaurantId}`)
@@ -68,6 +71,7 @@ export function useDashboard(restaurantId = null) {
       // 其次嘗試從URL查詢參數獲取restaurantId（超級管理員從餐廳管理頁面跳轉過來）
       const urlParams = new URLSearchParams(window.location.search)
       const urlRestaurantId = urlParams.get('restaurantId')
+      console.log('URL查詢參數中的 restaurantId:', urlRestaurantId) // 添加調試日誌
       if (urlRestaurantId) {
         console.log(`使用URL查詢參數中的餐廳ID: ${urlRestaurantId}`)
         return urlRestaurantId
@@ -75,8 +79,10 @@ export function useDashboard(restaurantId = null) {
       
       // 再次嘗試從localStorage獲取用戶信息
       const storedUser = localStorage.getItem('user')
+      console.log('localStorage 中的 user 數據:', storedUser) // 添加調試日誌
       if (storedUser) {
         const userData = JSON.parse(storedUser)
+        console.log('解析後的用戶數據:', userData) // 添加調試日誌
         // 如果是超級管理員，需要從其他地方獲取商家ID
         if (userData.role === 'admin' || userData.role === 'superadmin') {
           // 超級管理員查看商家後台時，應該有 restaurantId 參數
@@ -85,16 +91,20 @@ export function useDashboard(restaurantId = null) {
           return null
         }
         // 普通商家用戶，直接返回用戶ID
-        console.log(`使用商家用戶ID: ${userData._id || userData.id}`)
-        return userData._id || userData.id
+        const merchantId = userData._id || userData.id
+        console.log(`使用商家用戶ID: ${merchantId}`)
+        return merchantId
       }
       
       // 如果沒有用戶信息，嘗試從merchant存儲獲取
       const storedMerchant = localStorage.getItem('merchant')
+      console.log('localStorage 中的 merchant 數據:', storedMerchant) // 添加調試日誌
       if (storedMerchant) {
         const merchantData = JSON.parse(storedMerchant)
-        console.log(`使用merchant存儲中的ID: ${merchantData._id || merchantData.id}`)
-        return merchantData._id || merchantData.id
+        console.log('解析後的商家數據:', merchantData) // 添加調試日誌
+        const merchantId = merchantData._id || merchantData.id
+        console.log(`使用merchant存儲中的ID: ${merchantId}`)
+        return merchantId
       }
       
       console.warn('無法獲取商家ID，用戶可能未登入')
@@ -188,6 +198,8 @@ export function useDashboard(restaurantId = null) {
   const loadBusinessStats = async () => {
     try {
       const merchantId = getMerchantId()
+      console.log('loadBusinessStats - 獲取到的商家ID:', merchantId) // 添加調試日誌
+      
       if (!merchantId) {
         console.warn('無法載入營業統計：商家ID不存在')
         return
@@ -198,28 +210,37 @@ export function useDashboard(restaurantId = null) {
       const storedUser = localStorage.getItem('user')
       let tableResponse
       
+      console.log('loadBusinessStats - 用戶角色:', storedUser ? JSON.parse(storedUser).role : '未登入') // 添加調試日誌
+      
       if (storedUser) {
         const userData = JSON.parse(storedUser)
         if (userData.role === 'admin' || userData.role === 'superadmin') {
           // 超級管理員需要傳遞merchantId參數
+          console.log('loadBusinessStats - 超級管理員調用，使用merchantId參數') // 添加調試日誌
           tableResponse = await api.get(`/tables/stats?merchantId=${merchantId}`)
         } else {
           // 商家直接呼叫自己的API
+          console.log('loadBusinessStats - 商家用戶調用，直接調用API') // 添加調試日誌
           tableResponse = await api.get(`/tables/stats`)
         }
       } else {
         // 默認情況，直接呼叫API
+        console.log('loadBusinessStats - 默認情況，直接調用API') // 添加調試日誌
         tableResponse = await api.get(`/tables/stats`)
       }
       
       if (tableResponse.status === 'success') {
-        const stats = tableResponse.data
+        const stats = tableResponse.data.stats // 修正：從 data.stats 獲取統計數據
+        console.log('桌次統計數據:', stats) // 添加日誌以便調試
+        
         businessStats.value = {
           tablesInUse: stats.occupiedTables || 0,
           totalTables: stats.totalTables || 0,
           currentGuests: (stats.occupiedTables || 0) * 3, // 假設每桌平均3人
           seatUtilization: stats.totalTables > 0 ? Math.round((stats.occupiedTables / stats.totalTables) * 100) : 0
         }
+        
+        console.log('更新後的營業統計:', businessStats.value) // 添加日誌以便調試
       }
     } catch (error) {
       console.error('載入營業統計失敗:', error)
