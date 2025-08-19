@@ -40,6 +40,12 @@
         <p>{{ item.description }}</p>
       </div>
 
+      <!-- 庫存關聯顯示 -->
+      <InventoryDisplay 
+        :inventory-config="item.inventoryConfig"
+        :available-inventory="availableInventory"
+      />
+
       <!-- 操作按鈕 -->
       <div class="item-actions">
         <BaseButton variant="text" size="small" @click="$emit('edit', item)">
@@ -56,10 +62,16 @@
 </template>
 
 <script setup>
+import InventoryDisplay from './InventoryDisplay.vue'
+
 const props = defineProps({
   item: {
     type: Object,
     required: true
+  },
+  availableInventory: {
+    type: Array,
+    default: () => []
   }
 })
 

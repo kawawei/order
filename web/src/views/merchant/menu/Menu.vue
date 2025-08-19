@@ -42,6 +42,7 @@
                 v-for="item in menuItems[category._id]"
                 :key="item._id"
                 :item="item"
+                :available-inventory="availableInventory"
                 @edit="handleEditMenuItem(category._id, item)"
                 @delete="handleDeleteMenuItem(category._id, item)"
               />
@@ -103,6 +104,7 @@ const {
   menuItems,
   loading,
   error,
+  availableInventory,
   showAddCategoryDialog,
   showAddMenuItemDialog,
   currentCategory,

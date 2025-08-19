@@ -272,4 +272,28 @@ export const inventoryCategoryAPI = {
   initializeSystemCategories: () => api.post('/inventory-categories/initialize')
 };
 
+// 為了向後兼容，創建 inventoryService 對象
+export const inventoryService = {
+  // 庫存項目相關方法
+  getInventory: inventoryAPI.getAllInventory,
+  getInventoryItem: inventoryAPI.getInventory,
+  createInventory: inventoryAPI.createInventory,
+  updateInventory: inventoryAPI.updateInventory,
+  deleteInventory: inventoryAPI.deleteInventory,
+  batchUpdateInventory: inventoryAPI.batchUpdateInventory,
+  getInventoryStats: inventoryAPI.getInventoryStats,
+  getInventoryCategories: inventoryAPI.getInventoryCategories,
+  searchInventory: inventoryAPI.searchInventory,
+  
+  // 庫存分類相關方法
+  getCategories: inventoryCategoryAPI.getAllCategories,
+  getCategory: inventoryCategoryAPI.getCategory,
+  createCategory: inventoryCategoryAPI.createCategory,
+  updateCategory: inventoryCategoryAPI.updateCategory,
+  deleteCategory: inventoryCategoryAPI.deleteCategory,
+  updateCategoriesOrder: inventoryCategoryAPI.updateCategoriesOrder,
+  getCategoryStats: inventoryCategoryAPI.getCategoryStats,
+  initializeSystemCategories: inventoryCategoryAPI.initializeSystemCategories
+};
+
 export default api;

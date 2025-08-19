@@ -1,5 +1,6 @@
 import { ref, computed, onMounted } from 'vue'
 import { useMenu } from './useMenu'
+import { inventoryService } from '@/services/api'
 
 export function useMenuPage(restaurantId = null) {
   const {
@@ -18,6 +19,25 @@ export function useMenuPage(restaurantId = null) {
     removeDish,
     initializeData
   } = useMenu(restaurantId)
+
+  // 庫存相關
+  const availableInventory = ref([])
+  const inventoryLoading = ref(false)
+
+  // 加載可用庫存
+  const loadAvailableInventory = async () => {
+    try {
+      inventoryLoading.value = true
+      const response = await inventoryService.getInventory()
+      if (response.status === 'success') {
+        availableInventory.value = response.data.inventory || []
+      }
+    } catch (err) {
+      console.error('加載庫存失敗:', err)
+    } finally {
+      inventoryLoading.value = false
+    }
+  }
 
   // 根據分類組織菜品數據
   const menuItems = computed(() => {
@@ -98,49 +118,57 @@ export function useMenuPage(restaurantId = null) {
       const dishData = {
         name: menuItem.name,
         price: Number(menuItem.basePrice),
+        description: menuItem.description,
+        image: menuItem.image,
         category: currentCategory.value,
-        description: menuItem.description || '',
-        image: menuItem.image || '',
-        customOptions: menuItem.options || [],
-        isActive: true
+        customOptions: menuItem.options,
+        inventoryConfig: menuItem.inventoryConfig
       }
 
       if (editingItem.value) {
-        // 編輯現有菜品
+        // 更新現有菜品
         await updateDish(editingItem.value._id, dishData)
       } else {
-        // 添加新菜品
+        // 創建新菜品
         await addDish(dishData)
       }
-      
-      editingItem.value = null
+
       showAddMenuItemDialog.value = false
+      editingItem.value = null
     } catch (err) {
       console.error('保存菜品失敗:', err)
       // 可以添加錯誤提示
     }
   }
 
-  // 編輯菜品
   const handleEditMenuItem = (categoryId, item) => {
     currentCategory.value = categoryId
     editingItem.value = item
     showAddMenuItemDialog.value = true
   }
 
-  // 刪除菜品
   const handleDeleteMenuItem = async (categoryId, item) => {
-    try {
-      await removeDish(item._id)
-    } catch (err) {
-      console.error('刪除菜品失敗:', err)
-      // 可以添加錯誤提示
+    if (confirm(`確定要刪除「${item.name}」嗎？`)) {
+      try {
+        await removeDish(item._id)
+      } catch (err) {
+        console.error('刪除菜品失敗:', err)
+        // 可以添加錯誤提示
+      }
     }
   }
 
   // 初始化數據
+  const initializePageData = async () => {
+    await Promise.all([
+      initializeData(),
+      loadAvailableInventory()
+    ])
+  }
+
+  // 組件掛載時初始化
   onMounted(() => {
-    initializeData()
+    initializePageData()
   })
 
   return {
@@ -149,6 +177,8 @@ export function useMenuPage(restaurantId = null) {
     menuItems,
     loading,
     error,
+    availableInventory,
+    inventoryLoading,
     showAddCategoryDialog,
     showAddMenuItemDialog,
     currentCategory,
@@ -160,6 +190,7 @@ export function useMenuPage(restaurantId = null) {
     handleAddMenuItem,
     handleConfirmAddMenuItem,
     handleEditMenuItem,
-    handleDeleteMenuItem
+    handleDeleteMenuItem,
+    loadAvailableInventory
   }
 }
