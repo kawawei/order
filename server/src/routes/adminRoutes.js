@@ -28,7 +28,8 @@ router.route('/')
 
 // 商家管理路由
 router.route('/merchants')
-  .get(adminController.getAllMerchants);
+  .get(adminController.getAllMerchants)
+  .post(adminController.createMerchant);
 
 router.route('/merchants/:id')
   .get(adminController.getMerchant)

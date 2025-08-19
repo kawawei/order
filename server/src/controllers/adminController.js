@@ -1,6 +1,8 @@
 const jwt = require('jsonwebtoken');
 const Admin = require('../models/admin');
 const Merchant = require('../models/merchant');
+const Role = require('../models/role');
+const Employee = require('../models/employee');
 const AppError = require('../utils/appError');
 const catchAsync = require('../utils/catchAsync');
 
@@ -23,6 +25,80 @@ exports.createSuperAdmin = catchAsync(async (req, res, next) => {
   res.status(201).json({
     status: 'success',
     data: { admin }
+  });
+});
+
+// 新增商家（超級管理員）
+exports.createMerchant = catchAsync(async (req, res, next) => {
+  const {
+    businessName,
+    merchantCode,
+    businessPhone,
+    businessAddress,
+    ownerName,
+    ownerPhone
+  } = req.body || {};
+
+  if (!businessName || !merchantCode) {
+    return next(new AppError('缺少必要欄位：businessName 或 merchantCode', 400));
+  }
+
+  const duplicated = await Merchant.findOne({ merchantCode });
+  if (duplicated) {
+    return next(new AppError('商家代碼已存在', 400));
+  }
+
+  // 建立商家（為滿足既有 schema 的 email/password 必填，使用內部預設）
+  const internalEmail = `${merchantCode}@example.com`;
+  const internalPassword = `${merchantCode}_Pass1234`;
+
+  const merchant = await Merchant.create({
+    merchantCode,
+    email: internalEmail,
+    password: internalPassword,
+    businessName,
+    businessType: 'restaurant',
+    phone: (businessPhone && String(businessPhone).replace(/\D/g, '').slice(0,10).padEnd(10, '0')) || '0000000000',
+    address: businessAddress || '未提供地址',
+    status: 'active'
+  });
+
+  // 預設「管理人員」角色
+  const managerRole = await Role.create({
+    merchant: merchant._id,
+    name: '管理人員',
+    permissions: [
+      '菜單:查看','菜單:編輯','庫存:查看','庫存:編輯','訂單:查看','訂單:更新狀態','訂單:結帳','桌位:查看','桌位:管理','報表:查看','商家設定:編輯','員工:查看','員工:編輯','角色:管理'
+    ],
+    isSystem: true
+  });
+
+  // 產生老闆員工編號，並建立老闆帳號
+  const employeeCode = `${merchantCode}-001`;
+  const owner = await Employee.create({
+    merchant: merchant._id,
+    name: ownerName || '老闆',
+    account: employeeCode,
+    email: undefined,
+    password: `${merchantCode}_Owner1234`,
+    role: managerRole._id
+  });
+
+  res.status(201).json({
+    status: 'success',
+    data: {
+      merchant: {
+        id: merchant._id,
+        businessName: merchant.businessName,
+        merchantCode: merchant.merchantCode
+      },
+      owner: {
+        id: owner._id,
+        employeeCode,
+        name: owner.name,
+        phone: ownerPhone || ''
+      }
+    }
   });
 });
 

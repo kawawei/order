@@ -31,6 +31,14 @@
               >
                 <font-awesome-icon icon="search" />
               </BaseButton>
+              <BaseButton
+                variant="primary"
+                size="small"
+                class="ml-2"
+                @click="showAddDialog = true"
+              >
+                <font-awesome-icon icon="plus" /> 新增餐廳
+              </BaseButton>
             </div>
           </div>
         </template>
@@ -126,6 +134,16 @@
                 >
                   <font-awesome-icon icon="key" />
                 </BaseButton>
+
+                <!-- 刪除商家按鈕 -->
+                <BaseButton
+                  variant="text"
+                  size="small"
+                  @click="deleteUser(row)"
+                  title="刪除餐廳"
+                >
+                  <font-awesome-icon icon="trash" />
+                </BaseButton>
               </div>
             </template>
           </BaseTable>
@@ -157,11 +175,53 @@
         </div>
       </BaseCard>
     </div>
+
+    <!-- 新增餐廳對話框 -->
+    <BaseDialog
+      :model-value="showAddDialog"
+      @update:model-value="val => showAddDialog = val"
+      title="新增餐廳"
+      size="medium"
+    >
+      <div class="add-merchant-form">
+        <div class="form-row">
+          <label>餐廳名稱</label>
+          <input v-model="newMerchant.businessName" type="text" placeholder="請輸入餐廳名稱" />
+        </div>
+        <div class="form-row">
+          <label>商家代碼</label>
+          <input v-model="newMerchant.merchantCode" type="text" placeholder="自行設定商家代碼" />
+        </div>
+        <div class="form-row">
+          <label>餐廳電話（選填）</label>
+          <input v-model="newMerchant.businessPhone" type="text" placeholder="餐廳聯絡電話" />
+        </div>
+        <div class="form-row">
+          <label>餐廳地址（選填）</label>
+          <input v-model="newMerchant.businessAddress" type="text" placeholder="餐廳地址" />
+        </div>
+        <div class="form-row">
+          <label>老闆姓名</label>
+          <input v-model="newMerchant.ownerName" type="text" placeholder="請輸入老闆姓名" />
+        </div>
+        <div class="form-row">
+          <label>老闆電話（選填）</label>
+          <input v-model="newMerchant.ownerPhone" type="text" placeholder="連絡電話" />
+        </div>
+        <p v-if="addError" class="error-text">{{ addError }}</p>
+      </div>
+
+      <template #footer>
+        <BaseButton variant="text" @click="showAddDialog = false">取消</BaseButton>
+        <BaseButton :disabled="!canSubmitNew" @click="handleAddMerchant">新增</BaseButton>
+      </template>
+    </BaseDialog>
   </div>
 </template>
 
 <script setup>
 import { columns, useUsers } from './Restaurants.js'
+import { ref, computed } from 'vue'
 
 const {
   searchQuery,
@@ -174,11 +234,62 @@ const {
   editUser,
   toggleUserStatus,
   resetPassword,
+  deleteUser,
   goToRestaurant,
   handleSearch,
   handlePageChange,
-  loadMerchants
+  loadMerchants,
+  addMerchant
 } = useUsers()
+
+// 新增餐廳對話框狀態
+const showAddDialog = ref(false)
+const newMerchant = ref({
+  businessName: '',
+  merchantCode: '',
+  businessPhone: '',
+  businessAddress: '',
+  ownerName: '',
+  ownerPhone: ''
+})
+const addError = ref('')
+
+const canSubmitNew = computed(() => {
+  return (
+    newMerchant.value.businessName.trim() &&
+    newMerchant.value.merchantCode.trim() &&
+    newMerchant.value.ownerName.trim()
+  )
+})
+
+const handleAddMerchant = async () => {
+  addError.value = ''
+  if (!canSubmitNew.value) {
+    addError.value = '請完整填寫必填欄位'
+    return
+  }
+  try {
+    await addMerchant({
+      businessName: newMerchant.value.businessName.trim(),
+      merchantCode: newMerchant.value.merchantCode.trim(),
+      businessPhone: newMerchant.value.businessPhone.trim() || undefined,
+      businessAddress: newMerchant.value.businessAddress.trim() || undefined,
+      ownerName: newMerchant.value.ownerName.trim(),
+      ownerPhone: newMerchant.value.ownerPhone.trim() || undefined
+    })
+    showAddDialog.value = false
+    newMerchant.value = { 
+      businessName: '', 
+      merchantCode: '', 
+      businessPhone: '',
+      businessAddress: '',
+      ownerName: '', 
+      ownerPhone: '' 
+    }
+  } catch (e) {
+    addError.value = e.message || '新增餐廳失敗'
+  }
+}
 
 // 獲取狀態變體
 const getStatusVariant = (status) => {
@@ -202,3 +313,29 @@ const getStatusText = (status) => {
 </script>
 
 <style src="./Restaurants.css" scoped></style>
+
+<style scoped>
+.add-merchant-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+.form-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+.form-row label {
+  font-size: 0.875rem;
+  color: #666;
+}
+.form-row input {
+  padding: 0.5rem;
+  border: 1px solid #e6e6e6;
+  border-radius: 4px;
+}
+.error-text {
+  color: #ff4d4f;
+  font-size: 0.875rem;
+}
+</style>

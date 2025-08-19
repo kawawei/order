@@ -13,9 +13,9 @@
               <font-awesome-icon icon="envelope" />
             </span>
             <input 
-              type="email" 
-              v-model="form.email"
-              placeholder="請輸入您的電子郵件"
+              type="text" 
+              v-model="form.merchantCode"
+              placeholder="請輸入商家代碼"
               required
             />
           </div>
@@ -28,8 +28,8 @@
             </span>
             <input 
               :type="showPassword ? 'text' : 'password'" 
-              v-model="form.password"
-              placeholder="請輸入您的密碼"
+              v-model="form.employeeCode"
+              placeholder="請輸入員工編號"
               required
             />
             <button 
@@ -83,8 +83,8 @@ const { login } = useAuth()
 const loading = ref(false)
 const showPassword = ref(false)
 const form = ref({
-  email: '',
-  password: '',
+  merchantCode: '',
+  employeeCode: '',
   rememberMe: false
 })
 

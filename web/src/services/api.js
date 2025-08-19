@@ -50,16 +50,37 @@ export const authAPI = {
   // 登入
   login: async (data) => {
     try {
-      console.log('執行登入請求:', {
-        role: data.role,
-        endpoint: data.role === 'admin' ? '/admin/login' : '/auth/login',
-        data: { ...data, password: '[HIDDEN]' }
-      });
-      
-      const loginData = { ...data };
-      delete loginData.role;
-      
       const endpoint = data.role === 'admin' ? '/admin/login' : '/auth/login';
+
+      // 生成送出的負載：
+      // - 管理員：維持 email/password
+      // - 商家：改以 merchantCode/employeeCode，兼容舊欄位 email/password
+      let loginData;
+      if (data.role === 'admin') {
+        const { email, password, verificationCode, ...rest } = data || {};
+        loginData = {
+          email,
+          password,
+          ...(verificationCode ? { verificationCode } : {}),
+          ...rest
+        };
+      } else {
+        const merchantCode = data?.merchantCode ?? data?.email ?? '';
+        const employeeCode = data?.employeeCode ?? data?.password ?? '';
+        const { role, email, password, ...rest } = data || {};
+        loginData = {
+          merchantCode,
+          employeeCode,
+          ...rest
+        };
+      }
+
+      console.log('執行登入請求:', {
+        role: data.role || 'merchant',
+        endpoint,
+        payloadKeys: Object.keys(loginData || {})
+      });
+
       const response = await api.post(endpoint, loginData);
       
       console.log('登入回應:', {
@@ -169,6 +190,9 @@ export const merchantAPI = {
   
   // 更新商家狀態
   updateMerchantStatus: (merchantId, status) => api.patch(`/admin/merchants/${merchantId}`, { status }),
+  
+  // 新增商家（並建立老闆帳號）
+  createMerchant: (data) => api.post('/admin/merchants', data),
   
   // 刪除商家
   deleteMerchant: (merchantId) => api.delete(`/admin/merchants/${merchantId}`)

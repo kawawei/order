@@ -9,8 +9,8 @@ export default {
     const toast = useToast();
     
     const formData = ref({
-      email: '',
-      password: ''
+      merchantCode: '',
+      employeeCode: ''
     });
     
     const loading = ref(false);
@@ -19,12 +19,12 @@ export default {
     const validateForm = () => {
       const newErrors = {};
       
-      if (!formData.value.email) {
-        newErrors.email = '請輸入電子郵件';
+      if (!formData.value.merchantCode) {
+        newErrors.email = '請輸入商家代碼';
       }
       
-      if (!formData.value.password) {
-        newErrors.password = '請輸入密碼';
+      if (!formData.value.employeeCode) {
+        newErrors.password = '請輸入員工編號';
       }
       
       errors.value = newErrors;

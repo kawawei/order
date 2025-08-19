@@ -3,6 +3,7 @@ const catchAsync = require('../utils/catchAsync');
 const AppError = require('../utils/appError');
 const Merchant = require('../models/merchant');
 const Admin = require('../models/admin');
+const Employee = require('../models/employee');
 
 // 驗證 JWT token
 exports.protect = catchAsync(async (req, res, next) => {
@@ -36,6 +37,8 @@ exports.protect = catchAsync(async (req, res, next) => {
     currentUser = await Merchant.findById(decoded.id).select('+isActive');
   } else if (decoded.role === 'admin' || decoded.role === 'superadmin') {
     currentUser = await Admin.findById(decoded.id).select('+isActive');
+  } else if (decoded.role === 'employee') {
+    currentUser = await Employee.findById(decoded.id).select('+isActive').populate('role');
   } else {
     // 默認情況下，假設是商家用戶（向後兼容） - Default case, assume merchant user (backward compatibility)
     currentUser = await Merchant.findById(decoded.id).select('+isActive');
@@ -63,6 +66,8 @@ exports.protect = catchAsync(async (req, res, next) => {
     req.merchant = currentUser;
   } else if (decoded.role === 'admin' || decoded.role === 'superadmin') {
     req.admin = currentUser;
+  } else if (decoded.role === 'employee') {
+    req.employee = currentUser;
   } else {
     // 默認情況下，假設是商家用戶 - Default case, assume merchant user
     req.merchant = currentUser;
@@ -123,6 +128,9 @@ exports.optionalAuth = catchAsync(async (req, res, next) => {
     } else if (decoded.role === 'admin' || decoded.role === 'superadmin') {
       currentUser = await Admin.findById(decoded.id).select('+isActive');
       req.admin = currentUser;
+    } else if (decoded.role === 'employee') {
+      currentUser = await Employee.findById(decoded.id).select('+isActive').populate('role');
+      req.employee = currentUser;
     }
     
     if (currentUser && currentUser.isActive) {
@@ -242,4 +250,74 @@ exports.checkMerchantOrAdminAccess = (model) => {
     req.resource = resource;
     next();
   });
+};
+
+// 允許商家、管理員或員工的保護中介層
+exports.protectAny = catchAsync(async (req, res, next) => {
+  let token;
+  if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
+    token = req.headers.authorization.split(' ')[1];
+  }
+  if (!token) {
+    return next(new AppError('您需要先登入才能訪問此資源', 401));
+  }
+  let decoded;
+  try {
+    decoded = jwt.verify(token, process.env.JWT_SECRET);
+  } catch (error) {
+    return next(new AppError('token 驗證失敗', 401));
+  }
+  let currentUser;
+  if (decoded.role === 'merchant') {
+    currentUser = await Merchant.findById(decoded.id).select('+isActive');
+    if (!currentUser || !currentUser.isActive) return next(new AppError('帳戶無效', 401));
+    req.merchant = currentUser;
+    req.user = currentUser;
+  } else if (decoded.role === 'admin' || decoded.role === 'superadmin') {
+    currentUser = await Admin.findById(decoded.id).select('+isActive');
+    if (!currentUser || !currentUser.isActive) return next(new AppError('帳戶無效', 401));
+    req.admin = currentUser;
+    req.user = currentUser;
+  } else if (decoded.role === 'employee') {
+    currentUser = await Employee.findById(decoded.id).select('+isActive').populate('role');
+    if (!currentUser || !currentUser.isActive) return next(new AppError('帳戶無效', 401));
+    req.employee = currentUser;
+    req.user = currentUser;
+  } else {
+    return next(new AppError('無效的用戶角色', 401));
+  }
+  next();
+});
+
+// 權限檢查：管理員、商家擁有所有權限；員工依其角色權限
+exports.requirePermissions = (...requiredPermissions) => {
+  return (req, res, next) => {
+    // 超級管理員與管理員：允許
+    if (req.admin) return next();
+    // 商家：允許
+    if (req.merchant) return next();
+    // 員工：檢查權限
+    if (req.employee && req.employee.role && Array.isArray(req.employee.role.permissions)) {
+      const employeePerms = req.employee.role.permissions;
+      const ok = requiredPermissions.every(p => employeePerms.includes(p));
+      if (ok) return next();
+    }
+    return next(new AppError('您沒有權限執行此操作', 403));
+  };
+};
+
+// 強制檢查路由參數中的商家ID與登入者所屬商家相同（管理員略過）
+exports.enforceSameMerchantParam = (paramName = 'merchantId') => {
+  return (req, res, next) => {
+    if (req.admin) return next();
+    const requestedMerchantId = req.params[paramName];
+    const currentMerchantId = req.merchant ? req.merchant.id : (req.employee ? req.employee.merchant?.toString() : null);
+    if (!requestedMerchantId || !currentMerchantId) {
+      return next(new AppError('無法確認商家身分', 401));
+    }
+    if (requestedMerchantId.toString() !== currentMerchantId.toString()) {
+      return next(new AppError('您沒有權限訪問此商家的資料', 403));
+    }
+    next();
+  };
 };

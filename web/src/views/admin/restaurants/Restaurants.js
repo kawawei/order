@@ -114,6 +114,50 @@ export const useUsers = () => {
     toast.info('重置密碼功能開發中...')
   }
 
+  // 新增商家
+  const addMerchant = async (merchantData) => {
+    try {
+      loading.value = true
+      const response = await merchantAPI.createMerchant(merchantData)
+      if (response.status === 'success') {
+        toast.success('新增餐廳成功')
+        // 重新載入列表以取得最新資料
+        await loadMerchants(currentPage.value, searchQuery.value)
+        // 若後端回傳老闆員工編號，提示管理員記錄
+        const generatedCode = response.data?.owner?.employeeCode || response.data?.employeeCode
+        if (generatedCode) {
+          toast.info(`請記下老闆員工編號：${generatedCode}`)
+        }
+        return response
+      }
+      throw new Error(response.message || '新增餐廳失敗')
+    } catch (err) {
+      console.error('新增商家失敗:', err)
+      toast.error(err.message || '新增餐廳失敗')
+      throw err
+    } finally {
+      loading.value = false
+    }
+  }
+
+  // 刪除商家
+  const deleteUser = async (user) => {
+    try {
+      if (!confirm(`確定要刪除「${user.businessName}」嗎？`)) return
+      loading.value = true
+      await merchantAPI.deleteMerchant(user.id)
+      // 從本地列表移除，或重新載入
+      users.value = users.value.filter(u => u.id !== user.id)
+      totalUsers.value = Math.max(0, totalUsers.value - 1)
+      toast.success('已刪除餐廳')
+    } catch (err) {
+      console.error('刪除商家失敗:', err)
+      toast.error('刪除餐廳失敗')
+    } finally {
+      loading.value = false
+    }
+  }
+
   const goToRestaurant = (user) => {
     // 跳轉到餐廳後台，傳遞餐廳ID和名稱
     if (user.role === 'merchant') {
@@ -150,9 +194,11 @@ export const useUsers = () => {
     editUser,
     toggleUserStatus,
     resetPassword,
+    deleteUser,
     goToRestaurant,
     handleSearch,
     handlePageChange,
-    loadMerchants
+    loadMerchants,
+    addMerchant
   }
 }

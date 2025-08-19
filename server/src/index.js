@@ -10,6 +10,8 @@ const tableRoutes = require('./routes/tableRoutes');
 const menuRoutes = require('./routes/menuRoutes');
 const orderRoutes = require('./routes/orderRoutes');
 const reportRoutes = require('./routes/reportRoutes');
+const roleRoutes = require('./routes/roleRoutes');
+const employeeRoutes = require('./routes/employeeRoutes');
 const inventoryRoutes = require('./routes/inventoryRoutes');
 const inventoryCategoryRoutes = require('./routes/inventoryCategoryRoutes');
 
@@ -42,6 +44,8 @@ app.use('/api/v1/orders', orderRoutes);
 app.use('/api/v1/reports', reportRoutes);
 app.use('/api/v1/inventory', inventoryRoutes);
 app.use('/api/v1/inventory-categories', inventoryCategoryRoutes);
+app.use('/api/v1/roles', roleRoutes);
+app.use('/api/v1/employees', employeeRoutes);
 
 // 處理未找到的路由
 app.all('*', (req, res, next) => {

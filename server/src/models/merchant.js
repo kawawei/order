@@ -5,6 +5,13 @@ const jwt = require('jsonwebtoken');
 
 const merchantSchema = new mongoose.Schema({
   // 基本信息
+  // 供前台與後台識別使用的商家代碼
+  merchantCode: {
+    type: String,
+    required: [true, '請提供商家代碼'],
+    unique: true,
+    trim: true
+  },
   email: {
     type: String,
     required: [true, '請提供電子郵件'],

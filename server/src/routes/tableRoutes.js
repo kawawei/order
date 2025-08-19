@@ -1,6 +1,6 @@
 const express = require('express');
 const tableController = require('../controllers/tableController');
-const { protectMerchantOrAdmin, restrictTo } = require('../middleware/auth');
+const { protectAny, requirePermissions } = require('../middleware/auth');
 
 const router = express.Router();
 
@@ -11,8 +11,7 @@ router.get('/public/:code', tableController.getTableByCode);
 router.post('/:id/start-ordering', tableController.startOrdering);
 
 // 商家或超級管理員登入後才能訪問的路由
-router.use(protectMerchantOrAdmin);
-router.use(restrictTo('merchant', 'admin'));
+router.use(protectAny);
 
 // 統計信息 - 必須在 /:id 路由之前
 router.get('/stats', tableController.getTableStats);
@@ -20,20 +19,20 @@ router.get('/stats', tableController.getTableStats);
 // 桌次 CRUD 路由
 router
   .route('/')
-  .get(tableController.getAllTables)
-  .post(tableController.createTable);
+  .get(requirePermissions('桌位:查看'), tableController.getAllTables)
+  .post(requirePermissions('桌位:管理'), tableController.createTable);
 
 router
   .route('/:id')
-  .get(tableController.getTable)
-  .patch(tableController.updateTable)
-  .delete(tableController.deleteTable);
+  .get(requirePermissions('桌位:查看'), tableController.getTable)
+  .patch(requirePermissions('桌位:管理'), tableController.updateTable)
+  .delete(requirePermissions('桌位:管理'), tableController.deleteTable);
 
 // 桌次狀態管理
-router.patch('/:id/status', tableController.updateTableStatus);
-router.patch('/batch/status', tableController.batchUpdateStatus);
+router.patch('/:id/status', requirePermissions('桌位:管理'), tableController.updateTableStatus);
+router.patch('/batch/status', requirePermissions('桌位:管理'), tableController.batchUpdateStatus);
 
 // 二維碼管理
-router.post('/:id/regenerate-qr', tableController.regenerateQRCode);
+router.post('/:id/regenerate-qr', requirePermissions('桌位:管理'), tableController.regenerateQRCode);
 
 module.exports = router;

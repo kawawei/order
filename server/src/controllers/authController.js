@@ -37,7 +37,8 @@ exports.signup = catchAsync(async (req, res, next) => {
     phone,
     address,
     businessType,
-    businessHours
+    businessHours,
+    merchantCode: providedMerchantCode
   } = req.body;
 
   // 基本欄位驗證
@@ -54,19 +55,58 @@ exports.signup = catchAsync(async (req, res, next) => {
   }
 
   try {
+    // 地址可能是字串或物件，統一處理
+    let fullAddress = address;
+    let city, district, street, postalCode;
+    if (typeof address === 'object' && address !== null) {
+      city = address.city || '';
+      district = address.district || '';
+      street = address.street || '';
+      postalCode = address.postalCode || '';
+      fullAddress = `${city}${district}${street}`.trim() || '未提供地址';
+    }
+
+    // 產生 merchantCode（若未提供）
+    const baseCode = (providedMerchantCode || businessName || 'merchant')
+      .toString()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '')
+      .slice(0, 12);
+    let merchantCode = baseCode || 'merchant';
+
+    // 確保 merchantCode 不重複
+    let suffix = 1;
+    while (await Merchant.findOne({ merchantCode })) {
+      merchantCode = `${baseCode}${suffix++}`;
+    }
+
     // 創建新商家
     const newMerchant = await Merchant.create({
+      merchantCode,
       email,
       password,
       businessName,
       businessType: businessType || 'restaurant',
       phone,
-      address,
+      address: fullAddress,
+      ...(city ? { city } : {}),
+      ...(district ? { district } : {}),
+      ...(street ? { street } : {}),
+      ...(postalCode ? { postalCode } : {}),
       businessHours,
       status: 'pending'
     });
 
     console.log('商家創建成功:', newMerchant._id);
+
+    // 預設建立角色：收銀員、廚師、管理人員
+    const Role = require('../models/role');
+    const defaultRoles = [
+      { name: '收銀員', permissions: ['訂單:查看', '訂單:結帳', '桌位:查看'] },
+      { name: '廚師', permissions: ['訂單:查看', '訂單:更新狀態', '桌位:查看'] },
+      { name: '管理人員', permissions: ['菜單:查看','菜單:編輯','庫存:查看','庫存:編輯','訂單:查看','訂單:更新狀態','訂單:結帳','桌位:查看','桌位:管理','報表:查看','商家設定:編輯','員工:查看','員工:編輯','角色:管理'], isSystem: true }
+    ];
+    await Role.insertMany(defaultRoles.map(r => ({ ...r, merchant: newMerchant._id })));
 
     // 生成並發送 Token
     createSendToken(newMerchant, 201, res);
