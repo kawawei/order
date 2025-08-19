@@ -57,6 +57,11 @@ const routes = [
         component: () => import('../views/merchant/settings/Settings.vue')
       },
       {
+        path: 'inventory',
+        name: 'MerchantInventory',
+        component: () => import('../views/merchant/inventory/Inventory.vue')
+      },
+      {
         path: '',
         redirect: { name: 'MerchantDashboard' }
       }
