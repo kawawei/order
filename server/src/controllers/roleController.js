@@ -4,8 +4,8 @@ const catchAsync = require('../utils/catchAsync');
 
 const getMerchantId = (req) => {
   if (req.admin && req.query.merchantId) return req.query.merchantId;
+  if (req.employee) return req.employee.merchant?.toString();
   if (req.merchant) return req.merchant.id;
-  if (req.employee) return req.employee.merchant.toString();
   throw new AppError('無法確定商家身份', 401);
 };
 

@@ -4,11 +4,12 @@ const MenuCategory = require('../models/menuCategory');
 const catchAsync = require('../utils/catchAsync');
 const AppError = require('../utils/appError');
 
-// 輔助函數：獲取商家ID（支持超級管理員訪問特定商家）
+// 輔助函數：獲取商家ID（支持超級管理員與員工訪問特定商家）
 const getMerchantId = (req) => {
   console.log('=== getMerchantId 調試信息 ===');
   console.log('req.admin:', req.admin);
   console.log('req.merchant:', req.merchant);
+  console.log('req.employee:', req.employee);
   console.log('req.query:', req.query);
   console.log('req.query.merchantId:', req.query.merchantId);
   console.log('req.params:', req.params);
@@ -24,13 +25,19 @@ const getMerchantId = (req) => {
     console.log('超級管理員訪問但沒有指定merchantId參數');
     throw new AppError('超級管理員訪問商家後台需要指定merchantId參數', 400);
   }
-  // 否則使用當前登入的商家ID
-  if (!req.merchant) {
-    console.log('無法獲取商家信息');
-    throw new AppError('無法獲取商家信息', 401);
+  // 員工：從所屬商家取得 ID
+  if (req.employee) {
+    const id = req.employee.merchant?.toString();
+    console.log('員工訪問，使用所屬商家ID:', id);
+    return id;
   }
-  console.log('使用當前登入的商家ID:', req.merchant.id);
-  return req.merchant.id;
+  // 商家：使用當前登入商家 ID
+  if (req.merchant) {
+    console.log('使用當前登入的商家ID:', req.merchant.id);
+    return req.merchant.id;
+  }
+  console.log('無法獲取商家信息');
+  throw new AppError('無法獲取商家信息', 401);
 };
 
 // 獲取商家的所有菜品

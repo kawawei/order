@@ -19,8 +19,10 @@ export function useAuth() {
         user.value = admin
         localStorage.setItem('user', JSON.stringify({
           ...admin,
-          role: 'admin'
+          role: admin.role || 'admin'
         }))
+        // 清理舊版鍵名，避免顯示混淆
+        localStorage.removeItem('merchant')
       } else if (response?.data?.employee) {
         const employee = response.data.employee
         const merchantId =
@@ -35,6 +37,8 @@ export function useAuth() {
           role: 'employee',
           merchantId
         }))
+        // 清理舊版鍵名
+        localStorage.removeItem('merchant')
       } else if (response?.data?.merchant) {
         const merchant = response.data.merchant
         const merchantId = merchant?._id || merchant?.id || null
@@ -44,6 +48,8 @@ export function useAuth() {
           role: 'merchant',
           merchantId
         }))
+        // 同步清理舊版重複鍵
+        localStorage.removeItem('merchant')
       }
       
       return response
@@ -61,6 +67,8 @@ export function useAuth() {
     // 清除用戶信息
     user.value = null
     localStorage.removeItem('user')
+    // 清理可能殘留的舊版鍵名
+    localStorage.removeItem('merchant')
   }
 
   const isAuthenticated = () => {

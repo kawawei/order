@@ -5,9 +5,22 @@ const Table = require('../models/table');
 const Dish = require('../models/dish');
 const mongoose = require('mongoose');
 
-// 獲取商家ID
+
+// 獲取商家ID（支援商家、員工與超管指定 merchantId）
 const getMerchantId = (req) => {
-  return req.merchant.id;
+  // 超級管理員或管理員可透過查詢參數指定商家
+  if (req.admin && req.query.merchantId) {
+    return req.query.merchantId;
+  }
+  // 員工從所屬商家取得 ID
+  if (req.employee) {
+    return req.employee.merchant?.toString();
+  }
+  // 商家本身
+  if (req.merchant) {
+    return req.merchant.id;
+  }
+  throw new AppError('無法獲取商家信息', 401);
 };
 
 // 獲取報表統計數據

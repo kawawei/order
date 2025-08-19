@@ -31,10 +31,38 @@ const { user, logout } = useAuth()
 const username = ref('')
 
 onMounted(() => {
-  const storedUser = localStorage.getItem('user')
-  if (storedUser) {
-    const userData = JSON.parse(storedUser)
-    username.value = userData.name
+  // 優先從統一的 user 鍵讀取，若沒有則回退舊的 merchant 鍵
+  const storedUserRaw = localStorage.getItem('user')
+  if (storedUserRaw) {
+    try {
+      const userData = JSON.parse(storedUserRaw)
+      // 根據角色推導顯示名稱
+      let displayName = ''
+      const role = userData.role
+      if (role === 'admin' || role === 'superadmin') {
+        displayName = userData.username || userData.name || '超級管理員'
+      } else if (role === 'employee') {
+        displayName = userData.name || userData.account || '員工'
+      } else if (role === 'merchant') {
+        displayName = userData.businessName || userData.name || userData.merchantCode || '商家'
+      } else {
+        displayName = userData.name || userData.username || '用戶'
+      }
+      username.value = displayName
+      return
+    } catch (e) {
+      // 解析失敗則嘗試回退到 merchant
+    }
+  }
+
+  const storedMerchantRaw = localStorage.getItem('merchant')
+  if (storedMerchantRaw) {
+    try {
+      const merchantData = JSON.parse(storedMerchantRaw)
+      username.value = merchantData.businessName || merchantData.name || '商家'
+    } catch (e) {
+      username.value = '商家'
+    }
   }
 })
 

@@ -4,18 +4,18 @@ const Inventory = require('../models/inventory');
 const catchAsync = require('../utils/catchAsync');
 const AppError = require('../utils/appError');
 
-// 輔助函數：獲取商家ID
+// 輔助函數：獲取商家ID（支援員工與超管）
 const getMerchantId = (req) => {
-  if (req.admin && req.query.merchantId) {
-    return req.query.merchantId;
-  }
+  // 超管/管理員可帶入 merchantId
+  if (req.admin && req.query.merchantId) return req.query.merchantId;
   if (req.admin && !req.query.merchantId) {
     throw new AppError('超級管理員訪問商家後台需要指定merchantId參數', 400);
   }
-  if (!req.merchant) {
-    throw new AppError('無法獲取商家信息', 401);
-  }
-  return req.merchant.id;
+  // 員工從所屬商家取得
+  if (req.employee) return req.employee.merchant?.toString();
+  // 商家本人
+  if (req.merchant) return req.merchant.id;
+  throw new AppError('無法獲取商家信息', 401);
 };
 
 // 獲取所有分類

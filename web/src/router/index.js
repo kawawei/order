@@ -177,16 +177,17 @@ router.beforeEach((to, from, next) => {
   } else if (requiresAuth && routeRole) {
     // 驗證用戶角色
     const userRole = getUserRole()
-    if (userRole === routeRole) {
-      next()
-    } else if (
-      // 超級管理員與員工可以訪問商家後台
-      (routeRole === 'merchant' && (userRole === 'admin' || userRole === 'employee'))
-    ) {
+    const isAdminRole = (role) => role === 'admin' || role === 'superadmin'
+    const canAccess = (
+      (routeRole === 'admin' && isAdminRole(userRole)) ||
+      (routeRole === 'merchant' && (userRole === 'merchant' || userRole === 'employee' || isAdminRole(userRole)))
+    )
+
+    if (canAccess) {
       next()
     } else {
       // 無權訪問時重定向到對應的登入頁面
-      next({ name: userRole === 'admin' ? 'AdminLogin' : 'MerchantLogin' })
+      next({ name: isAdminRole(userRole) ? 'AdminLogin' : 'MerchantLogin' })
     }
   } else {
     next()

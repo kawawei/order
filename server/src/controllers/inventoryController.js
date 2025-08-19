@@ -3,7 +3,7 @@ const Inventory = require('../models/inventory');
 const catchAsync = require('../utils/catchAsync');
 const AppError = require('../utils/appError');
 
-// 輔助函數：獲取商家ID（支持超級管理員訪問特定商家）
+// 輔助函數：獲取商家ID（支持超級管理員與員工訪問特定商家）
 const getMerchantId = (req) => {
   // 如果是超級管理員且指定了商家ID，使用指定的商家ID
   if (req.admin && req.query.merchantId) {
@@ -13,11 +13,15 @@ const getMerchantId = (req) => {
   if (req.admin && !req.query.merchantId) {
     throw new AppError('超級管理員訪問商家後台需要指定merchantId參數', 400);
   }
-  // 否則使用當前登入的商家ID
-  if (!req.merchant) {
-    throw new AppError('無法獲取商家信息', 401);
+  // 員工：從所屬商家取得 ID
+  if (req.employee) {
+    return req.employee.merchant?.toString();
   }
-  return req.merchant.id;
+  // 商家：使用當前登入商家 ID
+  if (req.merchant) {
+    return req.merchant.id;
+  }
+  throw new AppError('無法獲取商家信息', 401);
 };
 
 // 獲取商家的所有庫存項目
