@@ -2,7 +2,7 @@
   <div class="menu-item-card">
     <!-- 菜品圖片 -->
     <div class="item-image">
-      <img :src="item.image" :alt="item.name">
+      <img :src="resolveImage(item.image)" :alt="item.name">
     </div>
 
     <!-- 菜品信息 -->
@@ -76,6 +76,16 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['edit', 'delete'])
+
+// 解析圖片路徑，當為相對路徑時自動加上 API 基底
+const resolveImage = (src) => {
+  if (!src) return ''
+  if (/^https?:\/\//i.test(src)) return src
+  const base = import.meta.env?.VITE_API_URL || 'http://localhost:3002/api/v1'
+  // 後端以 /uploads 提供靜態資源，API 基底去掉 /api/v1 再拼接
+  const origin = base.replace(/\/?api\/v1\/?$/, '')
+  return `${origin}${src.startsWith('/') ? src : '/' + src}`
+}
 
 // 組件正在處理後端返回的数据结构，不再需要静态映射
 </script>

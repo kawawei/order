@@ -22,6 +22,7 @@ services:
       - "3002:3002"
     volumes:
       - ../../server:/app
+      - ../../server/src/uploads:/app/src/uploads
       - /app/node_modules
     environment:
       - NODE_ENV=development

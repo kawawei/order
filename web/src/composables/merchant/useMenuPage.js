@@ -119,7 +119,8 @@ export function useMenuPage(restaurantId = null) {
         name: menuItem.name,
         price: Number(menuItem.basePrice),
         description: menuItem.description,
-        image: menuItem.image,
+        // 傳遞原始檔案，以便 multipart 上傳 - send File for multipart
+        image: menuItem.imageFile || null,
         category: currentCategory.value,
         customOptions: menuItem.options,
         inventoryConfig: menuItem.inventoryConfig

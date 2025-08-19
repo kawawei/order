@@ -638,3 +638,28 @@
    - ⏳ 歷史訂單詳情中也顯示同樣的選項標籤。
 
 *時間：2025-08-20 00:52*
+
+## 2025-08-20 01:08
+### 菜單圖片上傳與分類目錄管理｜Menu image upload & category folder management
+1. 完成內容｜What’s done
+   - ✅ 後端靜態資源：在 `server/src/index.js` 掛載 `/uploads` 靜態目錄，提供圖片直接訪問。
+   - ✅ 檔案上傳：新增 `multer`，在 `menuRoutes.js` 針對菜品建立/更新掛 `upload.single('image')`。
+   - ✅ 類別目錄：在 `menuCategoryController.js` 新增建立/改名/刪除分類時，同步建立/重命名/刪除對應圖片資料夾：`uploads/menu/{merchantSlug}/{categorySlug}`。
+   - ✅ 菜品圖片：在 `dishController.js` 新增圖片處理（搬移到對應分類資料夾，檔名規則：`{dish-slug}--{dishId}.{ext}`；更新菜名或分類時自動重命名/搬移）。
+   - ✅ JSON 欄位：新增 `parseJsonFields`，支援 multipart/form-data 送入的 `customOptions`、`inventoryConfig` JSON 字串解析。
+   - ✅ 前端上傳：`web/src/services/api.js` 的 `menuAPI.createDish/updateDish` 改為 `multipart/form-data`，自動附加 `File` 與 JSON 字串。
+   - ✅ 前端表單：在 `AddMenuItemDialog.script.js` 增加 `imageFile`，`handleImageUpload` 保存原始 `File` 並保留預覽 DataURL。
+   - ✅ 圖片顯示：`MenuItemCard.vue` 加入 `resolveImage()`，自動將相對路徑補全為 `VITE_API_URL` 對應的主機 + `/uploads/...`。
+   - ✅ Docker：dev/prod `docker-compose.yml` 掛載 `server/src/uploads` 至容器，以確保圖片持久化（注意：部署時請確保 volume 權限）。
+
+2. 影響範圍｜Impact
+   - 菜單管理頁新增/編輯菜品可直接上傳圖片，圖片按分類歸檔並以菜名命名。
+   - 分類名稱調整會同步重命名圖片資料夾，刪除分類會刪除其資料夾（若分類下仍有菜品，API 已阻擋刪除）。
+
+3. 待辦事項｜TODO
+   - ⏳ 後端路由加強錯誤訊息國際化與更完整回滾處理（檔案/DB 一致性）。
+   - ⏳ 類別更名時，同步更新既有菜品 `image` 路徑（目前搬移檔案，但若出現自定義外連 URL 需另行處理）。
+   - ⏳ 圖片壓縮/縮圖（可考慮引入 `sharp`）。
+   - ⏳ 物件儲存（S3/MinIO）適配層。
+
+*時間：2025-08-20 02:10*

@@ -3,6 +3,26 @@ const MenuCategory = require('../models/menuCategory');
 const Dish = require('../models/dish');
 const catchAsync = require('../utils/catchAsync');
 const AppError = require('../utils/appError');
+const fs = require('fs');
+const path = require('path');
+
+// 將字串轉為安全目錄名（slug）- Convert string to safe slug
+const toSlug = (text) => (text || '')
+  .toString()
+  .trim()
+  .toLowerCase()
+  .replace(/\s+/g, '-')
+  .replace(/[^a-z0-9\-_.]/g, '')
+  .replace(/-+/g, '-')
+  .replace(/^[-_.]+|[-_.]+$/g, '');
+
+// 取得分類圖片目錄 - Get category image directory
+const getCategoryDir = (merchantId, categoryName) => {
+  const baseDir = path.join(__dirname, '..', 'uploads', 'menu');
+  const safeMerchant = toSlug(String(merchantId));
+  const safeCategory = toSlug(String(categoryName));
+  return path.join(baseDir, safeMerchant, safeCategory);
+};
 
 // 輔助函數：獲取商家ID（支持超級管理員與員工訪問特定商家）
 const getMerchantId = (req) => {
@@ -103,6 +123,15 @@ exports.createCategory = catchAsync(async (req, res, next) => {
   }
   
   const category = await MenuCategory.create(req.body);
+
+  // 建立對應圖片目錄 - Create category folder for images
+  try {
+    const dir = getCategoryDir(category.merchant, category.name);
+    fs.mkdirSync(dir, { recursive: true });
+  } catch (e) {
+    // 不阻斷主流程，但打印日誌 - Log but do not block
+    console.warn('建立分類圖片目錄失敗:', e?.message);
+  }
   
   res.status(201).json({
     status: 'success',
@@ -133,6 +162,18 @@ exports.updateCategory = catchAsync(async (req, res, next) => {
     req.body,
     { new: true, runValidators: true }
   );
+
+  // 若名稱變更，重命名目錄 - If name changed, rename folder
+  try {
+    const oldDir = getCategoryDir(category.merchant, category.name);
+    const newDir = getCategoryDir(updatedCategory.merchant, updatedCategory.name);
+    if (oldDir !== newDir && fs.existsSync(oldDir)) {
+      fs.mkdirSync(path.dirname(newDir), { recursive: true });
+      fs.renameSync(oldDir, newDir);
+    }
+  } catch (e) {
+    console.warn('重命名分類圖片目錄失敗:', e?.message);
+  }
   
   res.status(200).json({
     status: 'success',
@@ -162,6 +203,16 @@ exports.deleteCategory = catchAsync(async (req, res, next) => {
   }
   
   await MenuCategory.findByIdAndDelete(req.params.id);
+
+  // 刪除對應圖片目錄 - Remove category folder
+  try {
+    const dir = getCategoryDir(category.merchant, category.name);
+    if (fs.existsSync(dir)) {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  } catch (e) {
+    console.warn('刪除分類圖片目錄失敗:', e?.message);
+  }
   
   res.status(204).json({
     status: 'success',

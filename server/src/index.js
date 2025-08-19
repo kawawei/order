@@ -4,6 +4,7 @@ const cors = require('cors');
 const morgan = require('morgan');
 const connectDB = require('./config/database');
 const AppError = require('./utils/appError');
+const path = require('path');
 const authRoutes = require('./routes/authRoutes');
 const adminRoutes = require('./routes/adminRoutes');
 const tableRoutes = require('./routes/tableRoutes');
@@ -48,6 +49,10 @@ app.use(cors(corsOptions));
 app.options('*', cors(corsOptions));
 app.use(express.json());
 app.use(morgan('dev'));
+
+// 靜態資源：提供上傳圖片目錄
+// Serve static uploads directory for images
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // 路由
 app.use('/api/v1/auth', authRoutes);

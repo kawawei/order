@@ -1,9 +1,27 @@
 const express = require('express');
 const menuCategoryController = require('../controllers/menuCategoryController');
 const dishController = require('../controllers/dishController');
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
 const { protectAny, requirePermissions } = require('../middleware/auth');
 
 const router = express.Router();
+
+// 上傳配置（先保存到暫存區，實際目錄與檔名在 controller 中決定）
+// Upload config: store temporarily; controller will move/rename per category/dish
+const tempDir = path.join(__dirname, '..', 'tmp');
+if (!fs.existsSync(tempDir)) {
+  fs.mkdirSync(tempDir, { recursive: true });
+}
+const upload = multer({
+  dest: tempDir,
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
+  fileFilter: (req, file, cb) => {
+    if (/^image\/(png|jpe?g|gif|webp)$/.test(file.mimetype)) return cb(null, true);
+    cb(new Error('只允許上傳圖片檔案'));
+  }
+});
 
 // 公開路由 - 客戶端獲取菜單
 router.get('/public/:merchantId', dishController.getPublicMenu);
@@ -30,12 +48,12 @@ router.get('/categories/stats', requirePermissions('報表:查看'), menuCategor
 // 菜品路由
 router.route('/dishes')
   .get(requirePermissions('菜單:查看'), dishController.getAllDishes)
-  .post(requirePermissions('菜單:編輯'), dishController.createDish);
+  .post(requirePermissions('菜單:編輯'), upload.single('image'), dishController.createDish);
 
 router.route('/dishes/:id')
   .get(requirePermissions('菜單:查看'), dishController.getDish)
-  .patch(requirePermissions('菜單:編輯'), dishController.updateDish)
-  .put(requirePermissions('菜單:編輯'), dishController.updateDish)  // 向後兼容 PUT 方法
+  .patch(requirePermissions('菜單:編輯'), upload.single('image'), dishController.updateDish)
+  .put(requirePermissions('菜單:編輯'), upload.single('image'), dishController.updateDish)  // 向後兼容 PUT 方法
   .delete(requirePermissions('菜單:編輯'), dishController.deleteDish);
 
 // 批量操作

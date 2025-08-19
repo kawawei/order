@@ -3,6 +3,8 @@ const Dish = require('../models/dish');
 const MenuCategory = require('../models/menuCategory');
 const catchAsync = require('../utils/catchAsync');
 const AppError = require('../utils/appError');
+const fs = require('fs');
+const path = require('path');
 
 // 輔助函數：獲取商家ID（支持超級管理員與員工訪問特定商家）
 const getMerchantId = (req) => {
@@ -38,6 +40,56 @@ const getMerchantId = (req) => {
   }
   console.log('無法獲取商家信息');
   throw new AppError('無法獲取商家信息', 401);
+};
+
+// 將字串轉為安全檔名（slug）- Convert string to safe slug
+const toSlug = (text) => (text || '')
+  .toString()
+  .trim()
+  .toLowerCase()
+  .replace(/\s+/g, '-')
+  .replace(/[^a-z0-9\-_.]/g, '')
+  .replace(/-+/g, '-')
+  .replace(/^[-_.]+|[-_.]+$/g, '');
+
+// 取得分類圖片目錄 - Get category image directory
+const getCategoryDir = (merchantId, categoryName) => {
+  const baseDir = path.join(__dirname, '..', 'uploads', 'menu');
+  const safeMerchant = toSlug(String(merchantId));
+  const safeCategory = toSlug(String(categoryName));
+  return path.join(baseDir, safeMerchant, safeCategory);
+};
+
+// 根據菜名與副檔名生成檔名 - Build filename using dish name and ext
+const buildDishFilename = (dishName, dishId, ext) => {
+  const base = toSlug(dishName);
+  const idSuffix = dishId ? `--${dishId}` : '';
+  return `${base}${idSuffix}${ext}`;
+};
+
+// 解析可能為 JSON 字串的欄位 - Parse fields that may be JSON strings
+const parseJsonFields = (body, fields) => {
+  fields.forEach((key) => {
+    if (typeof body[key] === 'string') {
+      try {
+        body[key] = JSON.parse(body[key]);
+      } catch (e) {}
+    }
+  });
+};
+
+// 安全搬移檔案：優先 rename，同掛載點跨裝置(EXDEV)時改為 copy + unlink
+const safeMoveFileSync = (sourcePath, destinationPath) => {
+  try {
+    fs.renameSync(sourcePath, destinationPath);
+  } catch (error) {
+    if (error && error.code === 'EXDEV') {
+      fs.copyFileSync(sourcePath, destinationPath);
+      fs.unlinkSync(sourcePath);
+    } else {
+      throw error;
+    }
+  }
 };
 
 // 獲取商家的所有菜品
@@ -197,6 +249,8 @@ exports.getDish = catchAsync(async (req, res, next) => {
 exports.createDish = catchAsync(async (req, res, next) => {
   // 確保菜品關聯到當前商家
   req.body.merchant = getMerchantId(req);
+  // 解析 JSON 欄位
+  parseJsonFields(req.body, ['customOptions', 'inventoryConfig']);
   
   // 驗證分類是否屬於當前商家
   const category = await MenuCategory.findById(req.body.category);
@@ -214,6 +268,32 @@ exports.createDish = catchAsync(async (req, res, next) => {
   }
   
   const dish = await Dish.create(req.body);
+
+  // 若有圖片上傳，將暫存檔移動到分類目錄，並以菜名命名 - Move uploaded image into category folder
+  if (req.file) {
+    try {
+      const category = await MenuCategory.findById(dish.category);
+      const categoryDir = getCategoryDir(dish.merchant, category.name);
+      fs.mkdirSync(categoryDir, { recursive: true });
+
+      const ext = path.extname(req.file.originalname) ||
+        (req.file.mimetype === 'image/png' ? '.png' : req.file.mimetype === 'image/webp' ? '.webp' : '.jpg');
+      const finalName = buildDishFilename(dish.name, dish._id.toString(), ext);
+      const finalPath = path.join(categoryDir, finalName);
+
+      safeMoveFileSync(req.file.path, finalPath);
+
+      // 儲存相對於 /uploads 的路徑 - Save relative path
+      const relativePath = path
+        .relative(path.join(__dirname, '..'), finalPath)
+        .split(path.sep)
+        .join('/');
+      dish.image = `/${relativePath}`;
+      await dish.save();
+    } catch (e) {
+      console.warn('處理菜品圖片失敗:', e?.message);
+    }
+  }
   
   // 返回包含分類信息的菜品
   const populatedDish = await Dish.findById(dish._id)
@@ -232,6 +312,8 @@ exports.createDish = catchAsync(async (req, res, next) => {
 exports.updateDish = catchAsync(async (req, res, next) => {
   // 添加日誌來調試請求內容
   console.log('Update dish request body:', JSON.stringify(req.body, null, 2));
+  // 解析 JSON 欄位
+  parseJsonFields(req.body, ['customOptions', 'inventoryConfig']);
   
   const dish = await Dish.findById(req.params.id);
   
@@ -260,6 +342,46 @@ exports.updateDish = catchAsync(async (req, res, next) => {
     req.body,
     { new: true, runValidators: true }
   ).populate('category', 'name label');
+
+  // 若有新圖片上傳，或名稱/分類變更，需要重命名/搬移圖片 - Handle image move/rename
+  try {
+    const hasNewFile = !!req.file;
+    const category = await MenuCategory.findById(updatedDish.category);
+    const targetDir = getCategoryDir(updatedDish.merchant, category.name);
+    fs.mkdirSync(targetDir, { recursive: true });
+
+    if (hasNewFile) {
+      const ext = path.extname(req.file.originalname) ||
+        (req.file.mimetype === 'image/png' ? '.png' : req.file.mimetype === 'image/webp' ? '.webp' : '.jpg');
+      const finalName = buildDishFilename(updatedDish.name, updatedDish._id.toString(), ext);
+      const finalPath = path.join(targetDir, finalName);
+      safeMoveFileSync(req.file.path, finalPath);
+      const relativePath = path
+        .relative(path.join(__dirname, '..'), finalPath)
+        .split(path.sep)
+        .join('/');
+      updatedDish.image = `/${relativePath}`;
+      await updatedDish.save();
+    } else if (updatedDish.image) {
+      // 若沒有新檔，但名稱或分類可能改了，嘗試搬移/重命名現有檔案
+      const currentPath = path.join(__dirname, '..', updatedDish.image.replace(/^\/+/, ''));
+      const currentExt = path.extname(currentPath) || '.jpg';
+      const finalName = buildDishFilename(updatedDish.name, updatedDish._id.toString(), currentExt);
+      const finalPath = path.join(targetDir, finalName);
+      if (fs.existsSync(currentPath) && currentPath !== finalPath) {
+        fs.mkdirSync(path.dirname(finalPath), { recursive: true });
+        safeMoveFileSync(currentPath, finalPath);
+        const relativePath = path
+          .relative(path.join(__dirname, '..'), finalPath)
+          .split(path.sep)
+          .join('/');
+        updatedDish.image = `/${relativePath}`;
+        await updatedDish.save();
+      }
+    }
+  } catch (e) {
+    console.warn('更新菜品圖片處理失敗:', e?.message);
+  }
   
   console.log('Updated dish result:', JSON.stringify(updatedDish, null, 2));
   

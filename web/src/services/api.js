@@ -211,8 +211,37 @@ export const menuAPI = {
   
   // 菜品相關
   getDishes: (params = {}) => api.get('/menu/dishes', { params }),
-  createDish: (data) => api.post('/menu/dishes', data),
-  updateDish: (dishId, data) => api.put(`/menu/dishes/${dishId}`, data),
+  // 使用 multipart/form-data 上傳圖片與 JSON 欄位
+  createDish: (data) => {
+    const form = new FormData()
+    Object.entries(data || {}).forEach(([key, value]) => {
+      if (key === 'image' && value && value instanceof File) {
+        form.append('image', value)
+      } else if (typeof value === 'object') {
+        form.append(key, JSON.stringify(value))
+      } else if (value !== undefined && value !== null) {
+        form.append(key, value)
+      }
+    })
+    return api.post('/menu/dishes', form, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    })
+  },
+  updateDish: (dishId, data) => {
+    const form = new FormData()
+    Object.entries(data || {}).forEach(([key, value]) => {
+      if (key === 'image' && value && value instanceof File) {
+        form.append('image', value)
+      } else if (typeof value === 'object') {
+        form.append(key, JSON.stringify(value))
+      } else if (value !== undefined && value !== null) {
+        form.append(key, value)
+      }
+    })
+    return api.put(`/menu/dishes/${dishId}`, form, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    })
+  },
   deleteDish: (dishId) => api.delete(`/menu/dishes/${dishId}`),
   
   // 菜單相關

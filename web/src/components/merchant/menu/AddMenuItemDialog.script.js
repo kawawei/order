@@ -14,6 +14,7 @@ export function useAddMenuItemDialog(props, emit) {
     basePrice: '',
     description: '',
     image: '',
+    imageFile: null,
     options: [],
     baseInventory: [],
     conditionalInventory: []
@@ -273,6 +274,7 @@ export function useAddMenuItemDialog(props, emit) {
   const handleImageUpload = (event) => {
     const file = event.target.files[0]
     if (file) {
+      form.value.imageFile = file
       const reader = new FileReader()
       reader.onload = (e) => {
         form.value.image = e.target.result
@@ -337,6 +339,7 @@ export function useAddMenuItemDialog(props, emit) {
       basePrice: '',
       description: '',
       image: '',
+      imageFile: null,
       options: [],
       baseInventory: [],
       conditionalInventory: []

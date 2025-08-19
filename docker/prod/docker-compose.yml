@@ -27,6 +27,8 @@ services:
     container_name: order-backend-prod
     ports:
       - "3002:3002"
+    volumes:
+      - ../../server/src/uploads:/app/src/uploads
     environment:
       - NODE_ENV=production
       - MONGO_URI=mongodb://${MONGO_ROOT_USERNAME}:${MONGO_ROOT_PASSWORD}@mongodb:27017/order?authSource=admin
