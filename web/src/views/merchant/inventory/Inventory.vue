@@ -460,14 +460,13 @@
                   <span v-if="category.description" class="category-description">
                     {{ category.description }}
                   </span>
-                  <span v-if="category.isSystem" class="system-badge">系統</span>
+                  <span v-if="category.isSystem" class="system-badge">預設</span>
                 </div>
                 <div class="category-actions">
                   <button
                     @click="openCategoryEditModal(category)"
                     class="btn-icon"
                     title="編輯"
-                    :disabled="category.isSystem"
                   >
                     <font-awesome-icon icon="edit" />
                   </button>
@@ -475,7 +474,6 @@
                     @click="deleteCategory(category)"
                     class="btn-icon danger"
                     title="刪除"
-                    :disabled="category.isSystem"
                   >
                     <font-awesome-icon icon="trash" />
                   </button>

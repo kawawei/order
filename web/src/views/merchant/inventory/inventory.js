@@ -479,11 +479,6 @@ const submitCategoryForm = async () => {
 }
 
 const deleteCategory = async (category) => {
-  if (category.isSystem) {
-    alert('系統預設分類不能刪除')
-    return
-  }
-  
   if (confirm(`確定要刪除分類「${category.label}」嗎？`)) {
     try {
       await inventoryCategoryAPI.deleteCategory(category.id)

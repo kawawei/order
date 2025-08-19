@@ -75,18 +75,18 @@ inventoryCategorySchema.virtual('itemCount', {
   count: true
 });
 
-// 預保存中間件：確保系統預設分類不能被刪除或停用
+// 預保存中間件：系統預設分類也可以被停用，讓商家有更大的控制權
 inventoryCategorySchema.pre('save', function(next) {
   if (this.isSystem && !this.isActive) {
-    this.isActive = true;
+    console.log(`系統預設分類被停用: ${this.name}`);
   }
   next();
 });
 
-// 預刪除中間件：防止刪除系統預設分類
+// 預刪除中間件：系統預設分類也可以被刪除，但記錄日誌
 inventoryCategorySchema.pre('remove', function(next) {
   if (this.isSystem) {
-    return next(new Error('系統預設分類不能刪除'));
+    console.log(`系統預設分類被刪除: ${this.name}`);
   }
   next();
 });
@@ -116,13 +116,12 @@ inventoryCategorySchema.statics.createSystemCategories = async function(merchant
 
 // 實例方法：檢查是否可以刪除
 inventoryCategorySchema.methods.canDelete = async function() {
-  if (this.isSystem) return false;
-  
-  // 檢查是否有原料使用此分類
+  // 系統分類也可以被刪除，但需要檢查是否有原料使用此分類
   const Inventory = mongoose.model('Inventory');
   const count = await Inventory.countDocuments({ category: this.name, merchant: this.merchant });
   return count === 0;
 };
 
 module.exports = mongoose.model('InventoryCategory', inventoryCategorySchema);
+
 

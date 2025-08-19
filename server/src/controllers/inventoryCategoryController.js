@@ -105,10 +105,9 @@ exports.updateCategory = catchAsync(async (req, res, next) => {
     return next(new AppError('找不到該分類', 404));
   }
   
-  // 如果是系統預設分類，限制某些字段的修改
+  // 系統預設分類也可以被完全編輯，讓商家有更大的靈活性
   if (category.isSystem) {
-    delete req.body.isSystem;
-    delete req.body.isActive; // 系統分類不能停用
+    console.log(`商家 ${merchantId} 正在編輯系統預設分類: ${category.name}`);
   }
   
   // 如果要修改名稱，檢查是否與其他分類重複
@@ -154,9 +153,10 @@ exports.deleteCategory = catchAsync(async (req, res, next) => {
     return next(new AppError('找不到該分類', 404));
   }
   
-  // 檢查是否可以刪除
+  // 檢查是否可以刪除（系統分類也可以刪除，但需要額外確認）
   if (category.isSystem) {
-    return next(new AppError('系統預設分類不能刪除', 400));
+    // 系統分類可以刪除，但建議用戶謹慎操作
+    console.log(`商家 ${merchantId} 正在刪除系統預設分類: ${category.name}`);
   }
   
   // 檢查是否有原料使用此分類
@@ -277,4 +277,5 @@ exports.getCategoryStats = catchAsync(async (req, res, next) => {
     }
   });
 });
+
 
