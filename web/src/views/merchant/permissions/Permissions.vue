@@ -39,11 +39,13 @@
               </div>
             </div>
             <div class="actions">
+              <!-- 禁止刪除老闆帳號（僅隱藏刪除按鈕）/ Hide delete button for owner account -->
               <button class="btn-secondary" @click="editEmployee(employee)">
                 <font-awesome-icon icon="pen" />
                 編輯
               </button>
-              <button class="btn-danger" @click="deleteEmployee(employee.id)">
+              <!-- 僅非老闆可顯示刪除按鈕 / Show delete button only when employee is not owner -->
+              <button v-if="canDeleteEmployee(employee)" class="btn-danger" @click="deleteEmployee(employee.id)">
                 <font-awesome-icon icon="trash" />
                 刪除
               </button>
@@ -248,6 +250,12 @@ const editEmployee = (employee) => {
 }
 
 const deleteEmployee = (employeeId) => {
+  // 保護「老闆」帳號，不可刪除 / Protect owner account from deletion
+  const target = employees.value.find(emp => emp.id === employeeId)
+  if (target && (target.isOwner === true || isOwnerByRoleId(target.role))) {
+    alert('老闆帳號不可刪除')
+    return
+  }
   if (confirm('確定要刪除此員工嗎？')) {
     employees.value = employees.value.filter(emp => emp.id !== employeeId)
   }
@@ -419,6 +427,21 @@ const canEditRole = (role) => {
 const canDeleteRole = (role) => {
   if (role?.isSystem) return isAdminActor
   return true
+}
+
+// 判斷是否為老闆角色（依角色名稱或 isOwner 標記）/ Determine if role is owner
+const isOwnerByRoleId = (roleId) => {
+  const r = roles.value.find(r => (r._id || r.id) === roleId)
+  if (!r) return false
+  const name = String(r.name || '').trim()
+  return (r.isOwner === true) || (r.isSystem === true && name === '老闆') || name === '老闆' || name.toLowerCase() === 'owner'
+}
+
+// 僅非老闆可刪除 / Only non-owner employees can be deleted
+const canDeleteEmployee = (employee) => {
+  if (!employee) return false
+  if (employee.isOwner === true) return false
+  return !isOwnerByRoleId(employee.role)
 }
 </script>
 
