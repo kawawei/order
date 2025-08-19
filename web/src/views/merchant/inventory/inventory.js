@@ -91,7 +91,7 @@ const totalValue = computed(() => {
     if (item.type === 'single') {
       return sum + (item.cost.unitPrice * item.singleStock.quantity)
     } else if (item.type === 'multiSpec') {
-      return sum + item.multiSpecStock.reduce((vSum, v) => vSum + (item.cost.unitPrice * v.quantity), 0)
+      return sum + item.multiSpecStock.reduce((vSum, v) => vSum + (v.unitPrice * v.quantity), 0)
     }
     return sum
   }, 0)
@@ -210,7 +210,7 @@ const getTotalQuantity = (item) => {
 
 const getVariantCostRangeText = (item) => {
   if (item.type !== 'multiSpec') return ''
-  const costs = item.multiSpecStock.map(v => item.cost.unitPrice)
+  const costs = item.multiSpecStock.map(v => v.unitPrice)
   const minCost = Math.min(...costs)
   const maxCost = Math.max(...costs)
   if (minCost === maxCost) {
@@ -362,7 +362,8 @@ const addVariant = () => {
     quantity: 0,
     unit: formData.value.singleStock.unit || '',
     minStock: 0,
-    maxStock: 1000
+    maxStock: 1000,
+    unitPrice: 0
   })
 }
 

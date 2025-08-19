@@ -85,6 +85,12 @@ const inventorySchema = new mongoose.Schema({
       type: Number,
       default: 1000,
       min: [0, '最高庫存不能為負數']
+    },
+    // 每個規格的單價
+    unitPrice: {
+      type: Number,
+      default: 0,
+      min: [0, '單價不能為負數']
     }
   }],
   

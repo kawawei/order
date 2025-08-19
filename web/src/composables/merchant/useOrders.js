@@ -69,7 +69,7 @@ export function useOrders(restaurantId = null) {
       const batchKey = order.batchNumber || order._id
       if (!batchMap.has(batchKey)) {
         batchMap.set(batchKey, {
-          _id: batchKey,
+          _id: order._id, // 使用真正的訂單ID，而不是批次號碼
           batchNumber: order.batchNumber || '單一訂單',
           tableNumber: order.tableNumber,
           createdAt: order.createdAt,

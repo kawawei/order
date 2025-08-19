@@ -54,12 +54,12 @@ exports.getReportStats = catchAsync(async (req, res, next) => {
   }
 
   try {
-    // 1. 獲取營收統計
+    // 1. 獲取營收統計（只計算已結帳的訂單）
     const revenueStats = await Order.aggregate([
       { 
         $match: { 
           merchantId: new mongoose.Types.ObjectId(merchantId),
-          status: { $nin: ['cancelled'] }, // 排除取消的訂單
+          status: 'completed', // 只計算已結帳的訂單
           ...dateQuery 
         } 
       },
@@ -74,12 +74,12 @@ exports.getReportStats = catchAsync(async (req, res, next) => {
       { $sort: { _id: 1 } }
     ]);
 
-    // 2. 獲取人流量統計（基於桌次使用）
+    // 2. 獲取人流量統計（基於桌次使用，只計算已結帳的訂單）
     const trafficStats = await Order.aggregate([
       { 
         $match: { 
           merchantId: new mongoose.Types.ObjectId(merchantId),
-          status: { $nin: ['cancelled'] },
+          status: 'completed', // 只計算已結帳的訂單
           ...dateQuery 
         } 
       },
@@ -113,17 +113,28 @@ exports.getReportStats = catchAsync(async (req, res, next) => {
       { $sort: { _id: 1 } }
     ]);
 
-    // 3. 獲取熱門餐點統計
+    // 3. 獲取熱門餐點統計（包含成本計算，只計算已結帳的訂單）
     const popularDishes = await Order.aggregate([
       { 
         $match: { 
           merchantId: new mongoose.Types.ObjectId(merchantId),
-          status: { $nin: ['cancelled'] },
+          status: 'completed', // 只計算已結帳的訂單
           ...dateQuery 
         } 
       },
       {
         $unwind: '$items'
+      },
+      {
+        $addFields: {
+          // 按比例分配訂單總成本到每個菜品
+          'items.proportionalCost': {
+            $multiply: [
+              { $divide: ['$totalCost', { $cond: { if: { $isArray: '$items' }, then: { $size: '$items' }, else: 1 } }] },
+              '$items.quantity'
+            ]
+          }
+        }
       },
       {
         $group: {
@@ -133,7 +144,8 @@ exports.getReportStats = catchAsync(async (req, res, next) => {
             category: '$items.category'
           },
           orderCount: { $sum: '$items.quantity' },
-          revenue: { $sum: { $multiply: ['$items.unitPrice', '$items.quantity'] } }
+          revenue: { $sum: { $multiply: ['$items.unitPrice', '$items.quantity'] } },
+          cost: { $sum: '$items.proportionalCost' }
         }
       },
       {
@@ -144,8 +156,30 @@ exports.getReportStats = catchAsync(async (req, res, next) => {
       }
     ]);
 
+    // 3.1 計算總成本（基於訂單中已計算的庫存成本，只計算已結帳的訂單）
+    const totalCost = await Order.aggregate([
+      { 
+        $match: { 
+          merchantId: new mongoose.Types.ObjectId(merchantId),
+          status: 'completed', // 只計算已結帳的訂單
+          ...dateQuery 
+        } 
+      },
+      {
+        $group: {
+          _id: null,
+          totalCost: { $sum: '$totalCost' }
+        }
+      }
+    ]);
+
     // 4. 計算總計數據
     const totalRevenue = revenueStats.reduce((sum, stat) => sum + stat.revenue, 0);
+    
+    const actualTotalCost = totalCost[0]?.totalCost || 0;
+    const actualProfit = totalRevenue - actualTotalCost;
+    const profitMargin = totalRevenue > 0 ? ((actualProfit / totalRevenue) * 100).toFixed(1) : 0;
+    const costRatio = totalRevenue > 0 ? ((actualTotalCost / totalRevenue) * 100).toFixed(1) : 0;
     const totalOrders = revenueStats.reduce((sum, stat) => sum + stat.orderCount, 0);
     const totalCustomers = trafficStats.reduce((sum, stat) => sum + stat.totalCustomers, 0);
     
@@ -195,7 +229,7 @@ exports.getReportStats = catchAsync(async (req, res, next) => {
         { 
           $match: { 
             merchantId: new mongoose.Types.ObjectId(merchantId),
-            status: { $nin: ['cancelled'] },
+            status: 'completed', // 只計算已結帳的訂單
             ...previousPeriodQuery 
           } 
         },
@@ -220,7 +254,7 @@ exports.getReportStats = catchAsync(async (req, res, next) => {
       { 
         $match: { 
           merchantId: new mongoose.Types.ObjectId(merchantId),
-          status: { $nin: ['cancelled'] },
+          status: 'completed', // 只計算已結帳的訂單
           ...dateQuery 
         } 
       },
@@ -257,7 +291,12 @@ exports.getReportStats = catchAsync(async (req, res, next) => {
           totalOrders,
           averageOrderValue: totalOrders > 0 ? Math.round(totalRevenue / totalOrders) : 0,
           revenueChange: parseFloat(revenueChange),
-          revenueTrend: revenueStats
+          revenueTrend: revenueStats,
+          // 新增基於實際庫存成本的財務數據
+          totalCost: actualTotalCost,
+          totalProfit: actualProfit,
+          profitMargin: parseFloat(profitMargin),
+          costRatio: parseFloat(costRatio)
         },
         
         // 人流量統計
@@ -321,7 +360,7 @@ exports.getSimpleReportStats = catchAsync(async (req, res, next) => {
       { 
         $match: { 
           merchantId: new mongoose.Types.ObjectId(merchantId),
-          status: { $nin: ['cancelled'] },
+          status: 'completed', // 只計算已結帳的訂單
           ...dateQuery 
         } 
       },
@@ -339,7 +378,7 @@ exports.getSimpleReportStats = catchAsync(async (req, res, next) => {
       { 
         $match: { 
           merchantId: new mongoose.Types.ObjectId(merchantId),
-          status: { $nin: ['cancelled'] },
+          status: 'completed', // 只計算已結帳的訂單
           ...dateQuery 
         } 
       },
@@ -367,7 +406,7 @@ exports.getSimpleReportStats = catchAsync(async (req, res, next) => {
       { 
         $match: { 
           merchantId: new mongoose.Types.ObjectId(merchantId),
-          status: { $nin: ['cancelled'] },
+          status: 'completed', // 只計算已結帳的訂單
           ...dateQuery 
         } 
       },

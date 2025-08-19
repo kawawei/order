@@ -158,6 +158,9 @@ exports.createInventory = catchAsync(async (req, res, next) => {
       if (!spec.unit) {
         return next(new AppError(`第${i + 1}個規格必須提供計量單位`, 400));
       }
+      if (spec.unitPrice === undefined || spec.unitPrice < 0) {
+        return next(new AppError(`第${i + 1}個規格必須提供有效的單價`, 400));
+      }
     }
     
     // 檢查規格名稱是否重複
@@ -211,6 +214,9 @@ exports.updateInventory = catchAsync(async (req, res, next) => {
         }
         if (!spec.unit) {
           return next(new AppError(`第${i + 1}個規格必須提供計量單位`, 400));
+        }
+        if (spec.unitPrice === undefined || spec.unitPrice < 0) {
+          return next(new AppError(`第${i + 1}個規格必須提供有效的單價`, 400));
         }
       }
       

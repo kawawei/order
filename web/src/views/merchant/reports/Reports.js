@@ -20,7 +20,10 @@ export function useReports() {
     cost: 0,
     revenueChange: 0,
     profitChange: 0,
-    costChange: 0
+    costChange: 0,
+    // 新增基於實際庫存成本的數據
+    profitMargin: 0,
+    costRatio: 0
   })
   
   // 人流量統計
@@ -120,14 +123,16 @@ export function useReports() {
       if (response.status === 'success') {
         const data = response.data
         
-        // 更新財務統計
+        // 更新財務統計（使用實際庫存成本數據）
         financialStats.value = {
           revenue: data.financial.totalRevenue || 0,
-          profit: data.financial.totalRevenue * 0.7, // 假設利潤率為 70%
-          cost: data.financial.totalRevenue * 0.3, // 假設成本率為 30%
+          profit: data.financial.totalProfit || 0,
+          cost: data.financial.totalCost || 0,
           revenueChange: data.financial.revenueChange || 0,
-          profitChange: data.financial.revenueChange || 0, // 假設利潤變化與營收變化一致
-          costChange: 0 // 成本變化可以根據需要計算
+          profitChange: data.financial.revenueChange || 0, // 利潤變化與營收變化一致
+          costChange: 0, // 成本變化可以根據需要計算
+          profitMargin: data.financial.profitMargin || 0,
+          costRatio: data.financial.costRatio || 0
         }
         
         // 更新人流量統計
@@ -165,7 +170,9 @@ export function useReports() {
       cost: 0,
       revenueChange: 0,
       profitChange: 0,
-      costChange: 0
+      costChange: 0,
+      profitMargin: 0,
+      costRatio: 0
     }
     
     trafficStats.value = {
@@ -212,15 +219,25 @@ export function useReports() {
     return 'default'
   }
   
-  // 計算利潤率
+  // 計算利潤率（使用後端返回的實際數據）
   const calculateProfitMargin = () => {
     if (financialStats.value.revenue === 0) return 0
+    // 如果後端有提供實際利潤率，優先使用
+    if (financialStats.value.profitMargin !== undefined) {
+      return financialStats.value.profitMargin
+    }
+    // 否則前端計算
     return ((financialStats.value.profit / financialStats.value.revenue) * 100).toFixed(1)
   }
   
-  // 計算成本率
+  // 計算成本率（使用後端返回的實際數據）
   const calculateCostRatio = () => {
     if (financialStats.value.revenue === 0) return 0
+    // 如果後端有提供實際成本率，優先使用
+    if (financialStats.value.costRatio !== undefined) {
+      return financialStats.value.costRatio
+    }
+    // 否則前端計算
     return ((financialStats.value.cost / financialStats.value.revenue) * 100).toFixed(1)
   }
   

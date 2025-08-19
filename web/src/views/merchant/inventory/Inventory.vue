@@ -152,7 +152,7 @@
                   :key="idx"
                   class="variant-chip"
                 >
-                  {{ v.specName }} ${{ Number(v.quantity * item.cost.unitPrice).toFixed(2) }} × {{ v.quantity }} {{ v.unit }}
+                  {{ v.specName }} ${{ Number(v.quantity * v.unitPrice).toFixed(2) }} × {{ v.quantity }} {{ v.unit }}
                 </span>
               </div>
             </td>
@@ -297,6 +297,18 @@
                   type="number"
                   min="0"
                   placeholder="0"
+                />
+              </div>
+              <div class="variant-input-group">
+                <label :for="`variant-cost-${index}`">單價 (元) *</label>
+                <input
+                  :id="`variant-cost-${index}`"
+                  v-model.number="variant.unitPrice"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  required
+                  placeholder="0.00"
                 />
               </div>
               <div class="variant-input-group">

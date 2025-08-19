@@ -2,6 +2,7 @@ const mongoose = require('mongoose');
 const Order = require('../models/order');
 const Table = require('../models/table');
 const Dish = require('../models/dish');
+const inventoryService = require('../services/inventoryService');
 const catchAsync = require('../utils/catchAsync');
 const AppError = require('../utils/appError');
 
@@ -50,10 +51,18 @@ exports.createOrder = catchAsync(async (req, res, next) => {
   let totalAmount = 0;
 
   for (const item of items) {
+    console.log('處理訂單項目:', item);
     const dish = await Dish.findById(item.dishId);
     if (!dish) {
       return next(new AppError(`商品 ${item.dishId} 不存在`, 404));
     }
+    
+    console.log('找到菜品:', {
+      _id: dish._id,
+      name: dish.name,
+      price: dish.price,
+      customOptions: dish.customOptions
+    });
 
     // 計算商品總價（包含選項價格）
     let unitPrice = dish.price;
@@ -109,6 +118,9 @@ exports.createOrder = catchAsync(async (req, res, next) => {
     });
   }
 
+  // 注意：庫存檢查、成本計算和庫存扣減將在後台確認訂單時進行
+  // 這裡只創建訂單，不進行庫存相關操作
+
   // 創建新的批次訂單（帶重試機制）
   let order;
   let attempts = 0;
@@ -128,6 +140,7 @@ exports.createOrder = catchAsync(async (req, res, next) => {
         isMainOrder: nextBatchNumber === 1,
         items: validatedItems,
         totalAmount,
+        totalCost: 0, // 成本將在後台確認訂單時計算
         customerNotes: customerNotes || '',
         status: 'pending'
       });
@@ -153,6 +166,9 @@ exports.createOrder = catchAsync(async (req, res, next) => {
     }
   }
 
+  // 注意：庫存扣減和成本計算將在後台確認訂單時進行
+  // 這裡只創建訂單，不扣減庫存
+
   // 填充相關資料
   await order.populate([
     { path: 'tableId', select: 'tableNumber status' },
@@ -160,11 +176,11 @@ exports.createOrder = catchAsync(async (req, res, next) => {
     { path: 'items.dishId', select: 'name price category' }
   ]);
 
-  res.status(existingOrder ? 200 : 201).json({
+  res.status(201).json({
     status: 'success',
     data: {
       order,
-      isUpdate: !!existingOrder
+      isUpdate: false
     }
   });
 });
@@ -363,6 +379,102 @@ exports.updateOrderStatus = catchAsync(async (req, res, next) => {
 
   if (!validTransitions[order.status].includes(status)) {
     return next(new AppError(`無法從 ${order.status} 狀態轉換到 ${status} 狀態`, 400));
+  }
+
+  // 如果訂單被確認，執行庫存扣減和成本計算
+  if (status === 'confirmed' && order.status === 'pending') {
+    try {
+      // 計算庫存消耗和成本
+      let totalCost = 0;
+      const allConsumptionDetails = [];
+      
+      for (const item of order.items) {
+        try {
+          // 轉換選項格式為庫存服務需要的格式
+          const customOptions = [];
+          if (item.selectedOptions) {
+            for (const [optionName, optionValue] of item.selectedOptions.entries()) {
+              if (typeof optionValue === 'object' && optionValue !== null) {
+                customOptions.push({
+                  type: optionName,
+                  value: optionValue.value || optionValue.name || optionValue.label
+                });
+              } else {
+                customOptions.push({
+                  type: optionName,
+                  value: optionValue
+                });
+              }
+            }
+          }
+
+          const consumption = await inventoryService.calculateDishConsumption(
+            item.dishId,
+            customOptions
+          );
+          
+          // 乘以數量
+          const itemTotalCost = consumption.totalCost * item.quantity;
+          totalCost += itemTotalCost;
+          
+          // 累積消耗詳情
+          allConsumptionDetails.push({
+            dishId: item.dishId,
+            dishName: item.name,
+            quantity: item.quantity,
+            consumptionDetails: consumption.consumptionDetails,
+            totalCost: itemTotalCost
+          });
+        } catch (error) {
+          console.error(`計算菜品 ${item.name} 庫存消耗失敗:`, error);
+          // 如果計算失敗，繼續處理其他菜品
+        }
+      }
+
+      // 扣減庫存
+      const deductionResults = await inventoryService.deductInventory(
+        allConsumptionDetails.flatMap(item => 
+          item.consumptionDetails.map(consumption => ({
+            inventoryId: consumption.inventoryId,
+            inventoryValueId: consumption.inventoryValueId,
+            quantity: consumption.quantity * item.quantity
+          }))
+        )
+      );
+
+      // 檢查扣減結果
+      const failedDeductions = deductionResults.filter(result => !result.success);
+      if (failedDeductions.length > 0) {
+        console.error('部分庫存扣減失敗:', failedDeductions);
+        return next(new AppError('庫存不足，無法確認訂單', 400));
+      }
+
+      // 重新計算總成本（基於實際扣減的庫存）
+      totalCost = allConsumptionDetails.reduce((total, item) => {
+        return total + item.totalCost;
+      }, 0);
+
+      // 更新訂單的總成本
+      order.totalCost = totalCost;
+      await order.save();
+
+      console.log(`訂單 ${order.orderNumber} 已確認，庫存扣減成功，總成本：${totalCost}`);
+    } catch (error) {
+      console.error('確認訂單時庫存扣減失敗:', error);
+      return next(new AppError('確認訂單失敗：庫存處理錯誤', 500));
+    }
+  }
+
+  // 如果訂單被取消，需要恢復庫存（如果之前已經扣減過）
+  if (status === 'cancelled' && order.status === 'confirmed') {
+    try {
+      // 這裡可以實現庫存恢復邏輯
+      // 暫時只記錄日誌
+      console.log(`訂單 ${order.orderNumber} 已取消，需要恢復庫存`);
+    } catch (error) {
+      console.error('取消訂單時庫存恢復失敗:', error);
+      // 不阻止訂單取消，只記錄錯誤
+    }
   }
 
   await order.updateStatus(status);
