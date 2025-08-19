@@ -74,7 +74,7 @@ exports.createMerchant = catchAsync(async (req, res, next) => {
     status: 'active'
   });
 
-  // 預設「老闆」角色
+  // 預設「老闆」「管理人員」「工作人員」角色
   const ownerRole = await Role.create({
     merchant: merchant._id,
     name: '老闆',
@@ -83,6 +83,26 @@ exports.createMerchant = catchAsync(async (req, res, next) => {
     ],
     isSystem: true
   });
+
+  // 同步建立管理人員與工作人員
+  await Role.insertMany([
+    {
+      merchant: merchant._id,
+      name: '管理人員',
+      permissions: [
+        '菜單:查看','庫存:查看','訂單:查看','訂單:更新狀態','桌位:查看','桌位:管理','報表:查看','員工:查看','員工:編輯'
+      ],
+      isSystem: true
+    },
+    {
+      merchant: merchant._id,
+      name: '工作人員',
+      permissions: [
+        '訂單:查看','訂單:更新狀態','訂單:結帳','桌位:查看'
+      ],
+      isSystem: true
+    }
+  ]);
 
   // 產生 6 碼英數交錯（字母-數字-字母-數字-字母-數字）的員工編號（不含商家前綴）
   const generateEmployeeCode = () => {

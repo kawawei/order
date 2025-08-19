@@ -184,6 +184,25 @@ router.beforeEach((to, from, next) => {
     )
 
     if (canAccess) {
+      // 進一步限制商家內部員工的權限：
+      // - 工作人員：僅能訪問 /merchant/orders
+      if (routeRole === 'merchant') {
+        try {
+          const merchantRaw = localStorage.getItem('merchant_user')
+          const merchantUser = merchantRaw ? JSON.parse(merchantRaw) : null
+          const employeeRoleName = merchantUser?.employeeRoleName || null
+          const name = String(employeeRoleName || '').trim().toLowerCase()
+          const isStaff = name === '工作人員' || name === 'staff' || name === 'employee'
+          if (isStaff) {
+            const targetPath = to.path || ''
+            const isOrdersPage = targetPath.startsWith('/merchant/orders')
+            if (!isOrdersPage) {
+              next({ name: 'MerchantOrders' })
+              return
+            }
+          }
+        } catch (e) {}
+      }
       next()
     } else {
       // 無權訪問時重定向到對應的登入頁面

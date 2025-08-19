@@ -19,6 +19,39 @@ const getMerchantId = (req) => {
   throw new AppError('無法確定商家身份', 401);
 };
 
+// 僅允許管理人員編輯「工作人員」，不可操作老闆與其他管理人員
+const assertManagerCanEditTarget = async (req, targetEmployeeDocOrId) => {
+  // 管理員（後台超管）與商家（老闆）不受此限制
+  if (req.admin || req.merchant) return;
+  // 非員工（理論上不會到這步）
+  if (!req.employee) throw new AppError('您沒有權限執行此操作', 403);
+
+  // 若自己是「店老闆」員工，也視為老闆
+  if (req.employee.isOwner) return;
+
+  // 判斷是否為管理人員：其角色名稱必須為「管理人員」或英文別名 manager
+  const roleName = (req.employee.role && (req.employee.role.name || '')) || '';
+  const isManager = String(roleName).trim().toLowerCase() === '管理人員' || String(roleName).trim().toLowerCase() === 'manager';
+  if (!isManager) {
+    throw new AppError('您沒有權限執行此操作', 403);
+  }
+
+  // 取得目標員工實體
+  let target = targetEmployeeDocOrId;
+  if (!target || !target.role) {
+    target = await Employee.findById(typeof targetEmployeeDocOrId === 'string' ? targetEmployeeDocOrId : targetEmployeeDocOrId?._id).populate('role');
+  }
+  if (!target) throw new AppError('員工不存在', 404);
+
+  // 禁止操作店老闆
+  if (target.isOwner) throw new AppError('不可編輯或刪除老闆', 403);
+
+  // 只允許操作「工作人員」
+  const targetRoleName = (target.role && (target.role.name || '')) || '';
+  const isTargetStaff = String(targetRoleName).trim().toLowerCase() === '工作人員' || String(targetRoleName).trim().toLowerCase() === 'staff' || String(targetRoleName).trim().toLowerCase() === 'employee';
+  if (!isTargetStaff) throw new AppError('管理人員僅能操作工作人員', 403);
+};
+
 const generateEmployeeNumber = async (merchantId) => {
   const letters = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
   const digits = '23456789';
@@ -80,6 +113,19 @@ exports.createEmployee = catchAsync(async (req, res, next) => {
   }
   const role = await Role.findOne({ _id: roleId, merchant: merchantId });
   if (!role) return next(new AppError('角色不存在', 400));
+  // 管理人員只能新增「工作人員」
+  if (!req.admin && !req.merchant) {
+    const actorRoleName = (req.employee?.role?.name || '').trim().toLowerCase();
+    const isManager = actorRoleName === '管理人員' || actorRoleName === 'manager';
+    if (!isManager && !req.employee?.isOwner) {
+      return next(new AppError('您沒有權限執行此操作', 403));
+    }
+    const newRoleName = (role.name || '').trim().toLowerCase();
+    const isStaffRole = newRoleName === '工作人員' || newRoleName === 'staff' || newRoleName === 'employee';
+    if (!isStaffRole) {
+      return next(new AppError('管理人員僅能新增「工作人員」', 403));
+    }
+  }
   const employeeNumber = await generateEmployeeNumber(merchantId);
   const employee = await Employee.create({
     merchant: merchantId,
@@ -99,11 +145,18 @@ exports.updateEmployee = catchAsync(async (req, res, next) => {
   const { name, password, roleId, isActive } = req.body;
   const employee = await Employee.findOne({ _id: req.params.id, merchant: merchantId });
   if (!employee) return next(new AppError('員工不存在', 404));
+  await assertManagerCanEditTarget(req, employee);
   if (typeof name === 'string') employee.name = name;
   if (typeof isActive === 'boolean') employee.isActive = isActive;
   if (roleId) {
     const role = await Role.findOne({ _id: roleId, merchant: merchantId });
     if (!role) return next(new AppError('角色不存在', 400));
+    // 管理人員只能把對象設為「工作人員」
+    if (!req.admin && !req.merchant) {
+      const newRoleName = (role.name || '').trim().toLowerCase();
+      const isStaffRole = newRoleName === '工作人員' || newRoleName === 'staff' || newRoleName === 'employee';
+      if (!isStaffRole) return next(new AppError('管理人員僅能調整為「工作人員」', 403));
+    }
     employee.role = roleId;
   }
   if (password) employee.password = password;
@@ -116,6 +169,7 @@ exports.deleteEmployee = catchAsync(async (req, res, next) => {
   const merchantId = getMerchantId(req);
   const employee = await Employee.findOne({ _id: req.params.id, merchant: merchantId });
   if (!employee) return next(new AppError('員工不存在', 404));
+  await assertManagerCanEditTarget(req, employee);
   await employee.deleteOne();
   res.status(204).json({ status: 'success', data: null });
 });

@@ -11,8 +11,54 @@ const getMerchantId = (req) => {
   throw new AppError('無法確定商家身份', 401);
 };
 
+// 確保系統固定角色存在（管理人員、工作人員）
+const ensureSystemRolesForMerchant = async (merchantId) => {
+  const existingRoles = await Role.find({ merchant: merchantId }).select('name');
+  const names = new Set(existingRoles.map(r => (r.name || '').trim()));
+
+  const rolesToCreate = [];
+
+  if (!names.has('管理人員')) {
+    rolesToCreate.push({
+      merchant: merchantId,
+      name: '管理人員',
+      permissions: normalizePermissionKeys([
+        '菜單:查看',
+        '庫存:查看',
+        '訂單:查看',
+        '訂單:更新狀態',
+        '桌位:查看',
+        '桌位:管理',
+        '報表:查看',
+        '員工:查看',
+        '員工:編輯'
+      ]),
+      isSystem: true
+    });
+  }
+
+  if (!names.has('工作人員')) {
+    rolesToCreate.push({
+      merchant: merchantId,
+      name: '工作人員',
+      permissions: normalizePermissionKeys([
+        '訂單:查看',
+        '訂單:更新狀態',
+        '訂單:結帳',
+        '桌位:查看'
+      ]),
+      isSystem: true
+    });
+  }
+
+  if (rolesToCreate.length > 0) {
+    await Role.insertMany(rolesToCreate);
+  }
+};
+
 exports.getAllRoles = catchAsync(async (req, res, next) => {
   const merchantId = getMerchantId(req);
+  await ensureSystemRolesForMerchant(merchantId);
   const roles = await Role.find({ merchant: merchantId }).sort({ createdAt: -1 });
   res.status(200).json({ status: 'success', results: roles.length, data: { roles } });
 });
@@ -45,11 +91,12 @@ exports.updateRole = catchAsync(async (req, res, next) => {
     return next(new AppError('您沒有權限執行此操作', 403));
   }
   const isAdminActor = !!req.admin;
+  const isMerchantOwner = !!req.merchant || !!req.employee?.isOwner;
 
   // 系統預設角色（如：老闆）的保護規則
   if (role.isSystem) {
     // 非管理員不可修改系統預設角色
-    if (!isAdminActor) {
+    if (!isAdminActor && !isMerchantOwner) {
       return next(new AppError('系統預設角色不可修改，請聯繫管理員', 403));
     }
     // 管理員可調整權限，但不可更名

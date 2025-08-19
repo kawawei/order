@@ -6,21 +6,21 @@
       </button>
     </div>
     <nav class="sidebar-nav">
-      <router-link :to="{ path: '/merchant/dashboard', query: route.query }" class="nav-item">
+      <router-link v-if="showAllMenu" :to="{ path: '/merchant/dashboard', query: route.query }" class="nav-item">
         <div class="icon-wrapper">
           <font-awesome-icon icon="chart-line" />
         </div>
         <span class="nav-text">儀表板</span>
       </router-link>
 
-      <router-link :to="{ path: '/merchant/menu', query: route.query }" class="nav-item">
+      <router-link v-if="showAllMenu" :to="{ path: '/merchant/menu', query: route.query }" class="nav-item">
         <div class="icon-wrapper">
           <font-awesome-icon icon="utensils" />
         </div>
         <span class="nav-text">菜單管理</span>
       </router-link>
 
-      <router-link :to="{ path: '/merchant/tables', query: route.query }" class="nav-item">
+      <router-link v-if="showAllMenu" :to="{ path: '/merchant/tables', query: route.query }" class="nav-item">
         <div class="icon-wrapper">
           <font-awesome-icon icon="table" />
         </div>
@@ -34,28 +34,28 @@
         <span class="nav-text">查看訂單</span>
       </router-link>
 
-      <router-link :to="{ path: '/merchant/inventory', query: route.query }" class="nav-item">
+      <router-link v-if="showAllMenu" :to="{ path: '/merchant/inventory', query: route.query }" class="nav-item">
         <div class="icon-wrapper">
           <font-awesome-icon icon="box" />
         </div>
         <span class="nav-text">庫存管理</span>
       </router-link>
 
-      <router-link :to="{ path: '/merchant/reports', query: route.query }" class="nav-item">
+      <router-link v-if="showAllMenu" :to="{ path: '/merchant/reports', query: route.query }" class="nav-item">
         <div class="icon-wrapper">
           <font-awesome-icon icon="chart-bar" />
         </div>
         <span class="nav-text">報表統計</span>
       </router-link>
 
-      <router-link :to="{ path: '/merchant/permissions', query: route.query }" class="nav-item">
+      <router-link v-if="showAllMenu || canManagePeople" :to="{ path: '/merchant/permissions', query: route.query }" class="nav-item">
         <div class="icon-wrapper">
           <font-awesome-icon icon="user-shield" />
         </div>
         <span class="nav-text">權限管理</span>
       </router-link>
 
-      <router-link :to="{ path: '/merchant/settings', query: route.query }" class="nav-item">
+      <router-link v-if="showAllMenu" :to="{ path: '/merchant/settings', query: route.query }" class="nav-item">
         <div class="icon-wrapper">
           <font-awesome-icon icon="cog" />
         </div>
@@ -66,7 +66,7 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { useRoute } from 'vue-router'
 
 const route = useRoute()
@@ -75,6 +75,53 @@ const isCollapsed = ref(false)
 const toggleSidebar = () => {
   isCollapsed.value = !isCollapsed.value
 }
+
+// 讀取商家用戶資訊以決定側邊欄顯示
+const merchantUser = (() => {
+  try {
+    const raw = localStorage.getItem('merchant_user')
+    return raw ? JSON.parse(raw) : null
+  } catch (e) { return null }
+})()
+
+// 讀取管理員資訊（若以管理員身份瀏覽商家後台，也給予完整選單）
+const adminUser = (() => {
+  try {
+    const raw = localStorage.getItem('admin_user')
+    return raw ? JSON.parse(raw) : null
+  } catch (e) { return null }
+})()
+const isAdmin = (() => {
+  const role = String(adminUser?.role || '').trim().toLowerCase()
+  return role === 'admin' || role === 'superadmin'
+})()
+// 盡可能從多個來源推導角色名稱（兼容不同回應結構）
+const roleNameRaw = merchantUser?.employeeRoleName || merchantUser?.roleName || merchantUser?.role?.name || ''
+const employeeRoleName = String(roleNameRaw || '').trim().toLowerCase()
+
+// 老闆判斷：
+// - 商家本體登入（role === 'merchant'）
+// - 員工物件上標記 isOwner === true（若後端提供）
+// - 或角色名稱為「老闆」/owner
+const isOwner = (
+  merchantUser?.role === 'merchant' ||
+  merchantUser?.isOwner === true ||
+  employeeRoleName === '老闆' || employeeRoleName === 'owner'
+)
+
+// 管理人員：角色名稱為「管理人員」或 manager
+const isManager = employeeRoleName === '管理人員' || employeeRoleName === 'manager'
+
+// 工作人員（僅用於需要時的判斷）：包含「工作人員 / staff / employee / 收銀員 / 廚師」
+const isStaff = (
+  employeeRoleName === '工作人員' || employeeRoleName === 'staff' || employeeRoleName === 'employee' ||
+  employeeRoleName === '收銀員' || employeeRoleName === 'cashier' ||
+  employeeRoleName === '廚師' || employeeRoleName === 'kitchen'
+)
+
+// 員工僅可見訂單；管理人員可見全部（含人員管理）；老闆與管理員可見全部
+const showAllMenu = computed(() => isOwner || isManager || isAdmin)
+const canManagePeople = computed(() => isOwner || isManager || isAdmin)
 </script>
 
 <style scoped>

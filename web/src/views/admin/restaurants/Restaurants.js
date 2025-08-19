@@ -206,6 +206,7 @@ export const useUsers = () => {
         name: 'MerchantDashboard',
         query: {
           restaurantId: restaurantId,
+          merchantId: restaurantId,
           restaurantName: restaurantName
         }
       })

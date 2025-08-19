@@ -306,6 +306,17 @@ exports.requirePermissions = (...requiredPermissions) => {
   };
 };
 
+// 僅允許老闆或管理員：用於角色管理等敏感操作
+exports.requireOwnerOrAdmin = (req, res, next) => {
+  // 超管/管理員
+  if (req.admin) return next();
+  // 商家（老闆身分，使用商家登入）
+  if (req.merchant) return next();
+  // 員工：僅當其為店老闆（isOwner=true）時允許
+  if (req.employee && req.employee.isOwner) return next();
+  return next(new AppError('只有老闆可以執行此操作', 403));
+};
+
 // 強制檢查路由參數中的商家ID與登入者所屬商家相同（管理員略過）
 exports.enforceSameMerchantParam = (paramName = 'merchantId') => {
   return (req, res, next) => {

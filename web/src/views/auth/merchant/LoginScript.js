@@ -38,13 +38,30 @@ export default {
       try {
         const response = await authAPI.login(formData.value);
         
-        // 保存 token 與商家信息（使用分離鍵名）
+        // 保存 token 與商家/員工信息（使用分離鍵名）
         localStorage.setItem('merchant_token', response.token);
         if (response?.data?.merchant) {
           localStorage.setItem('merchant_user', JSON.stringify({
             ...response.data.merchant,
             role: 'merchant',
             merchantId: response.data.merchant?._id || response.data.merchant?.id || null
+          }));
+        } else if (response?.data?.employee) {
+          const employee = response.data.employee;
+          const merchantId =
+            (typeof employee?.merchant === 'string' ? employee.merchant : null) ||
+            employee?.merchant?._id ||
+            employee?.merchant?.id ||
+            employee?.merchantId ||
+            null;
+          const employeeRoleId = (employee?.role && (employee?.role?._id || employee?.role?.id)) || employee?.roleId || employee?.role || null;
+          const employeeRoleName = (employee?.role && (employee?.role?.name || employee?.role?.title)) || null;
+          localStorage.setItem('merchant_user', JSON.stringify({
+            ...employee,
+            role: 'employee',
+            merchantId,
+            employeeRoleId,
+            employeeRoleName
           }));
         }
         

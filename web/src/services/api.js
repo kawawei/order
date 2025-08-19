@@ -9,6 +9,30 @@ const api = axios.create({
   withCredentials: true
 });
 
+// 取得目前情境下的商家 ID（優先 URL，其次 localStorage）
+const resolveActiveMerchantId = () => {
+  try {
+    // 1) URL query: ?merchantId=xxx
+    const url = new URL(window.location?.href || '')
+    const fromQuery = url.searchParams.get('merchantId') || url.searchParams.get('restaurantId')
+    if (fromQuery) return fromQuery
+
+    // 2) localStorage.merchant_user
+    const raw = localStorage.getItem('merchant_user')
+    if (raw) {
+      const mu = JSON.parse(raw)
+      const merchantId = (
+        mu?.merchantId ||
+        (typeof mu?.merchant === 'string' ? mu.merchant : null) ||
+        mu?._id ||
+        mu?.id
+      )
+      if (merchantId) return merchantId
+    }
+  } catch (e) {}
+  return null
+}
+
 // 請求攔截器：根據情境添加對應 token（分離 admin 與 merchant），並關閉後台請求的 cookie 傳遞
 api.interceptors.request.use(
   (config) => {
@@ -87,7 +111,8 @@ api.interceptors.response.use(
         }
 
         if (!reqUrl.includes('/admin/login') && !reqUrl.includes('/auth/login')) {
-          window.location.href = isAdminPath ? '/admin/login' : '/merchant/login'
+          const redirectTo = actor === 'admin' ? '/admin/login' : (isAdminPath ? '/admin/login' : '/merchant/login')
+          window.location.href = redirectTo
         }
       }
       // 403：無權限 -> 不要登出，不跳轉，交由頁面自行處理錯誤
@@ -289,30 +314,80 @@ export const orderService = {
 // 報表 API
 export const reportAPI = {
   // 獲取詳細報表統計
-  getReportStats: (params = {}) => api.get('/reports/stats', { params }),
+  getReportStats: (params = {}) => {
+    const merged = { ...(params || {}) }
+    if (!merged.merchantId) {
+      const merchantId = resolveActiveMerchantId()
+      if (merchantId) merged.merchantId = merchantId
+    }
+    return api.get('/reports/stats', { params: merged })
+  },
   
   // 獲取簡化版報表統計（用於儀表板）
-  getSimpleReportStats: (params = {}) => api.get('/reports/simple', { params })
+  getSimpleReportStats: (params = {}) => {
+    const merged = { ...(params || {}) }
+    if (!merged.merchantId) {
+      const merchantId = resolveActiveMerchantId()
+      if (merchantId) merged.merchantId = merchantId
+    }
+    return api.get('/reports/simple', { params: merged })
+  }
 };
 
 // 角色與權限 API
 export const roleAPI = {
   // 權限目錄（由後端提供標準鍵與顯示文字）
-  getPermissionCatalog: () => api.get('/roles/_catalog/permissions'),
+  getPermissionCatalog: () => {
+    const merchantId = resolveActiveMerchantId()
+    const params = merchantId ? { merchantId } : {}
+    return api.get('/roles/_catalog/permissions', { params })
+  },
 
   // 角色 CRUD
-  getRoles: () => api.get('/roles'),
-  createRole: (data) => api.post('/roles', data),
-  updateRole: (roleId, data) => api.patch(`/roles/${roleId}`, data),
-  deleteRole: (roleId) => api.delete(`/roles/${roleId}`)
+  getRoles: () => {
+    const merchantId = resolveActiveMerchantId()
+    const params = merchantId ? { merchantId } : {}
+    return api.get('/roles', { params })
+  },
+  createRole: (data) => {
+    const merchantId = resolveActiveMerchantId()
+    const params = merchantId ? { merchantId } : {}
+    return api.post('/roles', data, { params })
+  },
+  updateRole: (roleId, data) => {
+    const merchantId = resolveActiveMerchantId()
+    const params = merchantId ? { merchantId } : {}
+    return api.patch(`/roles/${roleId}`, data, { params })
+  },
+  deleteRole: (roleId) => {
+    const merchantId = resolveActiveMerchantId()
+    const params = merchantId ? { merchantId } : {}
+    return api.delete(`/roles/${roleId}`, { params })
+  }
 };
 
 // 員工管理 API（商家後台）
 export const employeeAPI = {
-  getEmployees: () => api.get('/employees'),
-  createEmployee: (data) => api.post('/employees', data),
-  updateEmployee: (employeeId, data) => api.patch(`/employees/${employeeId}`, data),
-  deleteEmployee: (employeeId) => api.delete(`/employees/${employeeId}`)
+  getEmployees: () => {
+    const merchantId = resolveActiveMerchantId()
+    const params = merchantId ? { merchantId } : {}
+    return api.get('/employees', { params })
+  },
+  createEmployee: (data) => {
+    const merchantId = resolveActiveMerchantId()
+    const params = merchantId ? { merchantId } : {}
+    return api.post('/employees', data, { params })
+  },
+  updateEmployee: (employeeId, data) => {
+    const merchantId = resolveActiveMerchantId()
+    const params = merchantId ? { merchantId } : {}
+    return api.patch(`/employees/${employeeId}`, data, { params })
+  },
+  deleteEmployee: (employeeId) => {
+    const merchantId = resolveActiveMerchantId()
+    const params = merchantId ? { merchantId } : {}
+    return api.delete(`/employees/${employeeId}`, { params })
+  }
 };
 
 // 庫存管理 API

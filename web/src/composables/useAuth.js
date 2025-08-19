@@ -41,11 +41,15 @@ export function useAuth() {
           employee?.merchant?.id ||
           employee?.merchantId ||
           null
+        const employeeRoleId = (employee?.role && (employee?.role?._id || employee?.role?.id)) || employee?.roleId || employee?.role || null
+        const employeeRoleName = (employee?.role && (employee?.role?.name || employee?.role?.title)) || null
         user.value = employee
         localStorage.setItem('merchant_user', JSON.stringify({
           ...employee,
           role: 'employee',
-          merchantId
+          merchantId,
+          employeeRoleId,
+          employeeRoleName
         }))
       } else if (response?.data?.merchant) {
         const merchant = response.data.merchant
