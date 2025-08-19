@@ -59,16 +59,100 @@ export function useAddMenuItemDialog(props, emit) {
     return inventory ? inventory.name : ''
   }
 
+  // 獲取庫存的所有值（如：中杯、大杯）
+  const getInventoryValues = (inventoryId) => {
+    const inventory = availableInventory.value.find(inv => inv._id === inventoryId)
+    if (!inventory) return []
+    
+    if (inventory.type === 'single') {
+      // 單一庫存，返回一個虛擬的規格對象
+      return [{
+        _id: inventory._id,
+        specName: inventory.name,
+        quantity: inventory.singleStock.quantity,
+        unit: inventory.singleStock.unit
+      }]
+    } else if (inventory.type === 'multiSpec' && inventory.multiSpecStock) {
+      // 多規格庫存，返回所有規格
+      return inventory.multiSpecStock.map(spec => ({
+        _id: spec._id,
+        specName: spec.specName,
+        quantity: spec.quantity,
+        unit: spec.unit
+      }))
+    }
+    
+    return []
+  }
+
+  // 獲取當前庫存數量
+  const getCurrentStock = (inventoryValueId) => {
+    // 在所有庫存中查找對應的值
+    for (const inventory of availableInventory.value) {
+      if (inventory.type === 'single' && inventory._id === inventoryValueId) {
+        return inventory.singleStock.quantity || 0
+      } else if (inventory.type === 'multiSpec' && inventory.multiSpecStock) {
+        const spec = inventory.multiSpecStock.find(s => s._id === inventoryValueId)
+        if (spec) {
+          return spec.quantity || 0
+        }
+      }
+    }
+    return 0
+  }
+
   // 獲取選項的選擇值
   const getOptionChoices = (optionType) => {
     const option = form.value.options.find(opt => opt.name === optionType)
     return option ? option.choices : []
   }
 
+  // 基礎庫存變化處理
+  const onBaseInventoryChange = (item) => {
+    // 清空之前選擇的庫存值
+    item.inventoryValueId = ''
+    updateInventoryPreview()
+  }
+
+  // 基礎庫存值變化處理
+  const onBaseInventoryValueChange = (item) => {
+    updateInventoryPreview()
+  }
+
+  // 條件庫存變化處理
+  const onConditionalInventoryChange = (item) => {
+    // 清空所有條件的庫存值選擇
+    item.conditions.forEach(condition => {
+      condition.inventoryValueId = ''
+    })
+    updateInventoryPreview()
+  }
+
+  // 條件選項類型變化處理
+  const onConditionOptionTypeChange = (condition, item) => {
+    // 清空選項值和庫存值
+    condition.optionValue = ''
+    condition.inventoryValueId = ''
+    updateInventoryPreview()
+  }
+
+  // 條件選項值變化處理
+  const onConditionOptionValueChange = (condition, item) => {
+    // 清空庫存值
+    condition.inventoryValueId = ''
+    updateInventoryPreview()
+  }
+
+  // 條件庫存值變化處理
+  const onConditionInventoryValueChange = (condition) => {
+    updateInventoryPreview()
+  }
+
   // 添加基礎庫存
   const addBaseInventory = () => {
     form.value.baseInventory.push({
       inventoryId: '',
+      inventoryValueId: '',
       quantity: 1
     })
   }
@@ -87,23 +171,97 @@ export function useAddMenuItemDialog(props, emit) {
     inventoryItem.conditions.push({
       optionType: '',
       optionValue: '',
-      multiplier: 1,
-      additionalQuantity: 0
+      inventoryValueId: '',
+      quantity: 1
     })
   }
 
   // 更新庫存預覽
   const updateInventoryPreview = () => {
-    // 構建臨時的菜品對象用於計算
-    const tempDish = {
-      inventoryConfig: {
-        baseInventory: form.value.baseInventory,
-        conditionalInventory: form.value.conditionalInventory
+    const preview = {}
+    
+    // 處理基礎庫存
+    form.value.baseInventory.forEach(item => {
+      if (item.inventoryId && item.inventoryValueId && item.quantity) {
+        const key = `${item.inventoryId}_${item.inventoryValueId}`
+        preview[key] = (preview[key] || 0) + parseFloat(item.quantity)
+      }
+    })
+    
+    // 處理條件庫存
+    form.value.conditionalInventory.forEach(item => {
+      if (item.inventoryId && item.baseQuantity) {
+        // 檢查是否有匹配的條件
+        let hasMatchingCondition = false
+        
+        item.conditions.forEach(condition => {
+          if (condition.optionType && condition.optionValue && 
+              condition.inventoryValueId && condition.quantity) {
+            
+            const selectedOptionValue = previewOptions.value[condition.optionType]
+            if (selectedOptionValue === condition.optionValue) {
+              const key = `${item.inventoryId}_${condition.inventoryValueId}`
+              preview[key] = (preview[key] || 0) + parseFloat(condition.quantity)
+              hasMatchingCondition = true
+            }
+          }
+        })
+        
+        // 如果沒有匹配的條件，使用基礎數量
+        if (!hasMatchingCondition && item.baseQuantity) {
+          // 這裡需要選擇一個默認的庫存值，暫時使用第一個
+          const values = getInventoryValues(item.inventoryId)
+          if (values.length > 0) {
+            const key = `${item.inventoryId}_${values[0]._id}`
+            preview[key] = (preview[key] || 0) + parseFloat(item.baseQuantity)
+          }
+        }
+      }
+    })
+    
+    inventoryPreview.value = preview
+  }
+
+  // 獲取庫存顯示名稱（包含規格）
+  const getInventoryDisplayName = (key) => {
+    const [inventoryId, inventoryValueId] = key.split('_')
+    const inventory = availableInventory.value.find(inv => inv._id === inventoryId)
+    
+    if (!inventory) {
+      return '未知庫存'
+    }
+    
+    if (inventory.type === 'single') {
+      return inventory.name
+    } else if (inventory.type === 'multiSpec') {
+      const spec = inventory.multiSpecStock.find(s => s._id === inventoryValueId)
+      if (spec) {
+        return `${inventory.name} (${spec.specName})`
       }
     }
     
-    // 使用 composable 計算庫存消耗
-    inventoryPreview.value = estimateDishInventoryUsage(tempDish, previewOptions.value)
+    return inventory.name
+  }
+
+  // 獲取庫存單位（包含規格）
+  const getInventoryDisplayUnit = (key) => {
+    const [inventoryId, inventoryValueId] = key.split('_')
+    const inventory = availableInventory.value.find(inv => inv._id === inventoryId)
+    
+    if (!inventory) {
+      return ''
+    }
+    
+    if (inventory.type === 'single') {
+      return inventory.singleStock.unit
+    } else if (inventory.type === 'multiSpec') {
+      const spec = inventory.multiSpecStock.find(s => s._id === inventoryValueId)
+      if (spec) {
+        return spec.unit
+      }
+    }
+    
+    return ''
   }
 
   // 觸發文件選擇
@@ -157,16 +315,19 @@ export function useAddMenuItemDialog(props, emit) {
   // 移除基礎庫存
   const removeBaseInventory = (index) => {
     form.value.baseInventory.splice(index, 1)
+    updateInventoryPreview()
   }
 
   // 移除條件庫存
   const removeConditionalInventory = (index) => {
     form.value.conditionalInventory.splice(index, 1)
+    updateInventoryPreview()
   }
 
   // 移除條件
   const removeCondition = (inventoryItem, conditionIndex) => {
     inventoryItem.conditions.splice(conditionIndex, 1)
+    updateInventoryPreview()
   }
 
   // 重置表單
@@ -216,9 +377,10 @@ export function useAddMenuItemDialog(props, emit) {
       // 轉換庫存配置數據
       const transformedInventory = {
         baseInventory: form.value.baseInventory
-          .filter(item => item.inventoryId && item.quantity)
+          .filter(item => item.inventoryId && item.inventoryValueId && item.quantity)
           .map(item => ({
             inventoryId: item.inventoryId,
+            inventoryValueId: item.inventoryValueId,
             quantity: item.quantity
           })),
         conditionalInventory: form.value.conditionalInventory
@@ -227,12 +389,12 @@ export function useAddMenuItemDialog(props, emit) {
             inventoryId: item.inventoryId,
             baseQuantity: item.baseQuantity,
             conditions: item.conditions
-              .filter(cond => cond.optionType && cond.optionValue)
+              .filter(cond => cond.optionType && cond.optionValue && cond.inventoryValueId)
               .map(cond => ({
                 optionType: cond.optionType,
                 optionValue: cond.optionValue,
-                multiplier: cond.multiplier || 1,
-                additionalQuantity: cond.additionalQuantity || 0
+                inventoryValueId: cond.inventoryValueId,
+                quantity: cond.quantity || 1
               }))
           }))
       }
@@ -260,14 +422,19 @@ export function useAddMenuItemDialog(props, emit) {
         })) : []
       }))
 
+      // 兼容：從 inventoryConfig 中讀取庫存配置（若存在）
+      const inventoryConfig = props.editingItem.inventoryConfig || {}
+      const baseInventory = inventoryConfig.baseInventory || props.editingItem.baseInventory || []
+      const conditionalInventory = inventoryConfig.conditionalInventory || props.editingItem.conditionalInventory || []
+
       form.value = {
         name: props.editingItem.name,
         basePrice: props.editingItem.price || props.editingItem.basePrice,
         description: props.editingItem.description || '',
         image: props.editingItem.image || '',
         options: transformedOptions,
-        baseInventory: props.editingItem.baseInventory || [],
-        conditionalInventory: props.editingItem.conditionalInventory || []
+        baseInventory,
+        conditionalInventory
       }
       
       // 初始化預覽選項
@@ -336,7 +503,17 @@ export function useAddMenuItemDialog(props, emit) {
     loadAvailableInventory,
     getInventoryUnit,
     getInventoryName,
+    getInventoryValues,
+    getCurrentStock,
+    getInventoryDisplayName,
+    getInventoryDisplayUnit,
     getOptionChoices,
+    onBaseInventoryChange,
+    onBaseInventoryValueChange,
+    onConditionalInventoryChange,
+    onConditionOptionTypeChange,
+    onConditionOptionValueChange,
+    onConditionInventoryValueChange,
     addBaseInventory,
     addConditionalInventory,
     addCondition,

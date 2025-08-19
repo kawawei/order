@@ -79,7 +79,7 @@
                   <BaseButton 
                     variant="text" 
                     class="delete-button"
-                    @click="form.options.splice(index, 1)"
+                    @click="removeOption(index)"
                   >
                     <font-awesome-icon icon="trash" />
                   </BaseButton>
@@ -103,10 +103,10 @@
                         <BaseButton 
                           variant="text" 
                           class="delete-button"
-                          @click="option.choices.splice(choiceIndex, 1)"
+                          @click="removeChoice(option, choiceIndex)"
                         >
                           <font-awesome-icon icon="trash" />
-                        </BaseButton>
+                    </BaseButton>
                       </div>
                     </template>
                   </div>
@@ -154,15 +154,30 @@
             <!-- 基礎庫存 -->
             <div class="inventory-section">
               <h4>基礎庫存（固定消耗）</h4>
+              <p class="section-description">
+                選擇庫存項目和具體值，這些庫存將在每次點餐時固定消耗
+              </p>
               <div class="base-inventory-list">
                 <div v-for="(item, index) in form.baseInventory" :key="index" class="inventory-item">
                   <div class="inventory-selector">
-                    <select v-model="item.inventoryId" class="inventory-select">
+                    <select v-model="item.inventoryId" class="inventory-select" @change="onBaseInventoryChange(item)">
                       <option value="">選擇庫存項目</option>
                       <option v-for="inv in availableInventory" :key="inv._id" :value="inv._id">
                         {{ inv.name }} ({{ inv.category }})
                       </option>
                     </select>
+                    
+                    <!-- 庫存值選擇器 -->
+                    <select v-if="item.inventoryId && getInventoryValues(item.inventoryId).length > 0" 
+                            v-model="item.inventoryValueId" 
+                            class="inventory-value-select"
+                            @change="onBaseInventoryValueChange(item)">
+                      <option value="">選擇具體值</option>
+                      <option v-for="value in getInventoryValues(item.inventoryId)" :key="value._id" :value="value._id">
+                        {{ value.specName }} (庫存: {{ value.quantity }})
+                      </option>
+                    </select>
+                    
                     <input 
                       type="number" 
                       v-model="item.quantity" 
@@ -175,10 +190,17 @@
                     <BaseButton 
                       variant="text" 
                       class="delete-button"
-                      @click="form.baseInventory.splice(index, 1)"
+                      @click="removeBaseInventory(index)"
                     >
                       <font-awesome-icon icon="trash" />
                     </BaseButton>
+                  </div>
+                  
+                  <!-- 庫存信息顯示 -->
+                  <div v-if="item.inventoryValueId" class="inventory-info">
+                    <span class="stock-info">
+                      當前庫存: {{ getCurrentStock(item.inventoryValueId) }} {{ getInventoryUnit(item.inventoryId) }}
+                    </span>
                   </div>
                 </div>
               </div>
@@ -195,11 +217,14 @@
             <!-- 條件庫存 -->
             <div class="inventory-section">
               <h4>條件庫存（根據選項變化）</h4>
+              <p class="section-description">
+                根據顧客選擇的選項動態調整庫存消耗，例如：選擇大杯時消耗大杯庫存，選擇中杯時消耗中杯庫存
+              </p>
               <div class="conditional-inventory-list">
                 <div v-for="(item, index) in form.conditionalInventory" :key="index" class="inventory-item">
                   <div class="inventory-header">
                     <div class="inventory-selector">
-                      <select v-model="item.inventoryId" class="inventory-select">
+                      <select v-model="item.inventoryId" class="inventory-select" @change="onConditionalInventoryChange(item)">
                         <option value="">選擇庫存項目</option>
                         <option v-for="inv in availableInventory" :key="inv._id" :value="inv._id">
                           {{ inv.name }} ({{ inv.category }})
@@ -218,7 +243,7 @@
                     <BaseButton 
                       variant="text" 
                       class="delete-button"
-                      @click="form.conditionalInventory.splice(index, 1)"
+                      @click="removeConditionalInventory(index)"
                     >
                       <font-awesome-icon icon="trash" />
                     </BaseButton>
@@ -227,38 +252,44 @@
                   <!-- 條件規則 -->
                   <div class="conditions-list">
                     <div v-for="(condition, condIndex) in item.conditions" :key="condIndex" class="condition-item">
-                      <select v-model="condition.optionType" class="option-type-select">
+                      <select v-model="condition.optionType" class="option-type-select" @change="onConditionOptionTypeChange(condition, item)">
                         <option value="">選擇選項類型</option>
                         <option v-for="opt in form.options" :key="opt.name" :value="opt.name">
                           {{ opt.name }}
                         </option>
                       </select>
-                      <select v-model="condition.optionValue" class="option-value-select">
+                      
+                      <select v-model="condition.optionValue" class="option-value-select" @change="onConditionOptionValueChange(condition, item)">
                         <option value="">選擇選項值</option>
                         <option v-for="choice in getOptionChoices(condition.optionType)" :key="choice.label" :value="choice.label">
                           {{ choice.label }}
                         </option>
                       </select>
+                      
+                      <!-- 庫存值選擇器 -->
+                      <select v-if="condition.optionValue && item.inventoryId && getInventoryValues(item.inventoryId).length > 0" 
+                              v-model="condition.inventoryValueId" 
+                              class="inventory-value-select"
+                              @change="onConditionInventoryValueChange(condition)">
+                        <option value="">選擇對應庫存值</option>
+                        <option v-for="value in getInventoryValues(item.inventoryId)" :key="value._id" :value="value._id">
+                          {{ value.specName }} (庫存: {{ value.quantity }})
+                        </option>
+                      </select>
+                      
                       <input 
                         type="number" 
-                        v-model="condition.multiplier" 
-                        placeholder="倍數" 
-                        class="multiplier-input"
+                        v-model="condition.quantity" 
+                        placeholder="數量" 
+                        class="quantity-input"
                         min="0"
                         step="0.1"
                       />
-                      <input 
-                        type="number" 
-                        v-model="condition.additionalQuantity" 
-                        placeholder="額外數量" 
-                        class="additional-input"
-                        min="0"
-                        step="0.1"
-                      />
+                      <span class="unit-display">{{ getInventoryUnit(item.inventoryId) }}</span>
                       <BaseButton 
                         variant="text" 
                         class="delete-button"
-                        @click="item.conditions.splice(condIndex, 1)"
+                        @click="removeCondition(item, condIndex)"
                       >
                         <font-awesome-icon icon="trash" />
                       </BaseButton>
@@ -287,6 +318,9 @@
             <!-- 庫存消耗預覽 -->
             <div class="inventory-preview">
               <h4>庫存消耗預覽</h4>
+              <p class="section-description">
+                選擇不同的選項組合，預覽對應的庫存消耗情況
+              </p>
               <div class="preview-options">
                 <div v-for="option in form.options" :key="option.name" class="preview-option">
                   <label>{{ option.name }}:</label>
@@ -300,9 +334,14 @@
               </div>
               <div class="preview-results">
                 <h5>預估庫存消耗：</h5>
-                <div v-for="(quantity, inventoryId) in inventoryPreview" :key="inventoryId" class="preview-item">
-                  <span>{{ getInventoryName(inventoryId) }}:</span>
-                  <span class="preview-quantity">{{ quantity }} {{ getInventoryUnit(inventoryId) }}</span>
+                <div v-if="Object.keys(inventoryPreview).length === 0" class="no-preview">
+                  請選擇選項來預覽庫存消耗
+                </div>
+                <div v-else>
+                  <div v-for="(quantity, key) in inventoryPreview" :key="key" class="preview-item">
+                    <span>{{ getInventoryDisplayName(key) }}:</span>
+                    <span class="preview-quantity">{{ quantity }} {{ getInventoryDisplayUnit(key) }}</span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -359,6 +398,8 @@ const {
   loadAvailableInventory,
   getInventoryUnit,
   getInventoryName,
+  getInventoryDisplayName,
+  getInventoryDisplayUnit,
   getOptionChoices,
   addBaseInventory,
   addConditionalInventory,
@@ -376,6 +417,14 @@ const {
   resetForm,
   isValid,
   handleConfirm,
-  initializeEditData
+  initializeEditData,
+  onBaseInventoryChange,
+  onBaseInventoryValueChange,
+  onConditionalInventoryChange,
+  onConditionOptionTypeChange,
+  onConditionOptionValueChange,
+  onConditionInventoryValueChange,
+  getInventoryValues,
+  getCurrentStock
 } = useAddMenuItemDialog(props, emit)
 </script>

@@ -154,7 +154,60 @@ const dishSchema = new mongoose.Schema({
       type: Boolean,
       default: false
     }
-  }]
+  }],
+
+  // 庫存關聯配置（支持基礎消耗與條件消耗）
+  inventoryConfig: {
+    baseInventory: [{
+      inventoryId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Inventory',
+        required: true
+      },
+      inventoryValueId: {
+        type: mongoose.Schema.Types.ObjectId,
+        required: true
+      },
+      quantity: {
+        type: Number,
+        required: true,
+        min: [0, '消耗數量不能為負數']
+      }
+    }],
+    conditionalInventory: [{
+      inventoryId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Inventory',
+        required: true
+      },
+      baseQuantity: {
+        type: Number,
+        default: 0,
+        min: [0, '消耗數量不能為負數']
+      },
+      conditions: [{
+        optionType: {
+          type: String,
+          required: true,
+          trim: true
+        },
+        optionValue: {
+          type: String,
+          required: true,
+          trim: true
+        },
+        inventoryValueId: {
+          type: mongoose.Schema.Types.ObjectId,
+          required: true
+        },
+        quantity: {
+          type: Number,
+          required: true,
+          min: [0, '消耗數量不能為負數']
+        }
+      }]
+    }]
+  }
 }, {
   timestamps: true
 });
