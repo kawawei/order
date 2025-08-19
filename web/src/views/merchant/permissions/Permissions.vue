@@ -32,6 +32,7 @@
               </div>
               <div class="details">
                 <h3>{{ employee.name }}</h3>
+                <p>員工編號：{{ employee.employeeNumber }}</p>
                 <span class="role-badge" :class="getRoleClass(employee.role)">
                   {{ getRoleText(employee.role) }}
                 </span>

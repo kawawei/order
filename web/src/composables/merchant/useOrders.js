@@ -75,13 +75,17 @@ export function useOrders(restaurantId = null) {
           createdAt: order.createdAt,
           items: [],
           totalAmount: 0,
-          status: order.status
+          status: order.status,
+          itemCount: 0 // 項目數量統計｜Count of items in this batch
         })
       }
       
       const batch = batchMap.get(batchKey)
-      batch.items.push(...(order.items || []))
+      // 將訂單項目處理為帶有中文選項標籤的結構｜Process order items into objects with human-readable option labels
+      const processedItems = processOrderItems(order.items || [])
+      batch.items.push(...processedItems)
       batch.totalAmount += order.totalAmount || 0
+      batch.itemCount += processedItems.length // 累加此批次的項目數量｜Accumulate item count for this batch
     })
     
     return Array.from(batchMap.values()).sort((a, b) => 

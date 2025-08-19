@@ -620,3 +620,21 @@
    - 僅前端 UI，後端 API 不受影響
 
 *時間：2025-08-19 23:27*
+
+## 2025-08-20 00:52
+### 商家端訂單卡片顯示選項標籤｜Show option tags on merchant order cards
+1. 完成內容｜What’s done
+   - ✅ 在 `web/src/composables/merchant/useOrders.js` 的 `groupOrdersByBatch` 中，改為使用 `processOrderItems()` 統一處理餐點選項，於餐點卡片名稱右側顯示標籤（如：無糖、去冰、大杯）。
+   - ✅ 新增 `itemCount` 統計，批次卡片底部的「項」數量正確顯示。
+
+2. 技術細節｜Technical details
+   - 於批次聚合時，將 `order.items` 轉為 `processedItems`，每個項目包含 `processedOptions`（已映射成中文/可讀標籤）。
+   - 批次物件新增 `itemCount` 並於聚合過程累加。
+
+3. 影響範圍｜Impact
+   - 商家端即時訂單頁（`Orders.vue`）顯示更清楚，廚房能一眼看到客製化選項。
+
+4. 待辦事項｜TODO
+   - ⏳ 歷史訂單詳情中也顯示同樣的選項標籤。
+
+*時間：2025-08-20 00:52*

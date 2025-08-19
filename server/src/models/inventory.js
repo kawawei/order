@@ -44,7 +44,8 @@ const inventorySchema = new mongoose.Schema({
     },
     unit: {
       type: String,
-      required: [true, '請提供計量單位'],
+      // 僅在「單一原料」時為必填；多規格時不要求此欄位
+      required: function() { return this.type === 'single' },
       trim: true
     },
     minStock: {
