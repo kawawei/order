@@ -2,7 +2,7 @@
   <Teleport to="body">
     <Transition name="dialog">
       <div v-if="modelValue" class="dialog-wrapper" @click.self="handleClose">
-        <div class="dialog" :class="size">
+        <div class="dialog" :class="[size, $attrs.class]">
           <!-- 標題區 -->
           <div class="dialog-header">
             <h3 class="dialog-title">
@@ -33,6 +33,11 @@
 
 <script setup>
 import { onMounted, onUnmounted } from 'vue'
+
+// 禁用自動繼承屬性，手動處理 class
+defineOptions({
+  inheritAttrs: false
+})
 
 const props = defineProps({
   modelValue: {
