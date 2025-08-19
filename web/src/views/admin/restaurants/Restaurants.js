@@ -6,7 +6,8 @@ import { merchantAPI } from '@/services/api'
 // 表格列定義
 export const columns = [
   { key: 'businessName', label: '餐廳名稱' },
-  { key: 'email', label: '電子郵件' },
+  { key: 'merchantCode', label: '商家代碼' },
+  { key: 'ownerEmployeeCode', label: '老闆員工代碼' },
   { key: 'phone', label: '聯絡電話' },
   { key: 'status', label: '狀態' },
   { key: 'createdAt', label: '註冊時間' },
@@ -44,7 +45,8 @@ export const useUsers = () => {
         users.value = response.data.merchants.map(merchant => ({
           id: merchant._id,
           businessName: merchant.businessName,
-          email: merchant.email,
+          merchantCode: merchant.merchantCode,
+          ownerEmployeeCode: merchant.ownerEmployeeCode,
           phone: merchant.phone,
           status: merchant.status,
           createdAt: new Date(merchant.createdAt).toLocaleDateString('zh-TW'),
@@ -81,9 +83,11 @@ export const useUsers = () => {
     if (!searchQuery.value) return users.value
     
     return users.value.filter(user => {
-      return user.businessName.toLowerCase().includes(searchQuery.value.toLowerCase()) ||
-             user.email.toLowerCase().includes(searchQuery.value.toLowerCase()) ||
-             user.phone.includes(searchQuery.value)
+      const q = searchQuery.value.toLowerCase()
+      return user.businessName.toLowerCase().includes(q) ||
+             (user.merchantCode || '').toLowerCase().includes(q) ||
+             (user.ownerEmployeeCode || '').toLowerCase().includes(q) ||
+             (user.phone || '').includes(searchQuery.value)
     })
   })
 

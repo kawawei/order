@@ -452,12 +452,18 @@ onMounted(() => {
   }
 })
 
-// 產生公司內唯一的員工編號（6 碼數字）
+// 產生公司內唯一的員工編號（6 碼英數交錯：字母-數字 重複3次）
 const generateUniqueEmployeeNumber = () => {
   const existing = new Set(employees.value.map(e => e.employeeNumber).filter(Boolean))
+  const letters = 'ABCDEFGHJKLMNPQRSTUVWXYZ'
+  const digits = '23456789'
   let code = ''
   do {
-    code = Math.floor(100000 + Math.random() * 900000).toString()
+    code = ''
+    for (let i = 0; i < 3; i++) {
+      code += letters[Math.floor(Math.random() * letters.length)]
+      code += digits[Math.floor(Math.random() * digits.length)]
+    }
   } while (existing.has(code))
   return code
 }

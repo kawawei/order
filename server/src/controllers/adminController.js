@@ -73,16 +73,43 @@ exports.createMerchant = catchAsync(async (req, res, next) => {
     isSystem: true
   });
 
-  // 產生老闆員工編號，並建立老闆帳號
-  const employeeCode = `${merchantCode}-001`;
-  const owner = await Employee.create({
-    merchant: merchant._id,
-    name: ownerName || '老闆',
-    account: employeeCode,
-    email: undefined,
-    password: `${merchantCode}_Owner1234`,
-    role: managerRole._id
-  });
+  // 產生 6 碼英數交錯（字母-數字-字母-數字-字母-數字）的員工編號（不含商家前綴）
+  const generateEmployeeCode = () => {
+    const letters = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+    const digits = '23456789';
+    let code = '';
+    for (let i = 0; i < 3; i++) {
+      code += letters[Math.floor(Math.random() * letters.length)];
+      code += digits[Math.floor(Math.random() * digits.length)];
+    }
+    return code;
+  };
+
+  // 嘗試建立老闆帳號（避免隨機碼碰撞，最多嘗試 5 次）
+  let owner;
+  let employeeCode;
+  for (let attempt = 0; attempt < 5; attempt++) {
+    try {
+      employeeCode = generateEmployeeCode();
+      owner = await Employee.create({
+        merchant: merchant._id,
+        name: ownerName || '老闆',
+        account: employeeCode,
+        email: undefined,
+        password: `${merchantCode}_Owner1234`,
+        role: managerRole._id,
+        isOwner: true
+      });
+      break;
+    } catch (err) {
+      // 若為唯一索引衝突則重試
+      if (err && err.code === 11000) continue;
+      throw err;
+    }
+  }
+  if (!owner) {
+    return next(new AppError('生成員工編號失敗，請重試', 500));
+  }
 
   res.status(201).json({
     status: 'success',
@@ -201,7 +228,7 @@ exports.getAllMerchants = catchAsync(async (req, res, next) => {
   if (search) {
     queryObj.$or = [
       { businessName: { $regex: search, $options: 'i' } },
-      { email: { $regex: search, $options: 'i' } },
+      { merchantCode: { $regex: search, $options: 'i' } },
       { phone: { $regex: search, $options: 'i' } }
     ];
   }
@@ -214,7 +241,36 @@ exports.getAllMerchants = catchAsync(async (req, res, next) => {
     .select('-password')
     .sort({ createdAt: -1 })
     .skip(skip)
-    .limit(parseInt(limit));
+    .limit(parseInt(limit))
+    .lean();
+
+  // 附加老闆員工代碼（以 isOwner 為主，向後相容舊規則 merchantCode-001）
+  const merchantsWithOwner = await Promise.all(
+    merchants.map(async (m) => {
+      let ownerEmployeeCode = null;
+      try {
+        // 先以 isOwner 尋找
+        const ownerByFlag = await Employee.findOne({
+          merchant: m._id,
+          isOwner: true
+        }).select('account').lean();
+
+        if (ownerByFlag) {
+          ownerEmployeeCode = ownerByFlag.account;
+        } else {
+          // 向後相容：使用舊規則找尋
+          const ownerLegacy = await Employee.findOne({
+            merchant: m._id,
+            account: `${m.merchantCode}-001`
+          }).select('account').lean();
+          ownerEmployeeCode = ownerLegacy?.account || null;
+        }
+      } catch (e) {
+        ownerEmployeeCode = null;
+      }
+      return { ...m, ownerEmployeeCode };
+    })
+  );
   
   // 獲取總數
   const total = await Merchant.countDocuments(queryObj);
@@ -226,7 +282,7 @@ exports.getAllMerchants = catchAsync(async (req, res, next) => {
     page: parseInt(page),
     pages: Math.ceil(total / limit),
     data: {
-      merchants
+      merchants: merchantsWithOwner
     }
   });
 });

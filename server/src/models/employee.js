@@ -36,6 +36,10 @@ const employeeSchema = new mongoose.Schema({
     type: Boolean,
     default: true
   },
+  isOwner: {
+    type: Boolean,
+    default: false
+  },
   lastLogin: {
     type: Date
   }
@@ -44,6 +48,11 @@ const employeeSchema = new mongoose.Schema({
 });
 
 employeeSchema.index({ merchant: 1, account: 1 }, { unique: true });
+// 每個商家最多一個 isOwner 員工
+employeeSchema.index(
+  { merchant: 1, isOwner: 1 },
+  { unique: true, partialFilterExpression: { isOwner: true } }
+);
 
 employeeSchema.pre('save', async function(next) {
   if (!this.isModified('password')) return next();
