@@ -99,6 +99,7 @@ exports.createMerchant = catchAsync(async (req, res, next) => {
   // 嘗試建立老闆帳號（避免隨機碼碰撞，最多嘗試 5 次）
   let owner;
   let employeeCode;
+  const cleanedOwnerPhone = ownerPhone ? String(ownerPhone).replace(/\D/g, '') : undefined;
   for (let attempt = 0; attempt < 5; attempt++) {
     try {
       employeeCode = generateEmployeeCode();
@@ -107,6 +108,7 @@ exports.createMerchant = catchAsync(async (req, res, next) => {
         name: ownerName || '老闆',
         account: employeeCode,
         email: undefined,
+        phone: cleanedOwnerPhone || undefined,
         password: `${merchantCode}_Owner1234`,
         role: managerRole._id,
         isOwner: true
@@ -134,7 +136,7 @@ exports.createMerchant = catchAsync(async (req, res, next) => {
         id: owner._id,
         employeeCode,
         name: owner.name,
-        phone: ownerPhone || ''
+        phone: owner.phone || ''
       }
     }
   });
@@ -259,27 +261,33 @@ exports.getAllMerchants = catchAsync(async (req, res, next) => {
   const merchantsWithOwner = await Promise.all(
     merchants.map(async (m) => {
       let ownerEmployeeCode = null;
+      let ownerName = null;
+      let ownerPhone = null;
       try {
         // 先以 isOwner 尋找
         const ownerByFlag = await Employee.findOne({
           merchant: m._id,
           isOwner: true
-        }).select('account').lean();
+        }).select('account name phone').lean();
 
         if (ownerByFlag) {
           ownerEmployeeCode = ownerByFlag.account;
+          ownerName = ownerByFlag.name || null;
+          ownerPhone = ownerByFlag.phone || null;
         } else {
           // 向後相容：使用舊規則找尋
           const ownerLegacy = await Employee.findOne({
             merchant: m._id,
             account: `${m.merchantCode}-001`
-          }).select('account').lean();
+          }).select('account name phone').lean();
           ownerEmployeeCode = ownerLegacy?.account || null;
+          ownerName = ownerLegacy?.name || null;
+          ownerPhone = ownerLegacy?.phone || null;
         }
       } catch (e) {
         ownerEmployeeCode = null;
       }
-      return { ...m, ownerEmployeeCode };
+      return { ...m, ownerEmployeeCode, ownerName, ownerPhone };
     })
   );
   
@@ -314,24 +322,76 @@ exports.getMerchant = catchAsync(async (req, res, next) => {
   });
 });
 
-// 更新商家狀態
-exports.updateMerchantStatus = catchAsync(async (req, res, next) => {
-  const { status } = req.body;
-  
-  if (!['pending', 'active', 'suspended'].includes(status)) {
-    return next(new AppError('無效的狀態值', 400));
+// 更新商家（狀態與其他欄位）
+exports.updateMerchant = catchAsync(async (req, res, next) => {
+  const {
+    businessName,
+    merchantCode,
+    restaurantType,
+    taxId,
+    businessPhone,
+    businessAddress,
+    status,
+    ownerName,
+    ownerPhone
+  } = req.body || {};
+
+  const update = {};
+  if (businessName != null) update.businessName = String(businessName).trim();
+  if (merchantCode != null) update.merchantCode = String(merchantCode).trim();
+  if (restaurantType != null) update.restaurantType = String(restaurantType).trim();
+  if (typeof taxId !== 'undefined' && taxId !== null && taxId !== '') {
+    const cleanedTaxId = String(taxId).replace(/\D/g, '');
+    if (cleanedTaxId && cleanedTaxId.length !== 8) {
+      return next(new AppError('統一編號需為 8 位數字', 400));
+    }
+    update.taxId = cleanedTaxId || undefined;
   }
-  
+  if (typeof businessPhone !== 'undefined') {
+    const cleanedPhone = String(businessPhone || '').replace(/\D/g, '').slice(0, 10);
+    if (cleanedPhone && !/^\d{10}$/.test(cleanedPhone)) {
+      return next(new AppError('請提供有效的電話號碼（10位數字）', 400));
+    }
+    update.phone = cleanedPhone || '0000000000';
+  }
+  if (typeof businessAddress !== 'undefined') {
+    update.address = String(businessAddress || '').trim() || '未提供地址';
+  }
+  if (typeof status !== 'undefined') {
+    if (!['pending', 'active', 'suspended'].includes(status)) {
+      return next(new AppError('無效的狀態值', 400));
+    }
+    update.status = status;
+  }
+
+  // 若嘗試更新商家代碼，需檢查重複
+  if (update.merchantCode) {
+    const duplicated = await Merchant.findOne({ merchantCode: update.merchantCode, _id: { $ne: req.params.id } });
+    if (duplicated) {
+      return next(new AppError('商家代碼已存在', 400));
+    }
+  }
+
   const merchant = await Merchant.findByIdAndUpdate(
     req.params.id,
-    { status },
+    update,
     { new: true, runValidators: true }
   ).select('-password');
-  
+
   if (!merchant) {
     return next(new AppError('找不到指定的商家', 404));
   }
-  
+
+  // 更新老闆資料（若提供）
+  if (ownerName != null || ownerPhone != null) {
+    const owner = await Employee.findOne({ merchant: merchant._id, isOwner: true });
+    if (owner) {
+      if (ownerName != null) owner.name = String(ownerName).trim() || owner.name;
+      if (ownerPhone != null) owner.phone = (ownerPhone || '').toString().trim() || owner.phone;
+      await owner.save();
+    }
+  }
+
   res.status(200).json({
     status: 'success',
     data: {

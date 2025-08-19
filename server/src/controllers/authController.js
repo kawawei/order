@@ -52,7 +52,8 @@ exports.signup = catchAsync(async (req, res, next) => {
   const {
     email,
     password,
-    name: businessName,
+    name,
+    businessName: bodyBusinessName,
     phone,
     address,
     businessType,
@@ -61,6 +62,9 @@ exports.signup = catchAsync(async (req, res, next) => {
     restaurantType,
     taxId
   } = req.body;
+
+  // 兼容前端傳入的 businessName 或 name
+  const businessName = (bodyBusinessName || name || '').trim();
 
   // 基本欄位驗證
   if (!email || !password || !businessName || !phone || !address) {

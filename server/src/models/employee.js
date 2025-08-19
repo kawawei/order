@@ -21,6 +21,17 @@ const employeeSchema = new mongoose.Schema({
     trim: true,
     lowercase: true
   },
+  phone: {
+    type: String,
+    trim: true,
+    validate: {
+      validator: function(v) {
+        if (!v) return true;
+        return /^\d{8,15}$/.test(String(v));
+      },
+      message: '請提供有效的電話號碼（8-15位數字）'
+    }
+  },
   password: {
     type: String,
     required: [true, '請提供密碼'],

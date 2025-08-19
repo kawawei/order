@@ -33,7 +33,7 @@ router.route('/merchants')
 
 router.route('/merchants/:id')
   .get(adminController.getMerchant)
-  .patch(adminController.updateMerchantStatus)
+  .patch(adminController.updateMerchant)
   .delete(adminController.deleteMerchant);
 
 // 超級管理員查看特定商家統計信息

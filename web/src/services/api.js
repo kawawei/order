@@ -236,6 +236,8 @@ export const merchantAPI = {
   
   // 更新商家狀態
   updateMerchantStatus: (merchantId, status) => api.patch(`/admin/merchants/${merchantId}`, { status }),
+  // 更新商家（詳細）
+  updateMerchant: (merchantId, data) => api.patch(`/admin/merchants/${merchantId}`, data),
   
   // 新增商家（並建立老闆帳號）
   createMerchant: (data) => api.post('/admin/merchants', data),

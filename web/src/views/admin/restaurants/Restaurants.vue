@@ -399,8 +399,18 @@ const getStatusText = (status) => {
 const handleSaveEdit = async () => {
   if (!editingUser.value) return
   try {
-    // 目前後端僅提供狀態更新 API，其餘欄位後續擴充
-    await merchantAPI.updateMerchantStatus(editingUser.value.id, editingUser.value.status)
+    const payload = {
+      businessName: (editingUser.value.businessName || '').trim(),
+      merchantCode: (editingUser.value.merchantCode || '').trim(),
+      restaurantType: (editingUser.value.restaurantType || '').trim() || undefined,
+      taxId: (editingUser.value.taxId || '').trim() || undefined,
+      businessPhone: (editingUser.value.businessPhone || '').trim() || undefined,
+      businessAddress: (editingUser.value.businessAddress || '').trim() || undefined,
+      ownerName: (editingUser.value.ownerName || '').trim() || undefined,
+      ownerPhone: (editingUser.value.ownerPhone || '').trim() || undefined,
+      status: editingUser.value.status
+    }
+    await merchantAPI.updateMerchant(editingUser.value.id, payload)
     // 重新載入列表
     await loadMerchants(currentPage.value, searchQuery.value)
     isEditDialogOpen.value = false
