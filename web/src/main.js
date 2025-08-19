@@ -79,7 +79,8 @@ import {
   faExclamationTriangle,
   faTimesCircle,
   faEdit,
-  faPlusMinus
+  faPlusMinus,
+  faTags
 } from '@fortawesome/free-solid-svg-icons'
 
 /* Import Base Components */
@@ -155,7 +156,8 @@ library.add(
   faExclamationTriangle,
   faTimesCircle,
   faEdit,
-  faPlusMinus
+  faPlusMinus,
+  faTags
 )
 
 const app = createApp(App)

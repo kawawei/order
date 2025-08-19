@@ -215,4 +215,61 @@ export const reportAPI = {
   getSimpleReportStats: (params = {}) => api.get('/reports/simple', { params })
 };
 
+// 庫存管理 API
+export const inventoryAPI = {
+  // 獲取所有庫存項目
+  getAllInventory: (params = {}) => api.get('/inventory', { params }),
+  
+  // 獲取單個庫存項目
+  getInventory: (id) => api.get(`/inventory/${id}`),
+  
+  // 創建庫存項目
+  createInventory: (data) => api.post('/inventory', data),
+  
+  // 更新庫存項目
+  updateInventory: (id, data) => api.patch(`/inventory/${id}`, data),
+  
+  // 刪除庫存項目
+  deleteInventory: (id) => api.delete(`/inventory/${id}`),
+  
+  // 批量更新庫存
+  batchUpdateInventory: (data) => api.patch('/inventory/batch/update', data),
+  
+  // 獲取庫存統計概覽
+  getInventoryStats: () => api.get('/inventory/stats/overview'),
+  
+  // 獲取庫存分類統計
+  getInventoryCategories: () => api.get('/inventory/categories'),
+  
+  // 搜索庫存項目
+  searchInventory: (query) => api.get('/inventory/search', { params: { q: query } })
+};
+
+// 庫存分類管理 API
+export const inventoryCategoryAPI = {
+  // 獲取所有分類
+  getAllCategories: () => api.get('/inventory-categories'),
+  
+  // 獲取單個分類
+  getCategory: (id) => api.get(`/inventory-categories/${id}`),
+  
+  // 創建新分類
+  createCategory: (data) => api.post('/inventory-categories', data),
+  
+  // 更新分類
+  updateCategory: (id, data) => api.patch(`/inventory-categories/${id}`, data),
+  
+  // 刪除分類
+  deleteCategory: (id) => api.delete(`/inventory-categories/${id}`),
+  
+  // 更新分類排序
+  updateCategoriesOrder: (data) => api.patch('/inventory-categories/order', data),
+  
+  // 獲取分類統計
+  getCategoryStats: () => api.get('/inventory-categories/stats'),
+  
+  // 初始化系統預設分類
+  initializeSystemCategories: () => api.post('/inventory-categories/initialize')
+};
+
 export default api;

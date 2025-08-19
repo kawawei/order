@@ -10,6 +10,8 @@ const tableRoutes = require('./routes/tableRoutes');
 const menuRoutes = require('./routes/menuRoutes');
 const orderRoutes = require('./routes/orderRoutes');
 const reportRoutes = require('./routes/reportRoutes');
+const inventoryRoutes = require('./routes/inventoryRoutes');
+const inventoryCategoryRoutes = require('./routes/inventoryCategoryRoutes');
 
 // 配置 CORS 選項
 const corsOptions = {
@@ -38,6 +40,8 @@ app.use('/api/v1/tables', tableRoutes);
 app.use('/api/v1/menu', menuRoutes);
 app.use('/api/v1/orders', orderRoutes);
 app.use('/api/v1/reports', reportRoutes);
+app.use('/api/v1/inventory', inventoryRoutes);
+app.use('/api/v1/inventory-categories', inventoryCategoryRoutes);
 
 // 處理未找到的路由
 app.all('*', (req, res, next) => {
