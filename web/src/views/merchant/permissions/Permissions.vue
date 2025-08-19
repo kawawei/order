@@ -120,8 +120,8 @@
           </div>
         </form>
       </div>
-    </div>
-    
+        </div>
+
   </div>
 </template>
 
@@ -157,7 +157,10 @@ const filteredAssignableRoles = computed(() => {
   const list = Array.isArray(roles.value) ? roles.value : []
   // 僅允許這三種固定角色
   const fixed = list.filter(r => isOwnerRoleName(r?.name) || isManagerRoleName(r?.name) || isStaffRoleName(r?.name))
-  if (isCurrentOwner || isAdminActor) return fixed
+  if (isCurrentOwner || isAdminActor) {
+    // 老闆可指派管理人員/工作人員，但不顯示老闆避免誤選
+    return fixed.filter(r => !isOwnerRoleName(r?.name))
+  }
   if (isCurrentManager) return fixed.filter(r => isStaffRoleName(r?.name))
   return []
 })
@@ -328,12 +331,12 @@ const submitEmployeeForm = async () => {
   if (!isCurrentOwner && !isAdminActor) {
     if (!isCurrentManager) {
       alert('您沒有權限進行此操作')
-      return
-    }
+    return
+  }
     if (selectedRole && !isStaffRoleName(selectedRole.name)) {
       alert('管理人員僅能指派「工作人員」角色')
-      return
-    }
+    return
+  }
   }
   if (editingEmployee.value) {
     // 更新員工

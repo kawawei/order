@@ -115,15 +115,25 @@ exports.createEmployee = catchAsync(async (req, res, next) => {
   if (!role) return next(new AppError('角色不存在', 400));
   // 管理人員只能新增「工作人員」
   if (!req.admin && !req.merchant) {
-    const actorRoleName = (req.employee?.role?.name || '').trim().toLowerCase();
-    const isManager = actorRoleName === '管理人員' || actorRoleName === 'manager';
-    if (!isManager && !req.employee?.isOwner) {
-      return next(new AppError('您沒有權限執行此操作', 403));
-    }
+    const actorIsEmployeeOwner = req.employee?.isOwner === true;
     const newRoleName = (role.name || '').trim().toLowerCase();
-    const isStaffRole = newRoleName === '工作人員' || newRoleName === 'staff' || newRoleName === 'employee';
-    if (!isStaffRole) {
-      return next(new AppError('管理人員僅能新增「工作人員」', 403));
+    const isOwnerRole = newRoleName === '老闆' || newRoleName === 'owner';
+    if (actorIsEmployeeOwner) {
+      // 員工身分的老闆：可新增管理人員/工作人員，但不可新增老闆
+      if (isOwnerRole) {
+        return next(new AppError('不可新增老闆角色', 403));
+      }
+    } else {
+      // 非老闆員工（例如管理人員）：僅能新增工作人員
+      const actorRoleName = (req.employee?.role?.name || '').trim().toLowerCase();
+      const isManager = actorRoleName === '管理人員' || actorRoleName === 'manager';
+      if (!isManager) {
+        return next(new AppError('您沒有權限執行此操作', 403));
+      }
+      const isStaffRole = newRoleName === '工作人員' || newRoleName === 'staff' || newRoleName === 'employee';
+      if (!isStaffRole) {
+        return next(new AppError('管理人員僅能新增「工作人員」', 403));
+      }
     }
   }
   const employeeNumber = await generateEmployeeNumber(merchantId);
@@ -153,9 +163,16 @@ exports.updateEmployee = catchAsync(async (req, res, next) => {
     if (!role) return next(new AppError('角色不存在', 400));
     // 管理人員只能把對象設為「工作人員」
     if (!req.admin && !req.merchant) {
+      const actorIsEmployeeOwner = req.employee?.isOwner === true;
       const newRoleName = (role.name || '').trim().toLowerCase();
-      const isStaffRole = newRoleName === '工作人員' || newRoleName === 'staff' || newRoleName === 'employee';
-      if (!isStaffRole) return next(new AppError('管理人員僅能調整為「工作人員」', 403));
+      const isOwnerRole = newRoleName === '老闆' || newRoleName === 'owner';
+      if (actorIsEmployeeOwner) {
+        // 員工身分的老闆：可調整為管理人員/工作人員，但不可調整為老闆
+        if (isOwnerRole) return next(new AppError('不可將角色調整為「老闆」', 403));
+      } else {
+        const isStaffRole = newRoleName === '工作人員' || newRoleName === 'staff' || newRoleName === 'employee';
+        if (!isStaffRole) return next(new AppError('管理人員僅能調整為「工作人員」', 403));
+      }
     }
     employee.role = roleId;
   }
