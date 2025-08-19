@@ -575,3 +575,22 @@
 3. 持續Bug修復和系統優化
 
 *時間：2025-08-19 12:07*
+
+## 2025-08-19 23:16
+### 權限管理初始建置（後端與前端同步）
+1. 完成內容
+   - ✅ 新增 `server/src/config/permissions.js`，定義系統權限常數與角色對應表
+   - ✅ 調整控制器：`adminController.js`、`authController.js`、`employeeController.js`、`roleController.js`，統一權限處理邏輯
+   - ✅ 更新路由：`server/src/routes/roleRoutes.js`，補齊角色/權限維護端點
+   - ✅ 前端同步：更新 `web/src/services/api.js` 與 `web/src/views/merchant/permissions/Permissions.vue` 對接新的權限接口
+
+2. 影響範圍
+   - 後端角色/權限維護流程
+   - 商家端權限頁面資料讀寫
+
+3. 待辦事項（未完成）
+   - ⏳ 權限中間件與端點保護全面整合與測試
+   - ⏳ 前端基於權限的 UI 控制（按鈕顯示/禁用）
+   - ⏳ 操作審計日誌（誰在何時變更了哪些權限）
+
+*時間：2025-08-19 13:10*

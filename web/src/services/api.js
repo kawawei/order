@@ -9,12 +9,15 @@ const api = axios.create({
   withCredentials: true
 });
 
-// 請求攔截器：根據情境添加對應 token（分離 admin 與 merchant）
+// 請求攔截器：根據情境添加對應 token（分離 admin 與 merchant），並關閉後台請求的 cookie 傳遞
 api.interceptors.request.use(
   (config) => {
     try {
       const currentPath = window.location?.pathname || ''
-      const isAdminContext = currentPath.startsWith('/admin') || (config?.url || '').startsWith('/admin')
+      const requestUrl = config?.url || ''
+      const isAdminContext = currentPath.startsWith('/admin') || requestUrl.startsWith('/admin')
+      const isMerchantBackoffice = currentPath.startsWith('/merchant')
+      const isBackofficeContext = isAdminContext || isMerchantBackoffice
 
       const adminToken = localStorage.getItem('admin_token')
       const merchantToken = localStorage.getItem('merchant_token')
@@ -39,6 +42,11 @@ api.interceptors.request.use(
         config.headers.Authorization = `Bearer ${token}`
         // 標記使用了哪個身分的 token（僅存在於客戶端，不作為請求標頭，避免 CORS 預檢）
         config._sessionActor = actor
+      }
+
+      // 關閉後台情境的 cookie，以免跨分頁覆蓋（admin/merchant 後台改用 Authorization）
+      if (isBackofficeContext) {
+        config.withCredentials = false
       }
     } catch (e) {
       // 忽略 token 設置錯誤，走未登入狀態
@@ -285,6 +293,26 @@ export const reportAPI = {
   
   // 獲取簡化版報表統計（用於儀表板）
   getSimpleReportStats: (params = {}) => api.get('/reports/simple', { params })
+};
+
+// 角色與權限 API
+export const roleAPI = {
+  // 權限目錄（由後端提供標準鍵與顯示文字）
+  getPermissionCatalog: () => api.get('/roles/_catalog/permissions'),
+
+  // 角色 CRUD
+  getRoles: () => api.get('/roles'),
+  createRole: (data) => api.post('/roles', data),
+  updateRole: (roleId, data) => api.patch(`/roles/${roleId}`, data),
+  deleteRole: (roleId) => api.delete(`/roles/${roleId}`)
+};
+
+// 員工管理 API（商家後台）
+export const employeeAPI = {
+  getEmployees: () => api.get('/employees'),
+  createEmployee: (data) => api.post('/employees', data),
+  updateEmployee: (employeeId, data) => api.patch(`/employees/${employeeId}`, data),
+  deleteEmployee: (employeeId) => api.delete(`/employees/${employeeId}`)
 };
 
 // 庫存管理 API

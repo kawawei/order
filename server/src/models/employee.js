@@ -11,6 +11,11 @@ const employeeSchema = new mongoose.Schema({
     type: String,
     required: [true, '請提供員工姓名']
   },
+  employeeNumber: {
+    type: String,
+    required: [true, '請提供員工編號'],
+    trim: true
+  },
   account: {
     type: String,
     required: [true, '請提供員工帳號'],
@@ -59,6 +64,7 @@ const employeeSchema = new mongoose.Schema({
 });
 
 employeeSchema.index({ merchant: 1, account: 1 }, { unique: true });
+employeeSchema.index({ merchant: 1, employeeNumber: 1 }, { unique: true });
 // 每個商家最多一個 isOwner 員工
 employeeSchema.index(
   { merchant: 1, isOwner: 1 },

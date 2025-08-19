@@ -1,6 +1,7 @@
 const express = require('express');
 const roleController = require('../controllers/roleController');
 const { protectAny, requirePermissions } = require('../middleware/auth');
+const { PERMISSIONS } = require('../config/permissions');
 
 const router = express.Router();
 
@@ -16,6 +17,11 @@ router.route('/:id')
   .get(requirePermissions('角色:管理'), roleController.getRole)
   .patch(requirePermissions('角色:管理'), roleController.updateRole)
   .delete(requirePermissions('角色:管理'), roleController.deleteRole);
+
+// 查詢系統支援的權限清單（方便前端渲染）
+router.get('/_catalog/permissions', (req, res) => {
+  res.status(200).json({ status: 'success', data: { permissions: PERMISSIONS } });
+});
 
 module.exports = router;
 

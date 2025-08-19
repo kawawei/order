@@ -19,6 +19,23 @@ const getMerchantId = (req) => {
   throw new AppError('無法確定商家身份', 401);
 };
 
+const generateEmployeeNumber = async (merchantId) => {
+  const letters = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+  const digits = '23456789';
+  let code = '';
+  let exists = true;
+  while (exists) {
+    code = '';
+    for (let i = 0; i < 3; i++) {
+      code += letters[Math.floor(Math.random() * letters.length)];
+      code += digits[Math.floor(Math.random() * digits.length)];
+    }
+    const found = await Employee.findOne({ merchant: merchantId, employeeNumber: code }).lean();
+    exists = !!found;
+  }
+  return code;
+};
+
 // 員工登入
 exports.login = catchAsync(async (req, res, next) => {
   const { merchantId, account, password } = req.body;
@@ -57,13 +74,22 @@ exports.getAllEmployees = catchAsync(async (req, res, next) => {
 // 新增員工
 exports.createEmployee = catchAsync(async (req, res, next) => {
   const merchantId = getMerchantId(req);
-  const { name, account, password, roleId, email } = req.body;
-  if (!name || !account || !password || !roleId) {
-    return next(new AppError('請提供姓名、帳號、密碼與角色', 400));
+  const { name, roleId, email } = req.body;
+  if (!name || !roleId) {
+    return next(new AppError('請提供姓名與角色', 400));
   }
   const role = await Role.findOne({ _id: roleId, merchant: merchantId });
   if (!role) return next(new AppError('角色不存在', 400));
-  const employee = await Employee.create({ merchant: merchantId, name, account, password, role: roleId, email });
+  const employeeNumber = await generateEmployeeNumber(merchantId);
+  const employee = await Employee.create({
+    merchant: merchantId,
+    name,
+    employeeNumber,
+    account: employeeNumber,
+    password: employeeNumber,
+    role: roleId,
+    email
+  });
   res.status(201).json({ status: 'success', data: { employee } });
 });
 

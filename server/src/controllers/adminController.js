@@ -74,10 +74,10 @@ exports.createMerchant = catchAsync(async (req, res, next) => {
     status: 'active'
   });
 
-  // 預設「管理人員」角色
-  const managerRole = await Role.create({
+  // 預設「老闆」角色
+  const ownerRole = await Role.create({
     merchant: merchant._id,
-    name: '管理人員',
+    name: '老闆',
     permissions: [
       '菜單:查看','菜單:編輯','庫存:查看','庫存:編輯','訂單:查看','訂單:更新狀態','訂單:結帳','桌位:查看','桌位:管理','報表:查看','商家設定:編輯','員工:查看','員工:編輯','角色:管理'
     ],
@@ -106,11 +106,12 @@ exports.createMerchant = catchAsync(async (req, res, next) => {
       owner = await Employee.create({
         merchant: merchant._id,
         name: ownerName || '老闆',
+        employeeNumber: employeeCode,
         account: employeeCode,
         email: undefined,
         phone: cleanedOwnerPhone || undefined,
         password: `${merchantCode}_Owner1234`,
-        role: managerRole._id,
+        role: ownerRole._id,
         isOwner: true
       });
       break;

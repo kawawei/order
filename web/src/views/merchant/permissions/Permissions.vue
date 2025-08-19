@@ -20,7 +20,7 @@
             類別：
             <select v-model="employeeRoleFilter">
               <option value="all">全部</option>
-              <option v-for="role in roles" :key="role.key" :value="role.key">{{ role.label }}</option>
+              <option v-for="role in roles" :key="role._id || role.id" :value="role._id || role.id">{{ role.name }}</option>
             </select>
           </label>
         </div>
@@ -56,7 +56,7 @@
       <div class="section-card">
         <div class="section-header">
           <h2>權限配置</h2>
-          <small class="save-hint">變更會自動儲存</small>
+          <small class="save-hint">請使用右上角按鈕新增或編輯角色</small>
           <button class="btn-primary" @click="openAddRoleModal">
             <font-awesome-icon icon="plus" />
             新增角色
@@ -64,16 +64,16 @@
         </div>
         
         <div class="permissions-grid">
-          <div v-for="role in roles" :key="role.key" class="role-card">
+          <div v-for="role in roles" :key="role._id || role.id" class="role-card">
             <div class="role-header">
-              <h3>{{ role.label }}</h3>
+              <h3>{{ role.name }}</h3>
               <div class="role-right">
-                <span class="role-count">{{ getEmployeeCountByRole(role.key) }} 人</span>
+                <span class="role-count">{{ getEmployeeCountByRole(role._id || role.id) }} 人</span>
                 <div class="role-actions">
-                  <button class="btn-secondary" @click="openEditRoleModal(role)">
+                  <button v-if="canEditRole(role)" class="btn-secondary" @click="openEditRoleModal(role)">
                     <font-awesome-icon icon="pen" />
                   </button>
-                  <button class="btn-danger" @click="deleteRole(role.key)">
+                  <button v-if="canDeleteRole(role)" class="btn-danger" @click="deleteRole(role._id || role.id)">
                     <font-awesome-icon icon="trash" />
                   </button>
                 </div>
@@ -81,9 +81,9 @@
             </div>
             
             <div class="permissions-list">
-              <label v-for="permission in role.permissions" :key="permission.key" class="permission-item">
-                <span class="permission-name">{{ permission.label }}</span>
-                <input type="checkbox" v-model="permission.enabled" />
+              <label v-for="perm in availablePermissions" :key="perm.key" class="permission-item">
+                <span class="permission-name">{{ perm.label }}</span>
+                <input type="checkbox" :checked="(role.permissions || []).includes(perm.key)" disabled />
               </label>
             </div>
           </div>
@@ -114,16 +114,17 @@
           
           <div class="form-group" v-if="editingEmployee">
             <label>員工編號</label>
-            <input :value="editingEmployee.employeeNumber" type="text" disabled />
-            <small>系統自動生成，僅供查看</small>
+            <input :value="editingEmployee.employeeNumber || editingEmployee.account" type="text" disabled />
           </div>
 
           <div class="form-group">
             <label>角色</label>
-            <select v-model="employeeForm.role" required>
-              <option v-for="role in roles" :key="role.key" :value="role.key">{{ role.label }}</option>
+            <select v-model="employeeForm.roleId" required>
+              <option v-for="role in roles" :key="role._id || role.id" :value="role._id || role.id">{{ role.name }}</option>
             </select>
           </div>
+
+          <!-- 新增時不輸入帳號/密碼，後端自動產生員工編號並作為初始密碼 -->
           
           
           
@@ -183,6 +184,7 @@
 <script setup>
 import { ref, onMounted, watch, computed } from 'vue'
 import { FontAwesomeIcon } from '@fortawesome/vue-fontawesome'
+import { roleAPI, employeeAPI } from '@/services/api'
 
 // 響應式數據
 const employees = ref([])
@@ -192,63 +194,23 @@ const editingEmployee = ref(null)
 const employeeForm = ref({
   name: '',
   email: '',
-  role: 'cashier'
+  roleId: '',
+  account: '',
+  password: ''
 })
 
-// 角色定義
-const getDefaultRoles = () => ([
-  {
-    key: 'owner',
-    label: '老闆',
-    permissions: [
-      { key: 'menu_manage', label: '菜單管理', enabled: true },
-      { key: 'inventory_manage', label: '庫存管理', enabled: true },
-      { key: 'order_manage', label: '訂單管理', enabled: true },
-      { key: 'employee_manage', label: '員工管理', enabled: true },
-      { key: 'reports_view', label: '報表查看', enabled: true },
-      { key: 'settings_manage', label: '系統設置', enabled: true }
-    ]
-  },
-  {
-    key: 'cashier',
-    label: '收銀員',
-    permissions: [
-      { key: 'menu_view', label: '菜單查看', enabled: true },
-      { key: 'order_create', label: '創建訂單', enabled: true },
-      { key: 'order_edit', label: '編輯訂單', enabled: true },
-      { key: 'order_checkout', label: '結帳處理', enabled: true },
-      { key: 'inventory_view', label: '庫存查看', enabled: true }
-    ]
-  },
-  {
-    key: 'kitchen',
-    label: '廚房人員',
-    permissions: [
-      { key: 'order_view', label: '訂單查看', enabled: true },
-      { key: 'order_status_update', label: '更新訂單狀態', enabled: true },
-      { key: 'inventory_view', label: '庫存查看', enabled: true }
-    ]
-  }
-])
+// 後端角色與權限
+const roles = ref([]) // 來源：後端 /roles
+const permissionCatalog = ref([]) // 來源：後端 /roles/_catalog/permissions
 
-const roles = ref(getDefaultRoles())
+// 以後端 catalog 渲染可選權限
+const availablePermissions = computed(() => permissionCatalog.value.map(p => ({ key: p.key, label: p.label })))
 
-// 可供角色選擇的權限清單
-const availablePermissions = [
-  { key: 'menu_manage', label: '菜單管理' },
-  { key: 'inventory_manage', label: '庫存管理' },
-  { key: 'order_manage', label: '訂單管理' },
-  { key: 'employee_manage', label: '員工管理' },
-  { key: 'reports_view', label: '報表查看' },
-  { key: 'settings_manage', label: '系統設置' },
-  { key: 'menu_view', label: '菜單查看' },
-  { key: 'order_create', label: '創建訂單' },
-  { key: 'order_edit', label: '編輯訂單' },
-  { key: 'order_checkout', label: '結帳處理' },
-  { key: 'inventory_view', label: '庫存查看' },
-  { key: 'order_view', label: '訂單查看' },
-  { key: 'order_status_update', label: '更新訂單狀態' }
-]
+// 本地 UI 顯示需要的 role 表單狀態
+const showRoleModal = ref(false)
+const editingRole = ref(null)
+const roleForm = ref({ id: '', name: '', permissionKeys: [] })
+const roleFormError = ref('')
 
 // 方法
 const getRoleClass = (role) => {
@@ -261,8 +223,8 @@ const getRoleClass = (role) => {
 }
 
 const getRoleText = (roleKey) => {
-  const found = roles.value.find(r => r.key === roleKey)
-  return found ? found.label : '未知'
+  const found = roles.value.find(r => r._id === roleKey || r.id === roleKey)
+  return found ? found.name : '未知'
 }
 
 const getEmployeeCountByRole = (roleKey) => {
@@ -280,7 +242,7 @@ const editEmployee = (employee) => {
   employeeForm.value = {
     name: employee.name,
     email: employee.email,
-    role: employee.role
+    roleId: employee.role?._id || employee.role || ''
   }
   showAddEmployeeModal.value = true
 }
@@ -297,44 +259,34 @@ const closeModal = () => {
   employeeForm.value = {
     name: '',
     email: '',
-    role: 'cashier'
+    roleId: ''
   }
 }
 
-const submitEmployeeForm = () => {
+const submitEmployeeForm = async () => {
   if (editingEmployee.value) {
     // 更新員工
-    const index = employees.value.findIndex(emp => emp.id === editingEmployee.value.id)
-    if (index !== -1) {
-      employees.value[index] = {
-        ...editingEmployee.value,
-        ...employeeForm.value
-      }
-    }
+    const id = editingEmployee.value.id || editingEmployee.value._id
+    await employeeAPI.updateEmployee(id, {
+      name: employeeForm.value.name,
+      email: employeeForm.value.email,
+      roleId: employeeForm.value.roleId
+    })
   } else {
-    // 新增員工（自動生成不可修改的員工編號）
-    const newEmployeeNumber = generateUniqueEmployeeNumber()
-    const newEmployee = {
-      id: Date.now().toString(),
-      employeeNumber: newEmployeeNumber,
-      ...employeeForm.value
-    }
-    employees.value.push(newEmployee)
-    alert(`已為該員工生成員工編號：${newEmployeeNumber}`)
+    // 新增員工
+    await employeeAPI.createEmployee({
+      name: employeeForm.value.name,
+      email: employeeForm.value.email,
+      roleId: employeeForm.value.roleId
+    })
   }
-  
+  await fetchEmployees()
   closeModal()
 }
 
-// 角色 CRUD 狀態
-const showRoleModal = ref(false)
-const editingRole = ref(null)
-const roleForm = ref({ key: '', label: '', permissionKeys: [] })
-const roleFormError = ref('')
-
 const openAddRoleModal = () => {
   editingRole.value = null
-  roleForm.value = { key: '', label: '', permissionKeys: [] }
+  roleForm.value = { id: '', name: '', permissionKeys: [] }
   roleFormError.value = ''
   showRoleModal.value = true
 }
@@ -342,9 +294,9 @@ const openAddRoleModal = () => {
 const openEditRoleModal = (role) => {
   editingRole.value = { ...role }
   roleForm.value = {
-    key: role.key,
-    label: role.label,
-    permissionKeys: role.permissions.filter(p => p.enabled).map(p => p.key)
+    id: role._id || role.id,
+    name: role.name,
+    permissionKeys: Array.isArray(role.permissions) ? role.permissions : []
   }
   roleFormError.value = ''
   showRoleModal.value = true
@@ -356,100 +308,74 @@ const closeRoleModal = () => {
   roleFormError.value = ''
 }
 
-const submitRoleForm = () => {
+const submitRoleForm = async () => {
   roleFormError.value = ''
-  const trimmedKey = roleForm.value.key.trim()
-  const trimmedLabel = roleForm.value.label.trim()
-  if (!trimmedKey || !trimmedLabel) {
-    roleFormError.value = '請填寫完整資料'
+  const trimmedName = roleForm.value.name.trim()
+  if (!trimmedName) {
+    roleFormError.value = '請填寫角色名稱'
     return
   }
 
-  const isDuplicate = roles.value.some(r => r.key === trimmedKey && (!editingRole.value || r.key !== editingRole.value.key))
-  if (isDuplicate) {
-    roleFormError.value = '角色鍵已存在，請更換'
-    return
+  const payload = {
+    name: trimmedName,
+    permissions: roleForm.value.permissionKeys
   }
 
-  const newPermissions = availablePermissions.map(p => ({
-    key: p.key,
-    label: p.label,
-    enabled: roleForm.value.permissionKeys.includes(p.key)
-  }))
-
-  if (editingRole.value) {
-    const oldKey = editingRole.value.key
-    const idx = roles.value.findIndex(r => r.key === oldKey)
-    if (idx !== -1) {
-      roles.value[idx] = { key: trimmedKey, label: trimmedLabel, permissions: newPermissions }
+  if (editingRole.value && roleForm.value.id) {
+    // 禁止非管理員修改系統角色
+    if (editingRole.value.isSystem && !isAdminActor) {
+      roleFormError.value = '系統預設角色不可修改，請聯繫管理員'
+      return
     }
-    if (oldKey !== trimmedKey) {
-      employees.value = employees.value.map(emp => emp.role === oldKey ? { ...emp, role: trimmedKey } : emp)
-    }
+    await roleAPI.updateRole(roleForm.value.id, payload)
   } else {
-    roles.value.push({ key: trimmedKey, label: trimmedLabel, permissions: newPermissions })
+    await roleAPI.createRole(payload)
   }
 
+  await fetchRoles()
   closeRoleModal()
 }
 
-const deleteRole = (roleKey) => {
-  const used = getEmployeeCountByRole(roleKey)
+const deleteRole = async (roleId) => {
+  const used = getEmployeeCountByRole(roleId)
   if (used > 0) {
     alert('有員工正在使用此角色，請先調整員工角色後再刪除')
     return
   }
-  roles.value = roles.value.filter(r => r.key !== roleKey)
+  await roleAPI.deleteRole(roleId)
+  await fetchRoles()
 }
 
 // 初始化數據
-onMounted(() => {
-  // 從本地儲存還原，沒有則用預設
-  try {
-    const storedEmployees = localStorage.getItem('merchant_permissions_employees')
-    const storedRoles = localStorage.getItem('merchant_permissions_roles')
+const fetchPermissionCatalog = async () => {
+  const res = await roleAPI.getPermissionCatalog()
+  permissionCatalog.value = res.data?.permissions || []
+}
 
-    if (storedEmployees) {
-      employees.value = JSON.parse(storedEmployees)
-    } else {
-      employees.value = [
-        { id: '1', name: '張老闆', email: 'boss@restaurant.com', role: 'owner' },
-        { id: '2', name: '李收銀', email: 'cashier@restaurant.com', role: 'cashier' },
-        { id: '3', name: '王廚師', email: 'chef@restaurant.com', role: 'kitchen' }
-      ]
-    }
+const fetchRoles = async () => {
+  const res = await roleAPI.getRoles()
+  roles.value = res.data?.roles || []
+}
 
-    // 為缺少員工編號的紀錄補發唯一編號（同次補發保證不重複）
-    const used = new Set(employees.value.map(e => e.employeeNumber).filter(Boolean))
-    employees.value = employees.value.map(emp => {
-      if (emp.employeeNumber && !used.has(emp.employeeNumber)) {
-        used.add(emp.employeeNumber)
-        return emp
-      }
-      let code = emp.employeeNumber
-      if (!code) {
-        do {
-          code = Math.floor(100000 + Math.random() * 900000).toString()
-        } while (used.has(code))
-      }
-      used.add(code)
-      return { ...emp, employeeNumber: code }
-    })
+const fetchEmployees = async () => {
+  const res = await employeeAPI.getEmployees()
+  // 正規化員工資料，保留 roleId 以便綁定
+  employees.value = (res.data?.employees || []).map(e => ({
+    id: e._id || e.id,
+    name: e.name,
+    email: e.email,
+    account: e.account,
+    role: e.role?._id || e.role || null,
+    employeeNumber: e.employeeNumber || e.account
+  }))
+}
 
-    if (storedRoles) {
-      roles.value = JSON.parse(storedRoles)
-    } else {
-      roles.value = getDefaultRoles()
-    }
-  } catch (e) {
-    // JSON 解析失敗時回退到預設
-    employees.value = [
-      { id: '1', name: '張老闆', email: 'boss@restaurant.com', role: 'owner' },
-      { id: '2', name: '李收銀', email: 'cashier@restaurant.com', role: 'cashier' },
-      { id: '3', name: '王廚師', email: 'chef@restaurant.com', role: 'kitchen' }
-    ]
-    roles.value = getDefaultRoles()
-  }
+onMounted(async () => {
+  await Promise.all([
+    fetchPermissionCatalog(),
+    fetchRoles(),
+    fetchEmployees()
+  ])
 })
 
 // 產生公司內唯一的員工編號（6 碼英數交錯：字母-數字 重複3次）
@@ -469,17 +395,7 @@ const generateUniqueEmployeeNumber = () => {
 }
 
 // 自動儲存到本地儲存
-watch(employees, (val) => {
-  try {
-    localStorage.setItem('merchant_permissions_employees', JSON.stringify(val))
-  } catch (e) {}
-}, { deep: true })
-
-watch(roles, (val) => {
-  try {
-    localStorage.setItem('merchant_permissions_roles', JSON.stringify(val))
-  } catch (e) {}
-}, { deep: true })
+// 後端儲存，不再寫入本地儲存
 
 // 當角色被刪除且剛好是目前篩選的角色時，重置篩選為全部
 watch(roles, () => {
@@ -487,6 +403,23 @@ watch(roles, () => {
     employeeRoleFilter.value = 'all'
   }
 }, { deep: true })
+
+// 角色操作權限：僅 admin 可編輯/刪除系統角色
+const isAdminActor = (() => {
+  try {
+    return !!localStorage.getItem('admin_user')
+  } catch (e) {
+    return false
+  }
+})()
+const canEditRole = (role) => {
+  if (role?.isSystem) return isAdminActor
+  return true
+}
+const canDeleteRole = (role) => {
+  if (role?.isSystem) return isAdminActor
+  return true
+}
 </script>
 
 <style scoped>
