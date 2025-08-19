@@ -179,8 +179,10 @@ router.beforeEach((to, from, next) => {
     const userRole = getUserRole()
     if (userRole === routeRole) {
       next()
-    } else if (userRole === 'admin' && routeRole === 'merchant') {
-      // 超級管理員可以訪問商家後台
+    } else if (
+      // 超級管理員與員工可以訪問商家後台
+      (routeRole === 'merchant' && (userRole === 'admin' || userRole === 'employee'))
+    ) {
       next()
     } else {
       // 無權訪問時重定向到對應的登入頁面

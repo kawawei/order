@@ -1,18 +1,19 @@
 const jwt = require('jsonwebtoken');
 const Merchant = require('../models/merchant');
+const Employee = require('../models/employee');
 const AppError = require('../utils/appError');
 const catchAsync = require('../utils/catchAsync');
 
 // 生成 JWT Token - Generate JWT Token
-const signToken = (id, role = 'merchant') => {
-  return jwt.sign({ id, role }, process.env.JWT_SECRET, {
+const signToken = (id, role = 'merchant', extraPayload = {}) => {
+  return jwt.sign({ id, role, ...extraPayload }, process.env.JWT_SECRET, {
     expiresIn: process.env.JWT_EXPIRES_IN
   });
 };
 
-// 發送 JWT Token
+// 發送 JWT Token（商家）
 const createSendToken = (merchant, statusCode, res) => {
-  const token = signToken(merchant._id);
+  const token = signToken(merchant._id, 'merchant');
 
   // 移除密碼
   merchant.password = undefined;
@@ -22,6 +23,24 @@ const createSendToken = (merchant, statusCode, res) => {
     token,
     data: {
       merchant
+    }
+  });
+};
+
+// 發送 JWT Token（員工）
+const createSendEmployeeToken = (employee, statusCode, res) => {
+  const token = signToken(employee._id, 'employee', { merchantId: employee.merchant });
+  res.status(statusCode).json({
+    status: 'success',
+    token,
+    data: {
+      employee: {
+        id: employee._id,
+        name: employee.name,
+        account: employee.account,
+        merchant: employee.merchant,
+        role: employee.role || null
+      }
     }
   });
 };
@@ -116,30 +135,36 @@ exports.signup = catchAsync(async (req, res, next) => {
   }
 });
 
-// 商家登入
+// 商家/員工登入
 exports.login = catchAsync(async (req, res, next) => {
-  const { email, password } = req.body;
+  const { email, password, merchantCode, employeeCode } = req.body || {};
 
-  // 檢查是否提供郵箱和密碼
-  if (!email || !password) {
-    return next(new AppError('請提供電子郵件和密碼', 400));
+  // 分支一：使用商家代碼 + 員工編號登入（不需要密碼）
+  if (merchantCode && employeeCode) {
+    const merchant = await Merchant.findOne({ merchantCode });
+    if (!merchant) {
+      return next(new AppError('商家代碼或員工編號錯誤', 401));
+    }
+    const employee = await Employee.findOne({ merchant: merchant._id, account: employeeCode }).populate('role');
+    if (!employee || employee.isActive === false) {
+      return next(new AppError('商家代碼或員工編號錯誤', 401));
+    }
+    // 簽發員工 token
+    return createSendEmployeeToken(employee, 200, res);
   }
 
-  // 查找商家並選擇密碼字段
+  // 分支二：舊版商家 email/password 登入
+  if (!email || !password) {
+    return next(new AppError('請提供登入憑證', 400));
+  }
   const merchant = await Merchant.findOne({ email }).select('+password');
-
-  // 檢查商家是否存在及密碼是否正確
   if (!merchant || !(await merchant.correctPassword(password, merchant.password))) {
     return next(new AppError('電子郵件或密碼錯誤', 401));
   }
-
-  // 檢查商家狀態
   if (merchant.status === 'suspended') {
     return next(new AppError('您的帳戶已被停用，請聯繫客服', 403));
   }
-
-  // 生成並發送 Token
-  createSendToken(merchant, 200, res);
+  return createSendToken(merchant, 200, res);
 });
 
 // 保護路由中間件

@@ -376,7 +376,13 @@ export function useOrders(restaurantId = null) {
           console.warn('超級管理員查看商家後台需要指定餐廳ID')
           return null
         }
-        return userData._id || userData.id
+        // 員工或商家：優先使用標準化 merchantId，其次使用 userData.merchant（若為字串），再退回自身 _id/id（舊資料結構）
+        return (
+          userData.merchantId ||
+          (typeof userData.merchant === 'string' ? userData.merchant : null) ||
+          userData._id ||
+          userData.id
+        )
       }
       
       // 如果沒有用戶信息，嘗試從merchant存儲獲取

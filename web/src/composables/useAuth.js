@@ -13,18 +13,36 @@ export function useAuth() {
       token.value = response.token
       localStorage.setItem('token', response.token)
       
-      // 保存用戶信息
-      if (credentials.role === 'admin') {
-        user.value = response.data.admin
+      // 保存用戶信息（自動判斷回應身分），並標準化 merchantId
+      if (response?.data?.admin) {
+        const admin = response.data.admin
+        user.value = admin
         localStorage.setItem('user', JSON.stringify({
-          ...response.data.admin,
+          ...admin,
           role: 'admin'
         }))
-      } else {
-        user.value = response.data.merchant
+      } else if (response?.data?.employee) {
+        const employee = response.data.employee
+        const merchantId =
+          (typeof employee?.merchant === 'string' ? employee.merchant : null) ||
+          employee?.merchant?._id ||
+          employee?.merchant?.id ||
+          employee?.merchantId ||
+          null
+        user.value = employee
         localStorage.setItem('user', JSON.stringify({
-          ...response.data.merchant,
-          role: 'merchant'
+          ...employee,
+          role: 'employee',
+          merchantId
+        }))
+      } else if (response?.data?.merchant) {
+        const merchant = response.data.merchant
+        const merchantId = merchant?._id || merchant?.id || null
+        user.value = merchant
+        localStorage.setItem('user', JSON.stringify({
+          ...merchant,
+          role: 'merchant',
+          merchantId
         }))
       }
       

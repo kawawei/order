@@ -98,21 +98,12 @@ const handleLogin = async () => {
     const response = await login(form.value)
     console.log('登入響應:', response)
     
-    // 先存儲用戶信息
-    localStorage.setItem('user', JSON.stringify({
-      ...response.data.merchant,
-      role: 'merchant'
-    }))
-    
-    // 存儲 token
-    localStorage.setItem('token', response.token)
-    
     toast.success('登入成功')
     
     // 等待一下再重定向，讓用戶看到成功提示
     setTimeout(() => {
-      window.location.href = '/merchant/dashboard'
-    }, 1000)
+      router.push({ name: 'MerchantDashboard' })
+    }, 600)
   } catch (error) {
     console.error('登入失敗：', error)
     if (error.response) {

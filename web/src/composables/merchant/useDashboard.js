@@ -90,8 +90,12 @@ export function useDashboard(restaurantId = null) {
           console.warn('超級管理員查看商家後台需要指定餐廳ID')
           return null
         }
-        // 普通商家用戶，直接返回用戶ID
-        const merchantId = userData._id || userData.id
+        // 員工或商家：優先使用標準化 merchantId，其次使用 userData.merchant（若為字串），再退回自身 _id/id（舊資料結構）
+        const merchantId =
+          userData.merchantId ||
+          (typeof userData.merchant === 'string' ? userData.merchant : null) ||
+          userData._id ||
+          userData.id
         console.log(`使用商家用戶ID: ${merchantId}`)
         return merchantId
       }
@@ -205,29 +209,10 @@ export function useDashboard(restaurantId = null) {
         return
       }
       
-      // 調用桌台統計API
-      // 如果是超級管理員，需要傳遞merchantId參數
-      const storedUser = localStorage.getItem('user')
+      // 調用桌台統計API：一律帶上 merchantId 以兼容員工/管理員 Token 的授權判定
       let tableResponse
-      
-      console.log('loadBusinessStats - 用戶角色:', storedUser ? JSON.parse(storedUser).role : '未登入') // 添加調試日誌
-      
-      if (storedUser) {
-        const userData = JSON.parse(storedUser)
-        if (userData.role === 'admin' || userData.role === 'superadmin') {
-          // 超級管理員需要傳遞merchantId參數
-          console.log('loadBusinessStats - 超級管理員調用，使用merchantId參數') // 添加調試日誌
-          tableResponse = await api.get(`/tables/stats?merchantId=${merchantId}`)
-        } else {
-          // 商家直接呼叫自己的API
-          console.log('loadBusinessStats - 商家用戶調用，直接調用API') // 添加調試日誌
-          tableResponse = await api.get(`/tables/stats`)
-        }
-      } else {
-        // 默認情況，直接呼叫API
-        console.log('loadBusinessStats - 默認情況，直接調用API') // 添加調試日誌
-        tableResponse = await api.get(`/tables/stats`)
-      }
+      console.log('loadBusinessStats - 調用 /tables/stats，附帶 merchantId 參數')
+      tableResponse = await api.get('/tables/stats', { params: { merchantId } })
       
       if (tableResponse.status === 'success') {
         const stats = tableResponse.data.stats // 修正：從 data.stats 獲取統計數據

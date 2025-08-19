@@ -28,15 +28,18 @@ api.interceptors.response.use(
   (response) => response.data,
   (error) => {
     if (error.response) {
-      // 如果是 401 錯誤，清除 token
+      // 401：未授權 -> 清除 token 並導向登入頁
       if (error.response.status === 401) {
         localStorage.removeItem('token');
-        // 檢查當前路徑來決定重定向
         const isAdminPath = window.location.pathname.startsWith('/admin');
-        if (!error.config.url.includes('/admin/login')) {
+        if (
+          !error.config?.url?.includes('/admin/login') &&
+          !error.config?.url?.includes('/auth/login')
+        ) {
           window.location.href = isAdminPath ? '/admin/login' : '/merchant/login';
         }
       }
+      // 403：無權限 -> 不要登出，不跳轉，交由頁面自行處理錯誤
       return Promise.reject(error.response.data);
     }
     return Promise.reject(error);

@@ -16,11 +16,15 @@ const getMerchantId = (req) => {
   if (req.admin && !req.query.merchantId) {
     throw new AppError('超級管理員訪問商家後台需要指定merchantId參數', 400);
   }
-  // 否則使用當前登入的商家ID
-  if (!req.merchant) {
-    throw new AppError('無法獲取商家信息', 401);
+  // 否則使用當前登入的商家ID（支援員工從 token 進來）
+  if (req.merchant) {
+    return req.merchant.id;
   }
-  return req.merchant.id;
+  if (req.employee) {
+    // req.employee.merchant 可能是 ObjectId 或字串
+    return req.employee.merchant?.toString();
+  }
+  throw new AppError('無法獲取商家信息', 401);
 };
 
 // 獲取商家的所有桌次
