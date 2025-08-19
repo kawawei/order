@@ -38,11 +38,15 @@ export default {
       try {
         const response = await authAPI.login(formData.value);
         
-        // 保存 token
-        localStorage.setItem('token', response.token);
-        
-        // 保存商家信息
-        localStorage.setItem('merchant', JSON.stringify(response.data.merchant));
+        // 保存 token 與商家信息（使用分離鍵名）
+        localStorage.setItem('merchant_token', response.token);
+        if (response?.data?.merchant) {
+          localStorage.setItem('merchant_user', JSON.stringify({
+            ...response.data.merchant,
+            role: 'merchant',
+            merchantId: response.data.merchant?._id || response.data.merchant?.id || null
+          }));
+        }
         
         toast.success('登入成功！');
         

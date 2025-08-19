@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 const api = axios.create({
-  baseURL: 'http://localhost:3002/api/v1',
+  baseURL: import.meta.env?.VITE_API_URL || 'http://localhost:3002/api/v1',
   headers: {
     'Content-Type': 'application/json',
     'Accept': 'application/json'
@@ -9,42 +9,85 @@ const api = axios.create({
   withCredentials: true
 });
 
-// 請求攔截器：添加 token
+// 請求攔截器：根據情境添加對應 token（分離 admin 與 merchant）
 api.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('token');
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
+    try {
+      const currentPath = window.location?.pathname || ''
+      const isAdminContext = currentPath.startsWith('/admin') || (config?.url || '').startsWith('/admin')
+
+      const adminToken = localStorage.getItem('admin_token')
+      const merchantToken = localStorage.getItem('merchant_token')
+
+      // 規則：
+      // - admin 情境：使用 admin_token
+      // - 其他情境：優先 merchant_token，如沒有再回退 admin_token（允許 admin 探索商家頁）
+      let token = null
+      let actor = null
+      if (isAdminContext) {
+        token = adminToken
+        actor = 'admin'
+      } else if (merchantToken) {
+        token = merchantToken
+        actor = 'merchant'
+      } else if (adminToken) {
+        token = adminToken
+        actor = 'admin'
+      }
+
+      if (token) {
+        config.headers.Authorization = `Bearer ${token}`
+        // 標記使用了哪個身分的 token（僅存在於客戶端，不作為請求標頭，避免 CORS 預檢）
+        config._sessionActor = actor
+      }
+    } catch (e) {
+      // 忽略 token 設置錯誤，走未登入狀態
     }
-    return config;
+    return config
   },
-  (error) => {
-    return Promise.reject(error);
-  }
-);
+  (error) => Promise.reject(error)
+)
 
 // 響應攔截器：處理錯誤
 api.interceptors.response.use(
   (response) => response.data,
   (error) => {
     if (error.response) {
-      // 401：未授權 -> 清除 token 並導向登入頁
+      // 401：未授權 -> 僅清除對應情境的 token，不影響另一個身分的登入
       if (error.response.status === 401) {
-        localStorage.removeItem('token');
-        const isAdminPath = window.location.pathname.startsWith('/admin');
-        if (
-          !error.config?.url?.includes('/admin/login') &&
-          !error.config?.url?.includes('/auth/login')
-        ) {
-          window.location.href = isAdminPath ? '/admin/login' : '/merchant/login';
+        const reqUrl = error.config?.url || ''
+        const currentPath = window.location?.pathname || ''
+        const isAdminPath = currentPath.startsWith('/admin') || reqUrl.startsWith('/admin')
+        const actor = error.config?._sessionActor || error.config?.headers?.['X-Auth-Actor']
+
+        // 精準清除實際使用的 token 所對應的 session
+        if (actor === 'admin') {
+          localStorage.removeItem('admin_token')
+          localStorage.removeItem('admin_user')
+        } else if (actor === 'merchant') {
+          localStorage.removeItem('merchant_token')
+          localStorage.removeItem('merchant_user')
+        } else {
+          // 回退：按路徑判斷
+          if (isAdminPath) {
+            localStorage.removeItem('admin_token')
+            localStorage.removeItem('admin_user')
+          } else {
+            localStorage.removeItem('merchant_token')
+            localStorage.removeItem('merchant_user')
+          }
+        }
+
+        if (!reqUrl.includes('/admin/login') && !reqUrl.includes('/auth/login')) {
+          window.location.href = isAdminPath ? '/admin/login' : '/merchant/login'
         }
       }
       // 403：無權限 -> 不要登出，不跳轉，交由頁面自行處理錯誤
-      return Promise.reject(error.response.data);
+      return Promise.reject(error.response.data)
     }
-    return Promise.reject(error);
+    return Promise.reject(error)
   }
-);
+)
 
 export const authAPI = {
   // 商家註冊

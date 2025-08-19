@@ -77,20 +77,29 @@ export function useDashboard(restaurantId = null) {
         return urlRestaurantId
       }
       
-      // 再次嘗試從localStorage獲取用戶信息
+      // 再次嘗試從localStorage獲取用戶信息（新鍵優先）
+      const merchantUserRaw = localStorage.getItem('merchant_user')
+      console.log('localStorage 中的 merchant_user 數據:', merchantUserRaw)
+      if (merchantUserRaw) {
+        const mu = JSON.parse(merchantUserRaw)
+        const merchantId =
+          mu.merchantId ||
+          (typeof mu.merchant === 'string' ? mu.merchant : null) ||
+          mu._id ||
+          mu.id
+        console.log(`使用 merchant_user 中的 ID: ${merchantId}`)
+        return merchantId
+      }
+
+      // 回退舊鍵：統一 user
       const storedUser = localStorage.getItem('user')
-      console.log('localStorage 中的 user 數據:', storedUser) // 添加調試日誌
+      console.log('localStorage 中的 user 數據:', storedUser)
       if (storedUser) {
         const userData = JSON.parse(storedUser)
-        console.log('解析後的用戶數據:', userData) // 添加調試日誌
-        // 如果是超級管理員，需要從其他地方獲取商家ID
         if (userData.role === 'admin' || userData.role === 'superadmin') {
-          // 超級管理員查看商家後台時，應該有 restaurantId 參數
-          // 如果沒有，則無法獲取商家ID
           console.warn('超級管理員查看商家後台需要指定餐廳ID')
           return null
         }
-        // 員工或商家：優先使用標準化 merchantId，其次使用 userData.merchant（若為字串），再退回自身 _id/id（舊資料結構）
         const merchantId =
           userData.merchantId ||
           (typeof userData.merchant === 'string' ? userData.merchant : null) ||
@@ -99,15 +108,14 @@ export function useDashboard(restaurantId = null) {
         console.log(`使用商家用戶ID: ${merchantId}`)
         return merchantId
       }
-      
-      // 如果沒有用戶信息，嘗試從merchant存儲獲取
+
+      // 回退舊鍵：merchant
       const storedMerchant = localStorage.getItem('merchant')
-      console.log('localStorage 中的 merchant 數據:', storedMerchant) // 添加調試日誌
+      console.log('localStorage 中的 merchant 數據:', storedMerchant)
       if (storedMerchant) {
         const merchantData = JSON.parse(storedMerchant)
-        console.log('解析後的商家數據:', merchantData) // 添加調試日誌
         const merchantId = merchantData._id || merchantData.id
-        console.log(`使用merchant存儲中的ID: ${merchantId}`)
+        console.log(`使用 merchant 存儲中的ID: ${merchantId}`)
         return merchantId
       }
       

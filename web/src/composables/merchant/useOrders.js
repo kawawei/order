@@ -365,18 +365,26 @@ export function useOrders(restaurantId = null) {
         return restaurantId
       }
       
-      // 其次嘗試從localStorage獲取用戶信息
+      // 其次嘗試從localStorage獲取用戶信息（新鍵優先）
+      const merchantUserRaw = localStorage.getItem('merchant_user')
+      if (merchantUserRaw) {
+        const mu = JSON.parse(merchantUserRaw)
+        return (
+          mu.merchantId ||
+          (typeof mu.merchant === 'string' ? mu.merchant : null) ||
+          mu._id ||
+          mu.id
+        )
+      }
+
+      // 回退舊鍵：統一的 user（可能是 admin/merchant/employee）
       const storedUser = localStorage.getItem('user')
       if (storedUser) {
         const userData = JSON.parse(storedUser)
-        // 如果是超級管理員，需要從其他地方獲取商家ID
         if (userData.role === 'admin' || userData.role === 'superadmin') {
-          // 超級管理員查看商家後台時，應該有 restaurantId 參數
-          // 如果沒有，則無法獲取商家ID
           console.warn('超級管理員查看商家後台需要指定餐廳ID')
           return null
         }
-        // 員工或商家：優先使用標準化 merchantId，其次使用 userData.merchant（若為字串），再退回自身 _id/id（舊資料結構）
         return (
           userData.merchantId ||
           (typeof userData.merchant === 'string' ? userData.merchant : null) ||
@@ -384,8 +392,8 @@ export function useOrders(restaurantId = null) {
           userData.id
         )
       }
-      
-      // 如果沒有用戶信息，嘗試從merchant存儲獲取
+
+      // 再回退舊鍵：merchant
       const storedMerchant = localStorage.getItem('merchant')
       if (storedMerchant) {
         const merchantData = JSON.parse(storedMerchant)

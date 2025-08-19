@@ -32,11 +32,37 @@ const username = ref('')
 
 onMounted(() => {
   // 優先從統一的 user 鍵讀取，若沒有則回退舊的 merchant 鍵
-  const storedUserRaw = localStorage.getItem('user')
-  if (storedUserRaw) {
+  // 先讀 admin，再讀 merchant，再回退舊鍵
+  const adminRaw = localStorage.getItem('admin_user')
+  if (adminRaw) {
     try {
-      const userData = JSON.parse(storedUserRaw)
-      // 根據角色推導顯示名稱
+      const admin = JSON.parse(adminRaw)
+      username.value = admin.username || admin.name || '超級管理員'
+      return
+    } catch (e) {}
+  }
+
+  const merchantRaw = localStorage.getItem('merchant_user')
+  if (merchantRaw) {
+    try {
+      const mu = JSON.parse(merchantRaw)
+      const role = mu.role
+      let displayName = ''
+      if (role === 'employee') {
+        displayName = mu.name || mu.account || '員工'
+      } else {
+        displayName = mu.businessName || mu.name || mu.merchantCode || '商家'
+      }
+      username.value = displayName
+      return
+    } catch (e) {}
+  }
+
+  // 回退：舊鍵
+  const legacyUserRaw = localStorage.getItem('user')
+  if (legacyUserRaw) {
+    try {
+      const userData = JSON.parse(legacyUserRaw)
       let displayName = ''
       const role = userData.role
       if (role === 'admin' || role === 'superadmin') {
@@ -50,15 +76,13 @@ onMounted(() => {
       }
       username.value = displayName
       return
-    } catch (e) {
-      // 解析失敗則嘗試回退到 merchant
-    }
+    } catch (e) {}
   }
 
-  const storedMerchantRaw = localStorage.getItem('merchant')
-  if (storedMerchantRaw) {
+  const legacyMerchantRaw = localStorage.getItem('merchant')
+  if (legacyMerchantRaw) {
     try {
-      const merchantData = JSON.parse(storedMerchantRaw)
+      const merchantData = JSON.parse(legacyMerchantRaw)
       username.value = merchantData.businessName || merchantData.name || '商家'
     } catch (e) {
       username.value = '商家'
@@ -74,8 +98,9 @@ const handleLogout = async () => {
   try {
     logout()
     toast.success('登出成功')
-    await router.push({ name: 'MerchantLogin' })
-    window.location.reload() // 強制重新載入頁面
+    const isAdminContext = window.location.pathname.startsWith('/admin')
+    await router.push({ name: isAdminContext ? 'AdminLogin' : 'MerchantLogin' })
+    window.location.reload()
   } catch (error) {
     toast.error('登出失敗')
     console.error('登出時發生錯誤：', error)

@@ -3,8 +3,8 @@ import App from './App.vue'
 import router from './router'
 import axios from 'axios'
 
-// 配置 axios 默認值
-axios.defaults.baseURL = 'http://localhost:3002/api/v1'
+// 配置 axios 默認值（改用環境變數，可被服務封裝覆蓋）
+axios.defaults.baseURL = import.meta.env?.VITE_API_URL || 'http://localhost:3002/api/v1'
 axios.defaults.headers.common['Content-Type'] = 'application/json'
 
 /* Import Font Awesome */

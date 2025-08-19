@@ -16,12 +16,24 @@ const inventoryRoutes = require('./routes/inventoryRoutes');
 const inventoryCategoryRoutes = require('./routes/inventoryCategoryRoutes');
 
 // 配置 CORS 選項
+const allowedOriginsEnv = process.env.CORS_ORIGIN || 'http://localhost:5173,http://127.0.0.1:5173'
+const allowedOrigins = allowedOriginsEnv.split(',').map(o => o.trim())
+
 const corsOptions = {
-  origin: process.env.CORS_ORIGIN || 'http://localhost:5173',
+  origin: (origin, callback) => {
+    // 開發環境放寬限制，或非瀏覽器請求（如 Postman）
+    if (!origin || process.env.NODE_ENV !== 'production') {
+      return callback(null, true)
+    }
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true)
+    }
+    return callback(new Error('Not allowed by CORS'), false)
+  },
   credentials: true,
   optionsSuccessStatus: 200,
-  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],  // 添加 PATCH 方法 - Add PATCH method
-  allowedHeaders: ['Content-Type', 'Authorization', 'Accept']  // 明確指定允許的標頭 - Explicitly specify allowed headers
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'Accept']
 };
 
 // 初始化 Express 應用
@@ -32,6 +44,8 @@ connectDB();
 
 // 中間件
 app.use(cors(corsOptions));
+// 顯式處理預檢請求
+app.options('*', cors(corsOptions));
 app.use(express.json());
 app.use(morgan('dev'));
 
