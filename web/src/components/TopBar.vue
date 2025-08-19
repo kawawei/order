@@ -9,6 +9,16 @@
         <span class="username">{{ username }}</span>
       </div>
       <BaseButton 
+        v-if="showBackToAdmin"
+        variant="text" 
+        size="small" 
+        @click="backToAdmin"
+        class="back-button"
+      >
+        <font-awesome-icon icon="arrow-left" class="back-icon" />
+        返回管理員後台
+      </BaseButton>
+      <BaseButton 
         variant="text" 
         size="small" 
         @click="handleLogout"
@@ -22,12 +32,13 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, onMounted, computed } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 import { useAuth } from '../composables/useAuth'
 
 const router = useRouter()
-const { user, logout } = useAuth()
+const route = useRoute()
+const { user, logout, getUserRole } = useAuth()
 const username = ref('')
 
 onMounted(() => {
@@ -106,6 +117,24 @@ const handleLogout = async () => {
     console.error('登出時發生錯誤：', error)
   }
 }
+
+// 僅當超級管理員/管理員身分正在瀏覽商家後台時，顯示返回管理員後台按鈕
+const isAdminRole = (role) => role === 'admin' || role === 'superadmin'
+const showBackToAdmin = computed(() => {
+  const role = getUserRole()
+  const path = route.path || window.location.pathname || ''
+  const inMerchantArea = path.startsWith('/merchant')
+  return inMerchantArea && isAdminRole(role)
+})
+
+const backToAdmin = async () => {
+  try {
+    await router.push({ name: 'AdminRestaurants' })
+  } catch (e) {
+    // 回退到管理員儀表板
+    await router.push({ name: 'AdminDashboard' })
+  }
+}
 </script>
 
 <style>
@@ -159,6 +188,17 @@ const handleLogout = async () => {
   font-size: 0.9375rem;
   color: #1d1d1f;
   font-weight: 500;
+}
+
+.back-button {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.back-icon {
+  font-size: 1rem;
+  color: #666;
 }
 
 .logout-button {

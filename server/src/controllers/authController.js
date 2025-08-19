@@ -57,7 +57,9 @@ exports.signup = catchAsync(async (req, res, next) => {
     address,
     businessType,
     businessHours,
-    merchantCode: providedMerchantCode
+    merchantCode: providedMerchantCode,
+    restaurantType,
+    taxId
   } = req.body;
 
   // 基本欄位驗證
@@ -100,12 +102,20 @@ exports.signup = catchAsync(async (req, res, next) => {
     }
 
     // 創建新商家
+    // 清理與驗證
+    const cleanedTaxId = taxId ? String(taxId).replace(/\D/g, '') : '';
+    if (taxId && cleanedTaxId.length !== 8) {
+      return next(new AppError('統一編號需為 8 位數字', 400));
+    }
+
     const newMerchant = await Merchant.create({
       merchantCode,
       email,
       password,
       businessName,
       businessType: businessType || 'restaurant',
+      restaurantType: (restaurantType || '').trim(),
+      taxId: cleanedTaxId || undefined,
       phone,
       address: fullAddress,
       ...(city ? { city } : {}),

@@ -193,10 +193,18 @@
           <input v-model="newMerchant.merchantCode" type="text" placeholder="自行設定商家代碼" />
         </div>
         <div class="form-row">
+          <label>餐廳種類</label>
+          <input v-model="newMerchant.restaurantType" type="text" placeholder="例：早午餐、火鍋、燒肉..." />
+        </div>
+        <div class="form-row">
+          <label>統編（選填）</label>
+          <input v-model="newMerchant.taxId" type="text" placeholder="請輸入 8 位數字" maxlength="8" />
+        </div>
+        <div class="form-row">
           <label>餐廳電話（選填）</label>
           <input v-model="newMerchant.businessPhone" type="text" placeholder="餐廳聯絡電話" />
         </div>
-        <div class="form-row">
+        <div class="form-row col-span-2">
           <label>餐廳地址（選填）</label>
           <input v-model="newMerchant.businessAddress" type="text" placeholder="餐廳地址" />
         </div>
@@ -216,12 +224,82 @@
         <BaseButton :disabled="!canSubmitNew" @click="handleAddMerchant">新增</BaseButton>
       </template>
     </BaseDialog>
+
+    <!-- 編輯餐廳對話框 -->
+    <BaseDialog
+      :model-value="isEditDialogOpen"
+      @update:model-value="val => isEditDialogOpen = val"
+      title="編輯餐廳"
+      size="medium"
+    >
+      <div v-if="editingUser" class="add-merchant-form">
+        <div class="form-row">
+          <label>餐廳名稱</label>
+          <input v-model="editingUser.businessName" type="text" placeholder="請輸入餐廳名稱" />
+        </div>
+        <div class="form-row">
+          <label>商家代碼</label>
+          <input v-model="editingUser.merchantCode" type="text" placeholder="自行設定商家代碼" />
+        </div>
+        <div class="form-row">
+          <label>餐廳種類</label>
+          <input v-model="editingUser.restaurantType" type="text" placeholder="例：早午餐、火鍋、燒肉..." />
+        </div>
+        <div class="form-row">
+          <label>統編（選填）</label>
+          <input v-model="editingUser.taxId" type="text" placeholder="請輸入 8 位數字" maxlength="8" />
+        </div>
+        <div class="form-row">
+          <label>餐廳電話（選填）</label>
+          <input v-model="editingUser.businessPhone" type="text" placeholder="餐廳聯絡電話" />
+        </div>
+        <div class="form-row col-span-2">
+          <label>餐廳地址（選填）</label>
+          <input v-model="editingUser.businessAddress" type="text" placeholder="餐廳地址" />
+        </div>
+        <div class="form-row">
+          <label>老闆姓名</label>
+          <input v-model="editingUser.ownerName" type="text" placeholder="請輸入老闆姓名" />
+        </div>
+        <div class="form-row">
+          <label>老闆電話（選填）</label>
+          <input v-model="editingUser.ownerPhone" type="text" placeholder="連絡電話" />
+        </div>
+        <div class="form-row col-span-2">
+          <label>狀態</label>
+          <div class="status-group">
+            <button
+              type="button"
+              class="status-chip success"
+              :class="{ active: editingUser.status === 'active' }"
+              @click="editingUser.status = 'active'"
+            >
+              營業中
+            </button>
+            <button
+              type="button"
+              class="status-chip danger"
+              :class="{ active: editingUser.status === 'suspended' }"
+              @click="editingUser.status = 'suspended'"
+            >
+              暫停營業
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <template #footer>
+        <BaseButton variant="text" @click="isEditDialogOpen = false">取消</BaseButton>
+        <BaseButton :disabled="!editingUser" @click="handleSaveEdit">儲存</BaseButton>
+      </template>
+    </BaseDialog>
   </div>
 </template>
 
 <script setup>
 import { columns, useUsers } from './Restaurants.js'
 import { ref, computed } from 'vue'
+import { merchantAPI } from '@/services/api'
 
 const {
   searchQuery,
@@ -239,7 +317,9 @@ const {
   handleSearch,
   handlePageChange,
   loadMerchants,
-  addMerchant
+  addMerchant,
+  isEditDialogOpen,
+  editingUser
 } = useUsers()
 
 // 新增餐廳對話框狀態
@@ -247,6 +327,8 @@ const showAddDialog = ref(false)
 const newMerchant = ref({
   businessName: '',
   merchantCode: '',
+  restaurantType: '',
+  taxId: '',
   businessPhone: '',
   businessAddress: '',
   ownerName: '',
@@ -272,6 +354,8 @@ const handleAddMerchant = async () => {
     await addMerchant({
       businessName: newMerchant.value.businessName.trim(),
       merchantCode: newMerchant.value.merchantCode.trim(),
+      restaurantType: newMerchant.value.restaurantType.trim() || undefined,
+      taxId: (newMerchant.value.taxId || '').trim() || undefined,
       businessPhone: newMerchant.value.businessPhone.trim() || undefined,
       businessAddress: newMerchant.value.businessAddress.trim() || undefined,
       ownerName: newMerchant.value.ownerName.trim(),
@@ -281,6 +365,8 @@ const handleAddMerchant = async () => {
     newMerchant.value = { 
       businessName: '', 
       merchantCode: '', 
+      restaurantType: '',
+      taxId: '',
       businessPhone: '',
       businessAddress: '',
       ownerName: '', 
@@ -295,7 +381,6 @@ const handleAddMerchant = async () => {
 const getStatusVariant = (status) => {
   const variantMap = {
     'active': 'success',
-    'pending': 'warning',
     'suspended': 'danger'
   }
   return variantMap[status] || 'info'
@@ -305,10 +390,23 @@ const getStatusVariant = (status) => {
 const getStatusText = (status) => {
   const textMap = {
     'active': '營業中',
-    'pending': '待審核',
     'suspended': '暫停營業'
   }
   return textMap[status] || '未知'
+}
+
+// 儲存編輯
+const handleSaveEdit = async () => {
+  if (!editingUser.value) return
+  try {
+    // 目前後端僅提供狀態更新 API，其餘欄位後續擴充
+    await merchantAPI.updateMerchantStatus(editingUser.value.id, editingUser.value.status)
+    // 重新載入列表
+    await loadMerchants(currentPage.value, searchQuery.value)
+    isEditDialogOpen.value = false
+  } catch (e) {
+    console.error('更新商家失敗:', e)
+  }
 }
 </script>
 
@@ -316,14 +414,25 @@ const getStatusText = (status) => {
 
 <style scoped>
 .add-merchant-form {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.75rem 1rem;
 }
 .form-row {
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
+}
+.col-span-2 {
+  grid-column: span 1;
+}
+@media (min-width: 768px) {
+  .add-merchant-form {
+    grid-template-columns: 1fr 1fr;
+  }
+  .col-span-2 {
+    grid-column: span 2;
+  }
 }
 .form-row label {
   font-size: 0.875rem;
@@ -337,5 +446,35 @@ const getStatusText = (status) => {
 .error-text {
   color: #ff4d4f;
   font-size: 0.875rem;
+}
+
+/* 狀態樣式 */
+.status-group {
+  display: inline-flex;
+  gap: 0.5rem;
+}
+.status-chip {
+  padding: 0.375rem 0.75rem;
+  border-radius: 9999px;
+  border: 1px solid transparent;
+  background: #f5f5f5;
+  color: #555;
+  cursor: pointer;
+  transition: all 0.15s ease-in-out;
+}
+.status-chip:hover {
+  filter: brightness(0.98);
+}
+.status-chip.active {
+  color: #fff;
+}
+.status-chip.success.active {
+  background: #16a34a;
+}
+.status-chip.warning.active {
+  background: #f59e0b;
+}
+.status-chip.danger.active {
+  background: #ef4444;
 }
 </style>

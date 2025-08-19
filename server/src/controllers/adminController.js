@@ -36,7 +36,9 @@ exports.createMerchant = catchAsync(async (req, res, next) => {
     businessPhone,
     businessAddress,
     ownerName,
-    ownerPhone
+    ownerPhone,
+    restaurantType,
+    taxId
   } = req.body || {};
 
   if (!businessName || !merchantCode) {
@@ -52,13 +54,22 @@ exports.createMerchant = catchAsync(async (req, res, next) => {
   const internalEmail = `${merchantCode}@example.com`;
   const internalPassword = `${merchantCode}_Pass1234`;
 
+  // 轉換與驗證
+  const cleanedPhone = (businessPhone && String(businessPhone).replace(/\D/g, '').slice(0,10).padEnd(10, '0')) || '0000000000';
+  const cleanedTaxId = taxId ? String(taxId).replace(/\D/g, '') : '';
+  if (taxId && cleanedTaxId.length !== 8) {
+    return next(new AppError('統一編號需為 8 位數字', 400));
+  }
+
   const merchant = await Merchant.create({
     merchantCode,
     email: internalEmail,
     password: internalPassword,
     businessName,
     businessType: 'restaurant',
-    phone: (businessPhone && String(businessPhone).replace(/\D/g, '').slice(0,10).padEnd(10, '0')) || '0000000000',
+    restaurantType: (restaurantType || '').trim(),
+    taxId: cleanedTaxId || undefined,
+    phone: cleanedPhone,
     address: businessAddress || '未提供地址',
     status: 'active'
   });

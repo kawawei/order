@@ -7,6 +7,7 @@ import { merchantAPI } from '@/services/api'
 export const columns = [
   { key: 'businessName', label: '餐廳名稱' },
   { key: 'merchantCode', label: '商家代碼' },
+  { key: 'restaurantType', label: '餐廳種類' },
   { key: 'ownerEmployeeCode', label: '老闆員工代碼' },
   { key: 'phone', label: '聯絡電話' },
   { key: 'status', label: '狀態' },
@@ -20,12 +21,30 @@ export const useUsers = () => {
   const searchQuery = ref('')
   const loading = ref(false)
   const error = ref(null)
+  const isEditDialogOpen = ref(false)
+  const editingUser = ref(null)
   
   // 真實的商家數據
   const users = ref([])
   const totalUsers = ref(0)
   const currentPage = ref(1)
   const totalPages = ref(1)
+
+  const sanitizePhoneForDisplay = (value) => {
+    const phone = String(value || '').trim()
+    if (!phone) return ''
+    // 若為全 0 或非數字，視為無電話
+    if (/^0+$/.test(phone)) return ''
+    return phone
+  }
+
+  const formatAddress = (address) => {
+    if (!address) return ''
+    if (typeof address === 'string') return address
+    const parts = [address.city, address.district, address.street, address.address]
+      .filter(Boolean)
+    return parts.join(' ')
+  }
 
   // 加載商家數據
   const loadMerchants = async (page = 1, search = '') => {
@@ -42,16 +61,25 @@ export const useUsers = () => {
       const response = await merchantAPI.getAllMerchants(params)
       
       if (response.status === 'success') {
-        users.value = response.data.merchants.map(merchant => ({
-          id: merchant._id,
-          businessName: merchant.businessName,
-          merchantCode: merchant.merchantCode,
-          ownerEmployeeCode: merchant.ownerEmployeeCode,
-          phone: merchant.phone,
-          status: merchant.status,
-          createdAt: new Date(merchant.createdAt).toLocaleDateString('zh-TW'),
-          role: 'merchant'
-        }))
+        users.value = response.data.merchants.map(merchant => {
+          const businessPhone = sanitizePhoneForDisplay(merchant.phone || merchant.businessPhone)
+          return {
+            id: merchant._id,
+            businessName: merchant.businessName,
+            merchantCode: merchant.merchantCode,
+            restaurantType: merchant.restaurantType || merchant.category || merchant.businessType || '',
+            ownerEmployeeCode: merchant.ownerEmployeeCode,
+            phone: businessPhone,
+            businessPhone: businessPhone,
+            taxId: merchant.taxId || merchant.vatId || '',
+            businessAddress: formatAddress(merchant.address || merchant.businessAddress),
+            ownerName: merchant.owner?.name || merchant.ownerName || '',
+            ownerPhone: sanitizePhoneForDisplay(merchant.owner?.phone || merchant.ownerPhone),
+            status: merchant.status,
+            createdAt: new Date(merchant.createdAt).toLocaleDateString('zh-TW'),
+            role: 'merchant'
+          }
+        })
         
         totalUsers.value = response.data.total
         currentPage.value = response.data.page
@@ -86,15 +114,20 @@ export const useUsers = () => {
       const q = searchQuery.value.toLowerCase()
       return user.businessName.toLowerCase().includes(q) ||
              (user.merchantCode || '').toLowerCase().includes(q) ||
+             (user.restaurantType || '').toLowerCase().includes(q) ||
              (user.ownerEmployeeCode || '').toLowerCase().includes(q) ||
              (user.phone || '').includes(searchQuery.value)
     })
   })
 
   const editUser = (user) => {
-    // TODO: 實現編輯商家功能
-    console.log('編輯商家:', user)
-    toast.info('編輯功能開發中...')
+    editingUser.value = {
+      ...user,
+      phone: sanitizePhoneForDisplay(user.phone),
+      businessPhone: sanitizePhoneForDisplay(user.businessPhone),
+      ownerPhone: sanitizePhoneForDisplay(user.ownerPhone)
+    }
+    isEditDialogOpen.value = true
   }
 
   const toggleUserStatus = async (user) => {
@@ -195,6 +228,8 @@ export const useUsers = () => {
     error,
     currentPage,
     totalPages,
+    isEditDialogOpen,
+    editingUser,
     editUser,
     toggleUserStatus,
     resetPassword,

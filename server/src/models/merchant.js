@@ -37,6 +37,25 @@ const merchantSchema = new mongoose.Schema({
     default: 'restaurant',
     enum: ['restaurant', 'cafe', 'fastFood', 'other']
   },
+  // 餐廳種類（自由輸入，如：火鍋、燒肉、早午餐）
+  restaurantType: {
+    type: String,
+    trim: true,
+    default: ''
+  },
+  // 統一編號（8 碼數字）
+  taxId: {
+    type: String,
+    trim: true,
+    validate: {
+      validator: function(v) {
+        if (!v) return true; // 可選欄位
+        return /^\d{8}$/.test(String(v));
+      },
+      message: '統一編號需為 8 位數字'
+    },
+    default: ''
+  },
   phone: {
     type: String,
     required: [true, '請提供聯繫電話'],
