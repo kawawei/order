@@ -48,6 +48,13 @@
         <span class="nav-text">報表統計</span>
       </router-link>
 
+      <router-link :to="{ path: '/merchant/permissions', query: route.query }" class="nav-item">
+        <div class="icon-wrapper">
+          <font-awesome-icon icon="user-shield" />
+        </div>
+        <span class="nav-text">權限管理</span>
+      </router-link>
+
       <router-link :to="{ path: '/merchant/settings', query: route.query }" class="nav-item">
         <div class="icon-wrapper">
           <font-awesome-icon icon="cog" />
