@@ -269,11 +269,16 @@ export function useOrders(restaurantId = null) {
   const todayOrdersCount = computed(() => {
     const today = new Date()
     today.setHours(0, 0, 0, 0)
-    return [...liveOrders.value, ...historyOrders.value].filter(order => {
-      const orderDate = new Date(order.createdAt)
-      orderDate.setHours(0, 0, 0, 0)
-      return orderDate.getTime() === today.getTime()
-    }).length
+    
+    // 只計算今日結帳的訂單（包括即時訂單中已結帳的和歷史訂單）
+    const todayCompletedOrders = historyOrders.value.filter(order => {
+      if (!order.completedAt) return false
+      const completedDate = new Date(order.completedAt)
+      completedDate.setHours(0, 0, 0, 0)
+      return completedDate.getTime() === today.getTime()
+    })
+    
+    return todayCompletedOrders.length
   })
 
   const historyStats = computed(() => {

@@ -13,7 +13,8 @@ export function useDashboard(restaurantId = null) {
     pending: 0,
     preparing: 0,
     ready: 0,
-    totalToday: 0
+    totalToday: 0,
+    totalCustomers: 0
   })
   
   const businessStats = ref({
@@ -177,32 +178,170 @@ export function useDashboard(restaurantId = null) {
       pending: pendingOrders.value.length,
       preparing: preparingOrders.value.length,
       ready: readyOrders.value.length,
-      totalToday: 0 // 將在 loadTodayCheckoutTables 中更新
+      totalToday: 0, // 將在 loadTodayCheckoutTables 中更新
+      totalCustomers: 0 // 將在 loadTodayCheckoutTables 中更新
     }
+  }
+
+  // 按桌次和客人組別合併訂單的方法（與訂單管理頁面相同的邏輯）
+  const mergeOrdersByTable = (orders) => {
+    const tableGroups = {}
+    
+    orders.forEach(order => {
+      const tableId = order.tableId?._id || order.tableId
+      const tableNumber = getTableNumber(order.tableId)
+      
+      // 從訂單號解析客人組別和批次號
+      let customerGroup = '1' // 預設組別
+      let batchNumber = '1' // 預設批次號
+      
+      if (order.orderNumber && order.orderNumber.includes('-')) {
+        const parts = order.orderNumber.split('-')
+        if (parts.length >= 2) {
+          // 訂單號格式：T1-202508180001001
+          // parts[0] = T1, parts[1] = 202508180001001
+          const dateGroupBatch = parts[1]
+          
+          if (dateGroupBatch.length >= 12) {
+            // 202508180001001 中：
+            // 前8位是日期：20250818
+            // 中間4位是客人組別：0001
+            // 後3位是批次號：001
+            const groupPart = dateGroupBatch.substring(8, 12)
+            const batchPart = dateGroupBatch.substring(12, 15)
+            
+            // 去掉前導零
+            customerGroup = parseInt(groupPart).toString()
+            batchNumber = parseInt(batchPart).toString()
+          }
+        }
+      }
+      
+      // 使用桌次+客人組別作為分組鍵
+      const groupKey = `${tableId}_${customerGroup}`
+      
+      if (!tableGroups[groupKey]) {
+        tableGroups[groupKey] = {
+          tableId: tableId,
+          tableNumber: tableNumber,
+          customerGroup: customerGroup,
+          orders: [],
+          batchNumbers: new Set(), // 使用 Set 來收集批次號
+          totalAmount: 0,
+          itemCount: 0,
+          firstOrderTime: order.createdAt,
+          lastOrderTime: order.createdAt,
+          completedAt: order.completedAt,
+          tableCapacity: order.tableId?.capacity || 4, // 預設4人桌
+          status: 'completed' // 歷史訂單都是已完成狀態
+        }
+      }
+      
+      const group = tableGroups[groupKey]
+      group.orders.push(order)
+      group.batchNumbers.add(batchNumber) // 添加批次號到 Set
+      group.totalAmount += order.totalAmount
+      group.itemCount += order.items.length
+      
+      // 更新時間範圍
+      const orderTime = new Date(order.createdAt)
+      const firstTime = new Date(group.firstOrderTime)
+      const lastTime = new Date(group.lastOrderTime)
+      
+      if (orderTime < firstTime) {
+        group.firstOrderTime = order.createdAt
+      }
+      if (orderTime > lastTime) {
+        group.lastOrderTime = order.createdAt
+      }
+      
+      // 更新完成時間（使用最新的完成時間）
+      if (order.completedAt) {
+        const orderCompletedTime = new Date(order.completedAt)
+        const groupCompletedTime = group.completedAt ? new Date(group.completedAt) : null
+        
+        if (!groupCompletedTime || orderCompletedTime > groupCompletedTime) {
+          group.completedAt = order.completedAt
+        }
+      }
+    })
+    
+    // 轉換為數組並添加計算屬性
+    return Object.values(tableGroups).map(group => ({
+      ...group,
+      batchNumbers: Array.from(group.batchNumbers).sort((a, b) => parseInt(a) - parseInt(b)),
+      batchCount: group.batchNumbers.size,
+      tableOrderNumber: `T${group.tableNumber}-${group.customerGroup}`,
+      // 添加桌次容量信息
+      tableCapacity: group.tableCapacity
+    }))
+  }
+
+  // 獲取桌號的輔助函數
+  const getTableNumber = (tableInfo) => {
+    if (!tableInfo) return '1'
+    if (typeof tableInfo === 'string') return tableInfo
+    return tableInfo.tableNumber || tableInfo._id || '1'
   }
 
   // 載入今日總訂單統計
   const loadTodayTotalOrders = async () => {
     try {
       const merchantId = getMerchantId()
-      if (!merchantId) return
+      console.log('loadTodayTotalOrders - 商家ID:', merchantId)
       
-      // 獲取今天的日期
-      const today = new Date()
-      const todayStr = today.toISOString().slice(0, 10) // 格式：YYYY-MM-DD
+      if (!merchantId) {
+        console.warn('無法載入今日總訂單統計：商家ID不存在')
+        return
+      }
       
-      // 使用統計API獲取今天的總訂單數
-      const response = await orderService.getOrderStats(merchantId, {
-        date: todayStr
+      // 使用與訂單管理頁面相同的邏輯：先獲取所有歷史訂單，然後在前端過濾
+      const response = await orderService.getOrdersByMerchant(merchantId, {
+        status: 'completed,cancelled',
+        limit: 200,
+        sortBy: 'createdAt',
+        sortOrder: 'desc'
       })
       
+      console.log('loadTodayTotalOrders - API響應:', response)
+      
       if (response.status === 'success') {
-        // 更新今日總訂單數
-        orderStats.value.totalToday = response.data.totalOrders
+        // 按桌次分組合併訂單（與訂單管理頁面相同的邏輯）
+        const tableOrders = mergeOrdersByTable(response.data.orders)
+        
+        // 計算今日結帳的訂單數
+        const today = new Date()
+        today.setHours(0, 0, 0, 0)
+        
+        const todayCompletedOrders = tableOrders.filter(order => {
+          if (!order.completedAt) return false
+          const completedDate = new Date(order.completedAt)
+          completedDate.setHours(0, 0, 0, 0)
+          return completedDate.getTime() === today.getTime()
+        })
+        
+        // 計算今日客人數
+        const todayCustomers = todayCompletedOrders.reduce((sum, order) => {
+          return sum + (order.tableCapacity || 0)
+        }, 0)
+        
+        // 更新統計數據
+        orderStats.value = {
+          ...orderStats.value,
+          totalToday: todayCompletedOrders.length,
+          totalCustomers: todayCustomers
+        }
+        console.log('loadTodayTotalOrders - 更新統計:', {
+          totalToday: todayCompletedOrders.length,
+          totalCustomers: todayCustomers
+        })
+      } else {
+        console.warn('loadTodayTotalOrders - API返回失敗狀態:', response)
       }
     } catch (error) {
       console.error('載入今日總訂單統計失敗:', error)
       orderStats.value.totalToday = 0
+      orderStats.value.totalCustomers = 0
     }
   }
 
@@ -262,9 +401,39 @@ export function useDashboard(restaurantId = null) {
         const totalRevenue = todayStats.totalRevenue || 0
         const totalOrders = todayStats.totalOrders || 0
         
+        // 使用與 loadTodayTotalOrders 相同的邏輯來獲取今日總人數
+        const response = await orderService.getOrdersByMerchant(merchantId, {
+          status: 'completed,cancelled',
+          limit: 200,
+          sortBy: 'createdAt',
+          sortOrder: 'desc'
+        })
+        
+        let todayCustomers = 0
+        if (response.status === 'success') {
+          // 按桌次分組合併訂單
+          const tableOrders = mergeOrdersByTable(response.data.orders)
+          
+          // 計算今日結帳的訂單數
+          const today = new Date()
+          today.setHours(0, 0, 0, 0)
+          
+          const todayCompletedOrders = tableOrders.filter(order => {
+            if (!order.completedAt) return false
+            const completedDate = new Date(order.completedAt)
+            completedDate.setHours(0, 0, 0, 0)
+            return completedDate.getTime() === today.getTime()
+          })
+          
+          // 計算今日客人數
+          todayCustomers = todayCompletedOrders.reduce((sum, order) => {
+            return sum + (order.tableCapacity || 0)
+          }, 0)
+        }
+        
         // 計算今日統計
         revenueStats.value.todayRevenue = totalRevenue
-        revenueStats.value.avgOrderValue = totalOrders > 0 ? Math.round(totalRevenue / totalOrders) : 0
+        revenueStats.value.avgOrderValue = todayCustomers > 0 ? Math.round(totalRevenue / todayCustomers) : 0
         
         // 計算當月營業額
         const currentMonth = new Date()
@@ -280,9 +449,36 @@ export function useDashboard(restaurantId = null) {
           const monthStats = monthResponse.data
           revenueStats.value.monthRevenue = monthStats.totalRevenue || 0
           
-          // 計算日均營業額
-          const daysInMonth = monthEnd.getDate()
-          revenueStats.value.dailyAvg = daysInMonth > 0 ? Math.round(monthStats.totalRevenue / daysInMonth) : 0
+          // 計算有訂單的天數
+          const monthOrdersResponse = await orderService.getOrdersByMerchant(merchantId, {
+            status: 'completed,cancelled',
+            limit: 1000,
+            sortBy: 'createdAt',
+            sortOrder: 'desc'
+          })
+          
+          let daysWithOrders = 0
+          if (monthOrdersResponse.status === 'success') {
+            // 按桌次分組合併訂單
+            const tableOrders = mergeOrdersByTable(monthOrdersResponse.data.orders)
+            
+            // 計算當月有訂單的天數
+            const orderDates = new Set()
+            tableOrders.forEach(order => {
+              if (order.completedAt) {
+                const completedDate = new Date(order.completedAt)
+                // 檢查是否在當月範圍內
+                if (completedDate >= monthStart && completedDate <= monthEnd) {
+                  const dateStr = completedDate.toISOString().split('T')[0]
+                  orderDates.add(dateStr)
+                }
+              }
+            })
+            daysWithOrders = orderDates.size
+          }
+          
+          // 計算日均營業額（總營業額/有訂單的天數）
+          revenueStats.value.dailyAvg = daysWithOrders > 0 ? Math.round(monthStats.totalRevenue / daysWithOrders) : 0
           
           // 計算當月增長率（與上月比較）
           const lastMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1)
@@ -334,8 +530,44 @@ export function useDashboard(restaurantId = null) {
         const monthlyTarget = revenueStats.value.monthRevenue * 1.2
         revenueStats.value.targetAchievement = monthlyTarget > 0 ? Math.round((revenueStats.value.monthRevenue / monthlyTarget) * 100) : 0
         
-        // 暫時使用模擬數據，後續可以擴展為真實的尖峰時段計算
-        revenueStats.value.peakHour = '12:00-13:00'
+        // 計算尖峰時段（基於最近7天的訂單數據）
+        const sevenDaysAgo = new Date()
+        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
+        
+        const peakHourResponse = await orderService.getOrdersByMerchant(merchantId, {
+          startDate: sevenDaysAgo.toISOString(),
+          status: 'completed,cancelled',
+          limit: 1000
+        })
+        
+        if (peakHourResponse.status === 'success') {
+          // 按小時統計訂單數量
+          const hourStats = {}
+          
+          peakHourResponse.data.orders.forEach(order => {
+            if (order.completedAt) {
+              const completedHour = new Date(order.completedAt).getHours()
+              hourStats[completedHour] = (hourStats[completedHour] || 0) + 1
+            }
+          })
+          
+          // 找出訂單最多的時段
+          let peakHour = '12:00-13:00' // 預設值
+          let maxOrders = 0
+          
+          Object.entries(hourStats).forEach(([hour, count]) => {
+            if (count > maxOrders) {
+              maxOrders = count
+              const startHour = hour.padStart(2, '0')
+              const endHour = ((parseInt(hour) + 1) % 24).toString().padStart(2, '0')
+              peakHour = `${startHour}:00-${endHour}:00`
+            }
+          })
+          
+          revenueStats.value.peakHour = peakHour
+        } else {
+          revenueStats.value.peakHour = '12:00-13:00' // 預設值
+        }
       }
     } catch (error) {
       console.error('載入營業額統計失敗:', error)

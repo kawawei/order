@@ -80,8 +80,7 @@ exports.getReportStats = catchAsync(async (req, res, next) => {
         $group: {
           _id: groupBy,
           revenue: { $sum: '$totalAmount' },
-          orderCount: { $sum: 1 },
-          customerCount: { $sum: 1 } // 每個訂單代表一組客人
+          orderCount: { $sum: 1 }
         }
       },
       { $sort: { _id: 1 } }
@@ -109,10 +108,17 @@ exports.getReportStats = catchAsync(async (req, res, next) => {
       },
       {
         $group: {
-          _id: groupBy,
-          totalCustomers: { $sum: '$tableInfo.capacity' }, // 使用桌次容量
-          tableUsageCount: { $sum: 1 },
-          uniqueTables: { $addToSet: '$tableId' }
+          _id: { timeSlot: groupBy, tableId: '$tableId' },
+          tableCapacity: { $first: '$tableInfo.capacity' },
+          orderCount: { $sum: 1 }
+        }
+      },
+      {
+        $group: {
+          _id: '$_id.timeSlot',
+          totalCustomers: { $sum: { $multiply: ['$tableCapacity', '$orderCount'] } },
+          tableUsageCount: { $sum: '$orderCount' },
+          uniqueTables: { $addToSet: '$_id.tableId' }
         }
       },
       {
@@ -302,7 +308,7 @@ exports.getReportStats = catchAsync(async (req, res, next) => {
         financial: {
           totalRevenue,
           totalOrders,
-          averageOrderValue: totalOrders > 0 ? Math.round(totalRevenue / totalOrders) : 0,
+          averageOrderValue: totalCustomers > 0 ? Math.round(totalRevenue / totalCustomers) : 0,
           revenueChange: parseFloat(revenueChange),
           revenueTrend: revenueStats,
           // 新增基於實際庫存成本的財務數據
@@ -408,8 +414,15 @@ exports.getSimpleReportStats = catchAsync(async (req, res, next) => {
       },
       {
         $group: {
+          _id: '$tableId',
+          tableCapacity: { $first: '$tableInfo.capacity' },
+          orderCount: { $sum: 1 }
+        }
+      },
+      {
+        $group: {
           _id: null,
-          totalCustomers: { $sum: '$tableInfo.capacity' }
+          totalCustomers: { $sum: { $multiply: ['$tableCapacity', '$orderCount'] } }
         }
       }
     ]);

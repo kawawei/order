@@ -76,7 +76,11 @@
 
           <div class="total-orders">
             <span class="total-number">{{ orderStats.totalToday }}</span>
-            <span class="total-label">今日總訂單</span>
+            <span class="total-label">今日總組數</span>
+          </div>
+          <div class="total-customers">
+            <span class="total-number">{{ orderStats.totalCustomers }}</span>
+            <span class="total-label">今日總人數</span>
           </div>
         </div>
       </BaseCard>
@@ -132,7 +136,6 @@
         <template #header>
           <div class="card-header-content">
             <h3>營業額統計</h3>
-            <BaseTag variant="primary" size="small">+{{ revenueStats.todayGrowth }}%</BaseTag>
           </div>
         </template>
         <div class="revenue-stats">
@@ -140,7 +143,6 @@
             <div class="revenue-card">
               <div class="revenue-header">
                 <span class="revenue-label">今日營業額</span>
-                <BaseTag variant="primary" size="small">+{{ revenueStats.todayGrowth }}%</BaseTag>
               </div>
               <span class="revenue-number">{{ formatCurrency(revenueStats.todayRevenue) }}</span>
               <div class="revenue-details">
@@ -158,17 +160,12 @@
             <div class="revenue-card">
               <div class="revenue-header">
                 <span class="revenue-label">當月營業額</span>
-                <BaseTag variant="success" size="small">+{{ revenueStats.monthGrowth }}%</BaseTag>
               </div>
               <span class="revenue-number">{{ formatCurrency(revenueStats.monthRevenue) }}</span>
-              <div class="revenue-details">
+              <div class="revenue-details single-item">
                 <div class="revenue-item">
                   <span class="item-label">日均營業額</span>
                   <span class="item-value">{{ formatCurrency(revenueStats.dailyAvg) }}元</span>
-                </div>
-                <div class="revenue-item">
-                  <span class="item-label">預期達成率</span>
-                  <span class="item-value">{{ revenueStats.targetAchievement }}%</span>
                 </div>
               </div>
             </div>
