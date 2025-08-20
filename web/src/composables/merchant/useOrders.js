@@ -847,9 +847,20 @@ export function useOrders(restaurantId = null) {
     stopAutoRefresh()
   })
 
+  // 匯出狀態管理
+  const isExporting = ref(false)
+
   // 匯出歷史訂單
   const exportHistoryOrders = async (format = 'xlsx') => {
+    // 防止重複調用
+    if (isExporting.value) {
+      console.log('匯出進行中，請稍候...')
+      return
+    }
+
     try {
+      isExporting.value = true
+      
       const merchantId = getMerchantId()
       if (!merchantId) {
         console.error('無法獲取商家ID')
@@ -951,6 +962,8 @@ export function useOrders(restaurantId = null) {
       } else {
         alert(`匯出失敗: ${error.message || '未知錯誤'}`)
       }
+    } finally {
+      isExporting.value = false
     }
   }
 
@@ -960,6 +973,7 @@ export function useOrders(restaurantId = null) {
     selectedTimeRange,
     searchTerm,
     loading,
+    isExporting,
     currentDate,
     todayOrdersCount,
     

@@ -715,3 +715,85 @@
 - 建議建立權限監控機制，避免類似問題再次發生
 
 *時間：2025-08-20 15:30*
+
+## 2025-08-20 21:30
+### 歷史訂單匯出功能檔案下載問題修復｜Fix file download issues in order history export
+1. 問題描述｜Problem description
+   - 歷史訂單匯出功能無法正確下載檔案
+   - 檔案名稱顯示為亂碼或預設名稱
+   - Excel 檔案格式可能損壞或無法開啟
+   - 瀏覽器下載權限提示出現問題
+
+2. 問題分析｜Problem analysis
+   - 後端 CORS 配置缺少檔案名稱標頭支援
+   - 前端 blob 處理邏輯錯誤，直接使用 response 而非 response.data
+   - 標頭讀取順序不當，可能導致檔案名稱獲取失敗
+   - 缺少適當的錯誤處理和回退機制
+
+3. 解決方案｜Solution
+   - **後端 CORS 配置**：
+     * 在 `server/src/index.js` 中新增 `x-file-name` 標頭到 CORS 允許列表
+     * 確保檔案名稱可以正確傳遞到前端
+   - **前端 blob 處理修正**：
+     * 在 `web/src/composables/merchant/useOrders.js` 中修正 blob 創建邏輯
+     * 使用 `response.data` 而非 `response` 作為 blob 內容
+     * 調整標頭讀取順序，優先檢查小寫 `x-file-name`
+   - **檔案名稱生成規則**：
+     * 格式：`{日期}-{商家名稱}-歷史訂單.{格式}`
+     * 範例：`20250820-test11-歷史訂單.xlsx`
+     * 支援中文檔案名稱，使用 `decodeURIComponent` 解碼
+     * 回退機制：如果無法從標頭獲取檔案名稱，使用預設格式
+
+4. 技術細節｜Technical details
+   - **CORS 配置**：
+     ```javascript
+     app.use(cors({
+       origin: true,
+       credentials: true,
+       exposedHeaders: ['x-file-name']
+     }))
+     ```
+   - **檔案名稱處理**：
+     ```javascript
+     let fileName = response.headers?.['x-file-name'] || response.headers?.['X-File-Name']
+     if (fileName) {
+       fileName = decodeURIComponent(fileName)
+     } else {
+       fileName = `歷史訂單_${new Date().toISOString().split('T')[0]}`
+     }
+     fileName = `${fileName}.${format}`
+     ```
+   - **Blob 處理**：
+     ```javascript
+     const blob = new Blob([response.data], { 
+       type: format === 'csv' ? 'text/csv;charset=utf-8' : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+     })
+     ```
+
+5. 修正結果｜Results
+   - ✅ 檔案下載功能正常工作
+   - ✅ 檔案名稱正確顯示中文名稱
+   - ✅ Excel 檔案格式完整，可以正常開啟
+   - ✅ 瀏覽器下載權限提示正常
+   - ✅ 支援 CSV 和 Excel 兩種格式
+   - ✅ 具備完整的錯誤處理和回退機制
+
+6. 影響範圍｜Impact
+   - 商家端歷史訂單匯出功能完全修復
+   - 提升用戶體驗，檔案下載更加可靠
+   - 支援中文檔案名稱，符合本地化需求
+
+7. 相關檔案｜Related files
+   - 後端 CORS 配置：`server/src/index.js`
+   - 前端匯出邏輯：`web/src/composables/merchant/useOrders.js`
+   - API 服務：`web/src/services/api.js`
+   - 訂單控制器：`server/src/controllers/orderController.js`
+
+### 經驗總結｜Lessons learned
+- CORS 配置需要明確允許自定義標頭
+- Blob 處理時必須使用正確的響應數據結構
+- 檔案名稱處理需要考慮編碼和解碼
+- 建立完善的錯誤處理和回退機制很重要
+- 測試時需要檢查瀏覽器開發者工具的詳細日誌
+
+*時間：2025-08-20 21:30*

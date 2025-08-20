@@ -24,9 +24,10 @@
           size="small" 
           icon="download" 
           @click="() => exportHistoryOrders('xlsx')"
-          :loading="loading"
+          :loading="isExporting"
+          :disabled="isExporting"
         >
-          匯出歷史訂單
+          {{ isExporting ? '匯出中...' : '匯出歷史訂單' }}
         </BaseButton>
       </div>
     </header>
@@ -475,6 +476,7 @@ const {
   selectedTimeRange,
   searchTerm,
   loading,
+  isExporting,
   currentDate,
   todayOrdersCount,
   
