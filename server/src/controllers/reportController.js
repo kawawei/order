@@ -39,7 +39,13 @@ exports.getReportStats = catchAsync(async (req, res, next) => {
     const endOfDay = new Date(date);
     endOfDay.setHours(23, 59, 59, 999);
     dateQuery.createdAt = { $gte: startOfDay, $lte: endOfDay };
-    groupBy = { $dateToString: { format: "%H:00", date: "$createdAt" } };
+    // 使用台灣時區格式化時間
+    groupBy = { 
+      $dateToString: { 
+        format: "%H:00", 
+        date: { $add: ["$createdAt", 8 * 60 * 60 * 1000] } // 轉換為台灣時區 (UTC+8)
+      } 
+    };
   } else if (period === 'month' && startDate && endDate) {
     // 月份查詢
     const start = new Date(startDate);
@@ -47,7 +53,12 @@ exports.getReportStats = catchAsync(async (req, res, next) => {
     const end = new Date(endDate);
     end.setHours(23, 59, 59, 999);
     dateQuery.createdAt = { $gte: start, $lt: end };
-    groupBy = { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } };
+    groupBy = { 
+      $dateToString: { 
+        format: "%Y-%m-%d", 
+        date: { $add: ["$createdAt", 8 * 60 * 60 * 1000] } // 轉換為台灣時區 (UTC+8)
+      } 
+    };
   } else if (period === 'year' && startDate && endDate) {
     // 年份查詢
     const start = new Date(startDate);
@@ -55,7 +66,12 @@ exports.getReportStats = catchAsync(async (req, res, next) => {
     const end = new Date(endDate);
     end.setHours(23, 59, 59, 999);
     dateQuery.createdAt = { $gte: start, $lt: end };
-    groupBy = { $dateToString: { format: "%Y-%m", date: "$createdAt" } };
+    groupBy = { 
+      $dateToString: { 
+        format: "%Y-%m", 
+        date: { $add: ["$createdAt", 8 * 60 * 60 * 1000] } // 轉換為台灣時區 (UTC+8)
+      } 
+    };
   } else {
     // 預設查詢今天
     const today = new Date();
@@ -63,7 +79,12 @@ exports.getReportStats = catchAsync(async (req, res, next) => {
     const tomorrow = new Date(today);
     tomorrow.setDate(tomorrow.getDate() + 1);
     dateQuery.createdAt = { $gte: today, $lt: tomorrow };
-    groupBy = { $dateToString: { format: "%H:00", date: "$createdAt" } };
+    groupBy = { 
+      $dateToString: { 
+        format: "%H:00", 
+        date: { $add: ["$createdAt", 8 * 60 * 60 * 1000] } // 轉換為台灣時區 (UTC+8)
+      } 
+    };
   }
 
   try {
@@ -87,6 +108,7 @@ exports.getReportStats = catchAsync(async (req, res, next) => {
     ]);
 
     // 2. 獲取人流量統計（基於桌次使用，只計算已結帳的訂單）
+    // 使用與儀表板相同的邏輯：按桌次和客人組別分組
     const trafficStats = await Order.aggregate([
       { 
         $match: { 
@@ -107,8 +129,48 @@ exports.getReportStats = catchAsync(async (req, res, next) => {
         $unwind: '$tableInfo'
       },
       {
+        $addFields: {
+          // 從訂單號解析客人組別
+          customerGroup: {
+            $let: {
+              vars: {
+                orderParts: { $split: ['$orderNumber', '-'] }
+              },
+              in: {
+                $cond: {
+                  if: { $gte: [{ $size: '$$orderParts' }, 2] },
+                  then: {
+                    $let: {
+                      vars: {
+                        dateGroupBatch: { $arrayElemAt: ['$$orderParts', 1] }
+                      },
+                      in: {
+                        $cond: {
+                          if: { $gte: [{ $strLenBytes: '$$dateGroupBatch' }, 12] },
+                          then: {
+                            $toString: {
+                              $toInt: { $substr: ['$$dateGroupBatch', 8, 4] }
+                            }
+                          },
+                          else: '1'
+                        }
+                      }
+                    }
+                  },
+                  else: '1'
+                }
+              }
+            }
+          }
+        }
+      },
+      {
         $group: {
-          _id: { timeSlot: groupBy, tableId: '$tableId' },
+          _id: { 
+            timeSlot: groupBy, 
+            tableId: '$tableId',
+            customerGroup: '$customerGroup'
+          },
           tableCapacity: { $first: '$tableInfo.capacity' },
           orderCount: { $sum: 1 }
         }
@@ -116,7 +178,7 @@ exports.getReportStats = catchAsync(async (req, res, next) => {
       {
         $group: {
           _id: '$_id.timeSlot',
-          totalCustomers: { $sum: { $multiply: ['$tableCapacity', '$orderCount'] } },
+          totalCustomers: { $sum: '$tableCapacity' }, // 直接加總桌次容量，不乘以訂單數
           tableUsageCount: { $sum: '$orderCount' },
           uniqueTables: { $addToSet: '$_id.tableId' }
         }
@@ -268,18 +330,32 @@ exports.getReportStats = catchAsync(async (req, res, next) => {
       ? ((totalRevenue - previousPeriodStats) / previousPeriodStats * 100).toFixed(1)
       : 0;
 
-    // 6. 獲取高峰時段
+    // 6. 獲取高峰時段（使用最近7天數據，與儀表板保持一致）
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+    
     const peakHours = await Order.aggregate([
       { 
         $match: { 
           merchantId: new mongoose.Types.ObjectId(merchantId),
           status: 'completed', // 只計算已結帳的訂單
-          ...dateQuery 
+          createdAt: { $gte: sevenDaysAgo }
         } 
       },
       {
+        $addFields: {
+          // 轉換為台灣時區 (UTC+8)
+          localHour: {
+            $add: [
+              { $hour: '$createdAt' },
+              8 // 台灣時區偏移
+            ]
+          }
+        }
+      },
+      {
         $group: {
-          _id: { $hour: '$createdAt' },
+          _id: { $mod: ['$localHour', 24] }, // 確保小時在 0-23 範圍內
           orderCount: { $sum: 1 },
           revenue: { $sum: '$totalAmount' }
         }
@@ -413,8 +489,44 @@ exports.getSimpleReportStats = catchAsync(async (req, res, next) => {
         $unwind: '$tableInfo'
       },
       {
+        $addFields: {
+          // 從訂單號解析客人組別
+          customerGroup: {
+            $let: {
+              vars: {
+                orderParts: { $split: ['$orderNumber', '-'] }
+              },
+              in: {
+                $cond: {
+                  if: { $gte: [{ $size: '$$orderParts' }, 2] },
+                  then: {
+                    $let: {
+                      vars: {
+                        dateGroupBatch: { $arrayElemAt: ['$$orderParts', 1] }
+                      },
+                      in: {
+                        $cond: {
+                          if: { $gte: [{ $strLenBytes: '$$dateGroupBatch' }, 12] },
+                          then: {
+                            $toString: {
+                              $toInt: { $substr: ['$$dateGroupBatch', 8, 4] }
+                            }
+                          },
+                          else: '1'
+                        }
+                      }
+                    }
+                  },
+                  else: '1'
+                }
+              }
+            }
+          }
+        }
+      },
+      {
         $group: {
-          _id: '$tableId',
+          _id: { tableId: '$tableId', customerGroup: '$customerGroup' },
           tableCapacity: { $first: '$tableInfo.capacity' },
           orderCount: { $sum: 1 }
         }
@@ -422,7 +534,7 @@ exports.getSimpleReportStats = catchAsync(async (req, res, next) => {
       {
         $group: {
           _id: null,
-          totalCustomers: { $sum: { $multiply: ['$tableCapacity', '$orderCount'] } }
+          totalCustomers: { $sum: '$tableCapacity' } // 直接加總桌次容量，不乘以訂單數
         }
       }
     ]);

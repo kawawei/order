@@ -1,6 +1,7 @@
 // 報表統計頁面的 JavaScript 邏輯
-import { ref, onMounted, watch } from 'vue'
+import { ref, onMounted, watch, nextTick } from 'vue'
 import { reportAPI } from '@/services/api'
+import Chart from 'chart.js/auto'
 
 export function useReports() {
   // 響應式數據
@@ -43,6 +44,10 @@ export function useReports() {
     traffic: [],
     dishes: []
   })
+  
+  // 圖表實例
+  const revenueChart = ref(null)
+  const trafficChart = ref(null)
   
   // 切換時間週期
   const changePeriod = (period) => {
@@ -129,8 +134,8 @@ export function useReports() {
           profit: data.financial.totalProfit || 0,
           cost: data.financial.totalCost || 0,
           revenueChange: data.financial.revenueChange || 0,
-          profitChange: data.financial.revenueChange || 0, // 利潤變化與營收變化一致
-          costChange: 0, // 成本變化可以根據需要計算
+          profitChange: data.financial.profitChange || 0,
+          costChange: data.financial.costChange || 0,
           profitMargin: data.financial.profitMargin || 0,
           costRatio: data.financial.costRatio || 0
         }
@@ -152,6 +157,11 @@ export function useReports() {
           traffic: data.timeSeries.traffic || [],
           dishes: data.popularDishes || []
         }
+        
+        // 更新圖表
+        nextTick(() => {
+          updateCharts()
+        })
       }
     } catch (error) {
       console.error('載入報表數據失敗:', error)
@@ -243,6 +253,9 @@ export function useReports() {
   
   // 獲取熱門時段
   const getPeakHours = () => {
+    if (!trafficStats.value.peakHours || trafficStats.value.peakHours.length === 0) {
+      return '暫無數據'
+    }
     return trafficStats.value.peakHours.join('、')
   }
   
@@ -365,6 +378,100 @@ export function useReports() {
     }
   }
   
+  // 更新圖表
+  const updateCharts = () => {
+    // 銷毀現有圖表
+    if (revenueChart.value) {
+      revenueChart.value.destroy()
+      revenueChart.value = null
+    }
+    if (trafficChart.value) {
+      trafficChart.value.destroy()
+      trafficChart.value = null
+    }
+    
+    // 延遲一下確保 DOM 已更新
+    setTimeout(() => {
+      // 獲取 canvas 元素
+      const revenueCanvas = document.getElementById('revenueChart')
+      const trafficCanvas = document.getElementById('trafficChart')
+      
+      if (!revenueCanvas || !trafficCanvas) {
+        console.warn('找不到圖表 canvas 元素')
+        return
+      }
+    
+    // 繪製營收趨勢圖
+    const revenueCtx = revenueCanvas.getContext('2d')
+    revenueChart.value = new Chart(revenueCtx, {
+      type: 'line',
+      data: {
+        labels: chartData.value.revenue.map(item => item._id || ''),
+        datasets: [{
+          label: '營收',
+          data: chartData.value.revenue.map(item => item.revenue || 0),
+          borderColor: 'rgb(75, 192, 192)',
+          backgroundColor: 'rgba(75, 192, 192, 0.2)',
+          tension: 0.1,
+          fill: true
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: {
+            display: false
+          }
+        },
+        scales: {
+          y: {
+            beginAtZero: true,
+            ticks: {
+              callback: function(value) {
+                return '$' + value.toLocaleString()
+              }
+            }
+          }
+        }
+      }
+    })
+    
+    // 繪製人流量趨勢圖
+    const trafficCtx = trafficCanvas.getContext('2d')
+    trafficChart.value = new Chart(trafficCtx, {
+      type: 'bar',
+      data: {
+        labels: chartData.value.traffic.map(item => item._id || ''),
+        datasets: [{
+          label: '人流量',
+          data: chartData.value.traffic.map(item => item.totalCustomers || 0),
+          backgroundColor: 'rgba(54, 162, 235, 0.8)',
+          borderColor: 'rgb(54, 162, 235)',
+          borderWidth: 1
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: {
+            display: false
+          }
+        },
+        scales: {
+          y: {
+            beginAtZero: true,
+            ticks: {
+              stepSize: 1
+            }
+          }
+        }
+      }
+    })
+    }, 100) // 延遲 100ms
+  }
+  
   return {
     // 響應式數據
     selectedPeriod,
@@ -394,6 +501,7 @@ export function useReports() {
     getDisplayTime,
     getDatePickerTitle,
     getDatePickerLabel,
-    getDateInputType
+    getDateInputType,
+    updateCharts
   }
 }

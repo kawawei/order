@@ -174,14 +174,14 @@
       <div class="chart-container">
         <h3>營收趨勢</h3>
         <div class="chart-placeholder">
-          <canvas ref="revenueChart" width="400" height="200"></canvas>
+          <canvas id="revenueChart" width="400" height="200"></canvas>
         </div>
       </div>
 
       <div class="chart-container">
         <h3>人流量趨勢</h3>
         <div class="chart-placeholder">
-          <canvas ref="trafficChart" width="400" height="200"></canvas>
+          <canvas id="trafficChart" width="400" height="200"></canvas>
         </div>
       </div>
     </div>
@@ -213,17 +213,17 @@
 <script setup>
 import { useRoute } from 'vue-router'
 import { useReports } from './Reports.js'
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 
 const route = useRoute()
 
 // 日期選擇器相關狀態
 const showDatePicker = ref(false)
-const selectedDate = ref('')
 
 // 使用報表統計邏輯
 const {
   selectedPeriod,
+  selectedDate,
   selectedYear,
   isLoading,
   financialStats,
@@ -246,7 +246,8 @@ const {
   getDisplayTime,
   getDatePickerTitle,
   getDatePickerLabel,
-  getDateInputType
+  getDateInputType,
+  updateCharts
 } = useReports()
 
 // 日期選擇器方法
@@ -283,7 +284,6 @@ const selectYear = (year) => {
 }
 
 // 組件掛載時載入數據
-import { onMounted } from 'vue'
 onMounted(() => {
   loadReportData()
 })

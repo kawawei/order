@@ -300,8 +300,10 @@ export function useOrders(restaurantId = null) {
     const hourStats = {}
     completedOrders.forEach(order => {
       if (order.completedAt) {
-        const completedHour = new Date(order.completedAt).getHours()
-        hourStats[completedHour] = (hourStats[completedHour] || 0) + 1
+        // 轉換為台灣時區 (UTC+8)
+        const completedDate = new Date(order.completedAt)
+        const taiwanHour = (completedDate.getUTCHours() + 8) % 24
+        hourStats[taiwanHour] = (hourStats[taiwanHour] || 0) + 1
       }
     })
     
