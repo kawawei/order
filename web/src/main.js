@@ -80,7 +80,10 @@ import {
   faTimesCircle,
   faEdit,
   faPlusMinus,
-  faTags
+  faTags,
+  faFileExcel,
+  faTimes,
+  faSync
 } from '@fortawesome/free-solid-svg-icons'
 
 /* Import Base Components */
@@ -98,6 +101,7 @@ library.add(
   faUsers, 
   faBars, 
   faChevronLeft,
+  faFileExcel,
   faChevronRight,
   faSort,
   faSortUp,
@@ -157,7 +161,10 @@ library.add(
   faTimesCircle,
   faEdit,
   faPlusMinus,
-  faTags
+  faTags,
+  faFileExcel,
+  faTimes,
+  faSync
 )
 
 const app = createApp(App)

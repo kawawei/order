@@ -1,6 +1,10 @@
 /* 餐廳管理頁面樣式 */
 .restaurants-page {
   padding: 1.5rem;
+  height: calc(100vh - 60px - 3rem); /* 減去頂部導航欄高度和頁面padding */
+  overflow: hidden; /* 防止整個頁面捲動 */
+  display: flex;
+  flex-direction: column;
 }
 
 .page-header {
@@ -8,6 +12,7 @@
   justify-content: space-between;
   align-items: center;
   margin-bottom: 1.5rem;
+  flex-shrink: 0; /* 防止header被壓縮 */
 }
 
 .header-main {
@@ -25,6 +30,41 @@
 .restaurants-grid {
   display: grid;
   gap: 1.5rem;
+  flex: 1; /* 佔據剩餘空間 */
+  min-height: 0; /* 允許flex子元素縮小 */
+}
+
+/* 自定義卡片樣式 */
+.custom-card {
+  background-color: white;
+  border-radius: 12px;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05),
+              0 0 2px rgba(0, 0, 0, 0.03);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.card-header {
+  padding: 16px 20px;
+  border-bottom: 1px solid #f5f5f7;
+  background-color: white;
+  flex-shrink: 0; /* 防止header被壓縮 */
+}
+
+.card-content {
+  flex: 1; /* 佔據剩餘空間 */
+  min-height: 0; /* 允許flex子元素縮小 */
+  display: flex;
+  flex-direction: column;
+}
+
+.card-footer {
+  padding: 16px 20px;
+  border-top: 1px solid #f5f5f7;
+  background-color: #fafafa;
+  flex-shrink: 0; /* 防止footer被壓縮 */
 }
 
 .card-header-content {
@@ -47,9 +87,20 @@
   font-size: 0.875rem;
 }
 
+/* 表格容器樣式 */
+.table-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  flex: 1;
+  min-height: 0;
+}
+
 .restaurants-table {
   width: 100%;
-  overflow-x: auto;
+  height: 100%;
+  flex: 1;
+  min-height: 0;
 }
 
 .restaurant-name {
@@ -80,6 +131,7 @@
   color: #6b7280;
   font-size: 0.875rem;
   gap: 0.5rem;
+  flex: 1; /* 佔據剩餘空間 */
 }
 
 .loading-state svg {
@@ -96,6 +148,7 @@
   font-size: 0.875rem;
   gap: 0.5rem;
   flex-direction: column;
+  flex: 1; /* 佔據剩餘空間 */
 }
 
 .error-state svg {
@@ -108,9 +161,6 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 1rem 0;
-  border-top: 1px solid #e5e7eb;
-  margin-top: 1rem;
 }
 
 .pagination-info {
@@ -125,6 +175,11 @@
 
 /* 響應式設計 */
 @media (max-width: 768px) {
+  .restaurants-page {
+    padding: 1rem;
+    height: calc(100vh - 60px - 2rem);
+  }
+  
   .page-header {
     flex-direction: column;
     align-items: flex-start;

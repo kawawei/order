@@ -1,9 +1,43 @@
 const express = require('express');
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
 const adminController = require('../controllers/adminController');
 const authController = require('../controllers/authController');
 const AppError = require('../utils/appError');
 
 const router = express.Router();
+
+// 設定 multer 儲存配置
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    const uploadDir = path.join(__dirname, '../tmp');
+    if (!fs.existsSync(uploadDir)) {
+      fs.mkdirSync(uploadDir, { recursive: true });
+    }
+    cb(null, uploadDir);
+  },
+  filename: function (req, file, cb) {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    cb(null, 'import-' + uniqueSuffix + path.extname(file.originalname));
+  }
+});
+
+const upload = multer({ 
+  storage: storage,
+  fileFilter: function (req, file, cb) {
+    const allowedTypes = ['.xlsx', '.xls'];
+    const ext = path.extname(file.originalname).toLowerCase();
+    if (allowedTypes.includes(ext)) {
+      cb(null, true);
+    } else {
+      cb(new Error('只允許上傳 Excel 檔案 (.xlsx, .xls)'), false);
+    }
+  },
+  limits: {
+    fileSize: 5 * 1024 * 1024 // 限制 5MB
+  }
+});
 
 // 初始化超級管理員（只能在系統初始化時使用一次）
 router.post('/init-super-admin', adminController.createSuperAdmin);
@@ -30,6 +64,9 @@ router.route('/')
 router.route('/merchants')
   .get(adminController.getAllMerchants)
   .post(adminController.createMerchant);
+
+// 匯入餐廳路由
+router.post('/merchants/import', upload.single('file'), adminController.importMerchants);
 
 router.route('/merchants/:id')
   .get(adminController.getMerchant)

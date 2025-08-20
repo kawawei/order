@@ -101,6 +101,13 @@ const merchantSchema = new mongoose.Schema({
     sunday: { open: String, close: String }
   },
 
+  // 老闆員工編號（用於快速識別老闆）
+  ownerEmployeeCode: {
+    type: String,
+    trim: true,
+    default: ''
+  },
+
   // 狀態信息
   status: {
     type: String,

@@ -9,6 +9,7 @@ export const columns = [
   { key: 'merchantCode', label: '商家代碼' },
   { key: 'restaurantType', label: '餐廳種類' },
   { key: 'ownerEmployeeCode', label: '老闆員工代碼' },
+  { key: 'businessPhone', label: '店家電話' },
   { key: 'phone', label: '聯絡電話' },
   { key: 'status', label: '狀態' },
   { key: 'createdAt', label: '註冊時間' },
@@ -63,18 +64,19 @@ export const useUsers = () => {
       if (response.status === 'success') {
         users.value = response.data.merchants.map(merchant => {
           const businessPhone = sanitizePhoneForDisplay(merchant.phone || merchant.businessPhone)
+          const ownerPhone = sanitizePhoneForDisplay(merchant.owner?.phone || merchant.ownerPhone)
           return {
             id: merchant._id,
             businessName: merchant.businessName,
             merchantCode: merchant.merchantCode,
             restaurantType: merchant.restaurantType || merchant.category || merchant.businessType || '',
-            ownerEmployeeCode: merchant.ownerEmployeeCode,
+            ownerEmployeeCode: merchant.ownerEmployeeCode || '',
             phone: businessPhone,
             businessPhone: businessPhone,
             taxId: merchant.taxId || merchant.vatId || '',
             businessAddress: formatAddress(merchant.address || merchant.businessAddress),
             ownerName: merchant.owner?.name || merchant.ownerName || '',
-            ownerPhone: sanitizePhoneForDisplay(merchant.owner?.phone || merchant.ownerPhone),
+            ownerPhone: ownerPhone,
             status: merchant.status,
             createdAt: new Date(merchant.createdAt).toLocaleDateString('zh-TW'),
             role: 'merchant'

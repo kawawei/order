@@ -305,7 +305,16 @@ export const merchantAPI = {
   createMerchant: (data) => api.post('/admin/merchants', data),
   
   // 刪除商家
-  deleteMerchant: (merchantId) => api.delete(`/admin/merchants/${merchantId}`)
+  deleteMerchant: (merchantId) => api.delete(`/admin/merchants/${merchantId}`),
+  
+  // 匯入商家（Excel）
+  importMerchants: (formData) => {
+    return api.post('/admin/merchants/import', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data'
+      }
+    })
+  }
 };
 
 export const menuService = {

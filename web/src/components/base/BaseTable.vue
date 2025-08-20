@@ -1,38 +1,40 @@
 <template>
   <div class="table-container" :class="{ 'is-loading': loading }">
-    <table class="base-table" :class="{ hoverable, bordered }">
-      <thead>
-        <tr>
-          <th v-for="column in columns" :key="column.key" :style="{ width: column.width }">
-            {{ column.label }}
-            <font-awesome-icon 
-              v-if="column.sortable" 
-              :icon="getSortIcon(column.key)"
-              class="sort-icon"
-              @click="handleSort(column.key)"
-            />
-          </th>
-        </tr>
-      </thead>
-      <tbody>
-        <template v-if="loading">
-          <tr v-for="n in 3" :key="n" class="loading-row">
-            <td v-for="column in columns" :key="column.key">
-              <div class="loading-cell"></div>
-            </td>
+    <div class="table-wrapper">
+      <table class="base-table" :class="{ hoverable, bordered }">
+        <thead>
+          <tr>
+            <th v-for="column in columns" :key="column.key" :style="{ width: column.width }">
+              {{ column.label }}
+              <font-awesome-icon 
+                v-if="column.sortable" 
+                :icon="getSortIcon(column.key)"
+                class="sort-icon"
+                @click="handleSort(column.key)"
+              />
+            </th>
           </tr>
-        </template>
-        <template v-else>
-          <tr v-for="(row, index) in data" :key="index">
-            <td v-for="column in columns" :key="column.key">
-              <slot :name="column.key" :row="row">
-                {{ row[column.key] }}
-              </slot>
-            </td>
-          </tr>
-        </template>
-      </tbody>
-    </table>
+        </thead>
+        <tbody>
+          <template v-if="loading">
+            <tr v-for="n in 3" :key="n" class="loading-row">
+              <td v-for="column in columns" :key="column.key">
+                <div class="loading-cell"></div>
+              </td>
+            </tr>
+          </template>
+          <template v-else>
+            <tr v-for="(row, index) in data" :key="index">
+              <td v-for="column in columns" :key="column.key">
+                <slot :name="column.key" :row="row">
+                  {{ row[column.key] }}
+                </slot>
+              </td>
+            </tr>
+          </template>
+        </tbody>
+      </table>
+    </div>
 
     <div v-if="!loading && data.length === 0" class="empty-state">
       <slot name="empty">
@@ -92,11 +94,20 @@ const handleSort = (columnKey) => {
 <style scoped>
 .table-container {
   width: 100%;
-  overflow-x: auto;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
   background: white;
   border-radius: 12px;
   box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05),
               0 0 2px rgba(0, 0, 0, 0.03);
+  overflow: hidden;
+}
+
+.table-wrapper {
+  flex: 1;
+  overflow: auto;
+  min-height: 0;
 }
 
 .base-table {
@@ -108,6 +119,9 @@ const handleSort = (columnKey) => {
 /* Header */
 .base-table thead {
   background-color: #f5f5f7;
+  position: sticky;
+  top: 0;
+  z-index: 10;
 }
 
 .base-table th {
@@ -176,5 +190,29 @@ const handleSort = (columnKey) => {
   padding: 40px;
   text-align: center;
   color: #86868b;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* 自定義捲動條樣式 */
+.table-wrapper::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.table-wrapper::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 3px;
+}
+
+.table-wrapper::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 3px;
+}
+
+.table-wrapper::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
 }
 </style>
