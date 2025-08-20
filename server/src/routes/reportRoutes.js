@@ -13,4 +13,7 @@ router.get('/stats', requirePermissions('報表:查看'), reportController.getRe
 // 獲取簡化版報表統計（用於儀表板）
 router.get('/simple', requirePermissions('報表:查看'), reportController.getSimpleReportStats);
 
+// 匯出報表
+router.get('/export', requirePermissions('報表:匯出'), reportController.exportReport);
+
 module.exports = router;

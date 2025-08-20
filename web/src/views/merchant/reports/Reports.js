@@ -107,19 +107,37 @@ export function useReports() {
       
       if (selectedPeriod.value === 'day') {
         const date = customDate || selectedDate.value
-        params.date = date.toISOString().split('T')[0]
+        // 使用本地時間格式化，避免 UTC 轉換問題
+        const year = date.getFullYear()
+        const month = String(date.getMonth() + 1).padStart(2, '0')
+        const day = String(date.getDate()).padStart(2, '0')
+        params.date = `${year}-${month}-${day}`
       } else if (selectedPeriod.value === 'month') {
         const month = customDate || selectedMonth.value
         const startDate = new Date(month.getFullYear(), month.getMonth(), 1)
         const endDate = new Date(month.getFullYear(), month.getMonth() + 1, 0)
-        params.startDate = startDate.toISOString().split('T')[0]
-        params.endDate = endDate.toISOString().split('T')[0]
+        // 使用本地時間格式化
+        const startYear = startDate.getFullYear()
+        const startMonth = String(startDate.getMonth() + 1).padStart(2, '0')
+        const startDay = String(startDate.getDate()).padStart(2, '0')
+        const endYear = endDate.getFullYear()
+        const endMonth = String(endDate.getMonth() + 1).padStart(2, '0')
+        const endDay = String(endDate.getDate()).padStart(2, '0')
+        params.startDate = `${startYear}-${startMonth}-${startDay}`
+        params.endDate = `${endYear}-${endMonth}-${endDay}`
       } else if (selectedPeriod.value === 'year') {
         const year = customDate || selectedYear.value
         const startDate = new Date(year.getFullYear(), 0, 1)
         const endDate = new Date(year.getFullYear(), 11, 31)
-        params.startDate = startDate.toISOString().split('T')[0]
-        params.endDate = endDate.toISOString().split('T')[0]
+        // 使用本地時間格式化
+        const startYear = startDate.getFullYear()
+        const startMonth = String(startDate.getMonth() + 1).padStart(2, '0')
+        const startDay = String(startDate.getDate()).padStart(2, '0')
+        const endYear = endDate.getFullYear()
+        const endMonth = String(endDate.getMonth() + 1).padStart(2, '0')
+        const endDay = String(endDate.getDate()).padStart(2, '0')
+        params.startDate = `${startYear}-${startMonth}-${startDay}`
+        params.endDate = `${endYear}-${endMonth}-${endDay}`
       }
       
       // 調用真實的 API
@@ -260,25 +278,90 @@ export function useReports() {
   }
   
   // 導出報表
-  const exportReport = () => {
-    const reportData = {
-      period: selectedPeriod.value,
-      financial: financialStats.value,
-      traffic: trafficStats.value,
-      popularDishes: popularDishes.value,
-      exportTime: new Date().toLocaleString('zh-TW')
+  const exportReport = async () => {
+    try {
+      // 構建查詢參數
+      const params = {
+        period: selectedPeriod.value,
+        format: 'xlsx'
+      }
+      
+      if (selectedPeriod.value === 'day') {
+        const date = selectedDate.value
+        // 使用本地時間格式化，避免 UTC 轉換問題
+        const year = date.getFullYear()
+        const month = String(date.getMonth() + 1).padStart(2, '0')
+        const day = String(date.getDate()).padStart(2, '0')
+        params.date = `${year}-${month}-${day}`
+      } else if (selectedPeriod.value === 'month') {
+        const month = selectedMonth.value
+        const startDate = new Date(month.getFullYear(), month.getMonth(), 1)
+        const endDate = new Date(month.getFullYear(), month.getMonth() + 1, 0)
+        // 使用本地時間格式化
+        const startYear = startDate.getFullYear()
+        const startMonth = String(startDate.getMonth() + 1).padStart(2, '0')
+        const startDay = String(startDate.getDate()).padStart(2, '0')
+        const endYear = endDate.getFullYear()
+        const endMonth = String(endDate.getMonth() + 1).padStart(2, '0')
+        const endDay = String(endDate.getDate()).padStart(2, '0')
+        params.startDate = `${startYear}-${startMonth}-${startDay}`
+        params.endDate = `${endYear}-${endMonth}-${endDay}`
+      } else if (selectedPeriod.value === 'year') {
+        const year = selectedYear.value
+        const startDate = new Date(year.getFullYear(), 0, 1)
+        const endDate = new Date(year.getFullYear(), 11, 31)
+        // 使用本地時間格式化
+        const startYear = startDate.getFullYear()
+        const startMonth = String(startDate.getMonth() + 1).padStart(2, '0')
+        const startDay = String(startDate.getDate()).padStart(2, '0')
+        const endYear = endDate.getFullYear()
+        const endMonth = String(endDate.getMonth() + 1).padStart(2, '0')
+        const endDay = String(endDate.getDate()).padStart(2, '0')
+        params.startDate = `${startYear}-${startMonth}-${startDay}`
+        params.endDate = `${endYear}-${endMonth}-${endDay}`
+      }
+
+      console.log('匯出報表參數:', params)
+
+      // 調用匯出 API
+      const response = await reportAPI.exportReport(params)
+      
+      // 處理檔案下載
+      const blob = new Blob([response.data], { 
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      })
+      
+      const url = window.URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      
+      // 從響應標頭獲取檔案名稱
+      console.log('響應標頭:', response.headers)
+      let fileName = response.headers?.['x-file-name'] || response.headers?.['X-File-Name']
+      console.log('從標頭獲取的檔案名稱:', fileName)
+      if (fileName) {
+        fileName = decodeURIComponent(fileName)
+        console.log('解碼後的檔案名稱:', fileName)
+      } else {
+        // 如果沒有標頭信息，使用預設名稱
+        fileName = `報表統計_${selectedPeriod.value}_${new Date().toISOString().split('T')[0]}`
+        console.log('使用預設檔案名稱:', fileName)
+      }
+      fileName = `${fileName}.xlsx`
+      console.log('最終檔案名稱:', fileName)
+      
+      link.download = fileName
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      window.URL.revokeObjectURL(url)
+
+      console.log('報表匯出成功')
+    } catch (error) {
+      console.error('匯出報表失敗:', error)
+      // 顯示錯誤訊息
+      alert('匯出報表失敗，請稍後再試')
     }
-    
-    const blob = new Blob([JSON.stringify(reportData, null, 2)], {
-      type: 'application/json'
-    })
-    
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `報表統計_${selectedPeriod.value}_${new Date().toISOString().split('T')[0]}.json`
-    a.click()
-    URL.revokeObjectURL(url)
   }
   
   // 檢查是否可以切換到上一個時間

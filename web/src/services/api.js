@@ -512,6 +512,19 @@ export const reportAPI = {
       if (merchantId) merged.merchantId = merchantId
     }
     return api.get('/reports/simple', { params: merged })
+  },
+
+  // 匯出報表
+  exportReport: (params = {}) => {
+    const merged = { ...(params || {}) }
+    if (!merged.merchantId) {
+      const merchantId = resolveActiveMerchantId()
+      if (merchantId) merged.merchantId = merchantId
+    }
+    return api.get('/reports/export', { 
+      params: merged,
+      responseType: 'blob' // 重要：設定為blob以接收檔案
+    })
   }
 };
 
