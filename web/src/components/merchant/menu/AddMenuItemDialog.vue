@@ -231,14 +231,6 @@
                           {{ inv.name }} ({{ inv.category }})
                         </option>
                       </select>
-                      <input 
-                        type="number" 
-                        v-model="item.baseQuantity" 
-                        placeholder="基礎數量" 
-                        class="quantity-input"
-                        min="0"
-                        step="0.1"
-                      />
                       <span class="unit-display">{{ getInventoryUnit(item.inventoryId) }}</span>
                     </div>
                     <BaseButton 

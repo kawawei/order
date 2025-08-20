@@ -112,6 +112,11 @@ const mapOptionToInventory = (fieldName) => {
   return mappedName;
 };
 
+// 清理選項名稱，移除「選-」前綴
+const cleanOptionName = (optionName) => {
+  return optionName.replace(/^選-/, '');
+};
+
 // 根據名稱查找庫存項目
 const findInventoryByName = async (inventoryName, merchantId) => {
   try {
@@ -149,17 +154,67 @@ const findInventorySpec = (inventory, optionLabel) => {
   console.log(`在庫存 ${inventory.name} 中查找規格：${optionLabel}`);
   console.log(`可用規格：${inventory.multiSpecStock.map(spec => spec.specName).join(', ')}`);
   
-  // 嘗試匹配規格名稱
-  const matchedSpec = inventory.multiSpecStock.find(spec => 
-    spec.specName.toLowerCase() === optionLabel.toLowerCase() ||
-    spec.specName.toLowerCase().includes(optionLabel.toLowerCase()) ||
-    optionLabel.toLowerCase().includes(spec.specName.toLowerCase())
+  // 清理選項標籤，移除可能的後綴（如"杯"、"份"等）
+  const cleanOptionLabel = optionLabel.replace(/[杯份個支]/g, '').trim();
+  console.log(`清理後的選項標籤：${cleanOptionLabel}`);
+  
+  // 嘗試多種匹配策略
+  let matchedSpec = null;
+  
+  // 1. 完全匹配
+  matchedSpec = inventory.multiSpecStock.find(spec => 
+    spec.specName.toLowerCase() === optionLabel.toLowerCase()
   );
   
+  // 2. 清理後完全匹配
+  if (!matchedSpec) {
+    matchedSpec = inventory.multiSpecStock.find(spec => 
+      spec.specName.toLowerCase() === cleanOptionLabel.toLowerCase()
+    );
+  }
+  
+  // 3. 包含匹配
+  if (!matchedSpec) {
+    matchedSpec = inventory.multiSpecStock.find(spec => 
+      spec.specName.toLowerCase().includes(optionLabel.toLowerCase()) ||
+      optionLabel.toLowerCase().includes(spec.specName.toLowerCase())
+    );
+  }
+  
+  // 4. 清理後包含匹配
+  if (!matchedSpec) {
+    matchedSpec = inventory.multiSpecStock.find(spec => 
+      spec.specName.toLowerCase().includes(cleanOptionLabel.toLowerCase()) ||
+      cleanOptionLabel.toLowerCase().includes(spec.specName.toLowerCase())
+    );
+  }
+  
+  // 5. 特殊映射匹配（針對常見的選項值）
+  if (!matchedSpec) {
+    const sizeMapping = {
+      '大杯': '大',
+      '中杯': '中', 
+      '小杯': '小',
+      '大份': '大',
+      '中份': '中',
+      '小份': '小',
+      '大': '大',
+      '中': '中',
+      '小': '小'
+    };
+    
+    const mappedValue = sizeMapping[optionLabel] || sizeMapping[cleanOptionLabel];
+    if (mappedValue) {
+      matchedSpec = inventory.multiSpecStock.find(spec => 
+        spec.specName.toLowerCase() === mappedValue.toLowerCase()
+      );
+    }
+  }
+  
   if (matchedSpec) {
-    console.log(`找到匹配規格：${matchedSpec.specName}`);
+    console.log(`找到匹配規格：${matchedSpec.specName} (原始選項：${optionLabel})`);
   } else {
-    console.log(`未找到匹配規格：${optionLabel}`);
+    console.log(`未找到匹配規格：${optionLabel} (清理後：${cleanOptionLabel})`);
   }
   
   return matchedSpec;
@@ -855,7 +910,7 @@ exports.importMenu = catchAsync(async (req, res, next) => {
         const optionGroups = {};
         
         for (const option of collectedOptions) {
-          const optionName = option.name;
+          const optionName = cleanOptionName(option.name); // 清理選項名稱，移除「選-」前綴
           
           if (!optionGroups[optionName]) {
             optionGroups[optionName] = {
@@ -915,55 +970,82 @@ exports.importMenu = catchAsync(async (req, res, next) => {
           if (inventory) {
             console.log(`找到庫存項目：${inventory.name} (ID: ${inventory._id})，類型：${inventory.type}`);
             
-            // 根據庫存類型處理
-            if (inventory.type === 'single') {
-              // 單一規格庫存：所有選項值都對應到同一個庫存項目
-              // 只需要添加一次庫存關聯，數量會在條件庫存中處理
-              const existingInventory = inventoryConfig.baseInventory.find(
-                item => item.inventoryId.toString() === inventory._id.toString()
-              );
+            // 過濾掉數量為0或空的選項值
+            const validOptions = optionConfig.options.filter(opt => 
+              opt.quantity > 0 && opt.label && opt.label.trim() !== ''
+            );
+            
+            console.log(`選項「${optionConfig.name}」的有效值：`, validOptions.map(opt => `${opt.label}(${opt.quantity})`));
+            
+            // 根據有效選項值的數量決定是基礎庫存還是條件庫存
+            if (validOptions.length === 1) {
+              // 只有一個有效值：基礎庫存
+              const optionValue = validOptions[0];
               
-              if (!existingInventory) {
+              if (inventory.type === 'single') {
+                // 單一規格庫存
                 inventoryConfig.baseInventory.push({
                   inventoryId: inventory._id,
                   inventoryValueId: inventory._id, // 單一庫存使用自身ID
-                  quantity: 1 // 基礎數量設為1，實際數量在條件庫存中處理
+                  quantity: optionValue.quantity
                 });
-                console.log(`添加單一庫存：${inventory.name}`);
-              }
-              
-              // 為每個選項值添加條件庫存
-              for (const optionValue of optionConfig.options) {
-                if (optionValue.quantity > 0) {
-                  inventoryConfig.conditionalInventory.push({
+                console.log(`添加基礎庫存（單一規格）：${inventory.name}，數量：${optionValue.quantity}`);
+              } else if (inventory.type === 'multiSpec') {
+                // 多規格庫存，需要找到對應的規格
+                const specValue = findInventorySpec(inventory, optionValue.label);
+                if (specValue) {
+                  inventoryConfig.baseInventory.push({
                     inventoryId: inventory._id,
-                    inventoryValueId: inventory._id,
-                    quantity: optionValue.quantity,
-                    condition: {
-                      optionName: optionConfig.name,
-                      optionValue: optionValue.label
-                    }
+                    inventoryValueId: specValue._id,
+                    quantity: optionValue.quantity
                   });
-                  console.log(`添加條件庫存：${inventory.name} - ${optionValue.label}，數量：${optionValue.quantity}`);
+                  console.log(`添加基礎庫存（多規格）：${inventory.name} - ${specValue.specName}，數量：${optionValue.quantity}`);
+                } else {
+                  console.warn(`未找到匹配的規格：${optionValue.label} 在庫存 ${inventory.name} 中`);
                 }
               }
-            } else if (inventory.type === 'multiSpec') {
-              // 多規格庫存：每個選項值對應不同的規格
-              for (const optionValue of optionConfig.options) {
-                if (optionValue.quantity > 0) {
+            } else if (validOptions.length > 1) {
+              // 多個有效值：條件庫存（支援單一規格和多規格）
+              console.log(`處理條件庫存：${inventory.name}（類型：${inventory.type}），選項：${optionConfig.name}，有效值：${validOptions.map(opt => `${opt.label}(${opt.quantity})`).join(', ')}`);
+              
+              const conditions = [];
+              
+              for (const optionValue of validOptions) {
+                if (inventory.type === 'single') {
+                  // 單一規格庫存：所有條件都指向同一個庫存項目，但數量不同
+                  conditions.push({
+                    optionType: optionConfig.name,
+                    optionValue: optionValue.label,
+                    inventoryValueId: inventory._id, // 單一庫存使用自身ID
+                    quantity: optionValue.quantity
+                  });
+                  console.log(`添加條件（單一規格）：${optionConfig.name} = ${optionValue.label} -> ${inventory.name}，數量：${optionValue.quantity}`);
+                } else if (inventory.type === 'multiSpec') {
+                  // 多規格庫存：需要找到對應的規格
                   const specValue = findInventorySpec(inventory, optionValue.label);
                   if (specValue) {
-                    inventoryConfig.baseInventory.push({
-                      inventoryId: inventory._id,
+                    conditions.push({
+                      optionType: optionConfig.name,
+                      optionValue: optionValue.label,
                       inventoryValueId: specValue._id,
                       quantity: optionValue.quantity
                     });
-                    console.log(`添加多規格庫存：${inventory.name} - ${specValue.specName}，數量：${optionValue.quantity}`);
+                    console.log(`添加條件（多規格）：${optionConfig.name} = ${optionValue.label} -> ${specValue.specName}，數量：${optionValue.quantity}`);
                   } else {
                     console.warn(`未找到匹配的規格：${optionValue.label} 在庫存 ${inventory.name} 中`);
                   }
                 }
               }
+              
+              if (conditions.length > 0) {
+                inventoryConfig.conditionalInventory.push({
+                  inventoryId: inventory._id,
+                  conditions: conditions
+                });
+                console.log(`添加條件庫存：${inventory.name}，條件數量：${conditions.length}，條件詳情：`, conditions.map(c => `${c.optionType}=${c.optionValue}(${c.quantity})`));
+              }
+            } else {
+              console.log(`選項「${optionConfig.name}」沒有有效的值，跳過庫存配置`);
             }
           } else {
             console.warn(`未找到庫存項目：${inventoryName}`);
@@ -972,6 +1054,22 @@ exports.importMenu = catchAsync(async (req, res, next) => {
         
         if (inventoryConfig.baseInventory.length > 0 || inventoryConfig.conditionalInventory.length > 0) {
           dishData.inventoryConfig = inventoryConfig;
+          
+          // 調試：顯示最終的庫存配置
+          console.log(`=== 菜品「${dishName}」的最終庫存配置 ===`);
+          if (inventoryConfig.baseInventory.length > 0) {
+            console.log('基礎庫存：', inventoryConfig.baseInventory.map(item => 
+              `庫存ID: ${item.inventoryId}, 值ID: ${item.inventoryValueId}, 數量: ${item.quantity}`
+            ));
+          }
+          if (inventoryConfig.conditionalInventory.length > 0) {
+            console.log('條件庫存：', inventoryConfig.conditionalInventory.map(item => 
+              `庫存ID: ${item.inventoryId}, 條件: ${item.conditions.map(c => 
+                `${c.optionType}=${c.optionValue}(${c.quantity})`
+              ).join(', ')}`
+            ));
+          }
+          console.log('=====================================');
         }
       }
     }
@@ -1056,6 +1154,17 @@ exports.importMenu = catchAsync(async (req, res, next) => {
     }
     
     console.log(`菜單匯入完成：新增 ${created} 項，更新 ${updated} 項，失敗 ${failed} 項`);
+    
+    // 調試：顯示匯入結果摘要
+    console.log('=== 匯入結果摘要 ===');
+    for (const result of results) {
+      if (result.success) {
+        console.log(`✓ ${result.action}: ${result.name} (${result.category})`);
+      } else {
+        console.log(`✗ 失敗: ${result.name} (${result.category}) - ${result.error}`);
+      }
+    }
+    console.log('===================');
     
     res.status(200).json({
       status: 'success',

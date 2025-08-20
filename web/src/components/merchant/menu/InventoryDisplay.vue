@@ -14,7 +14,7 @@
           variant="default"
           size="small"
         >
-          {{ getInventoryName(item.inventoryId) }} {{ item.totalQuantity }}{{ getInventoryUnit(item.inventoryId) }}
+          {{ getInventoryName(item.inventoryId) }}
         </BaseTag>
       </div>
     </div>
@@ -65,23 +65,39 @@ const allInventoryItems = computed(() => {
       } else {
         items.push({
           inventoryId: item.inventoryId,
-          totalQuantity: item.quantity
+          totalQuantity: item.quantity,
+          type: 'base'
         })
       }
     })
   }
   
-  // 添加條件庫存（只計算基礎數量）
+  // 添加條件庫存（顯示所有條件的數量範圍）
   if (props.inventoryConfig?.conditionalInventory) {
     props.inventoryConfig.conditionalInventory.forEach(item => {
       const existing = items.find(i => i.inventoryId === item.inventoryId)
-      if (existing) {
-        existing.totalQuantity += item.baseQuantity
-      } else {
-        items.push({
-          inventoryId: item.inventoryId,
-          totalQuantity: item.baseQuantity
-        })
+      
+      if (item.conditions && item.conditions.length > 0) {
+        // 計算條件庫存的最小和最大數量
+        const quantities = item.conditions.map(condition => condition.quantity)
+        const minQuantity = Math.min(...quantities)
+        const maxQuantity = Math.max(...quantities)
+        
+        if (existing) {
+          // 如果已存在，更新為條件庫存類型
+          existing.type = 'conditional'
+          existing.minQuantity = minQuantity
+          existing.maxQuantity = maxQuantity
+          existing.conditions = item.conditions
+        } else {
+          items.push({
+            inventoryId: item.inventoryId,
+            type: 'conditional',
+            minQuantity: minQuantity,
+            maxQuantity: maxQuantity,
+            conditions: item.conditions
+          })
+        }
       }
     })
   }
@@ -139,5 +155,12 @@ const getInventoryUnit = (inventoryId) => {
   font-size: 0.75rem;
   color: #6c757d;
   font-style: italic;
+}
+
+.conditional-hint {
+  font-size: 0.7rem;
+  color: #6c757d;
+  font-style: italic;
+  margin-left: 0.25rem;
 }
 </style>

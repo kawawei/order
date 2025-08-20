@@ -180,11 +180,6 @@ const dishSchema = new mongoose.Schema({
         ref: 'Inventory',
         required: true
       },
-      baseQuantity: {
-        type: Number,
-        default: 0,
-        min: [0, '消耗數量不能為負數']
-      },
       conditions: [{
         optionType: {
           type: String,

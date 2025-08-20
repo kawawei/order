@@ -162,7 +162,6 @@ export function useAddMenuItemDialog(props, emit) {
   const addConditionalInventory = () => {
     form.value.conditionalInventory.push({
       inventoryId: '',
-      baseQuantity: 1,
       conditions: []
     })
   }
@@ -191,10 +190,8 @@ export function useAddMenuItemDialog(props, emit) {
     
     // 處理條件庫存
     form.value.conditionalInventory.forEach(item => {
-      if (item.inventoryId && item.baseQuantity) {
+      if (item.inventoryId) {
         // 檢查是否有匹配的條件
-        let hasMatchingCondition = false
-        
         item.conditions.forEach(condition => {
           if (condition.optionType && condition.optionValue && 
               condition.inventoryValueId && condition.quantity) {
@@ -203,20 +200,9 @@ export function useAddMenuItemDialog(props, emit) {
             if (selectedOptionValue === condition.optionValue) {
               const key = `${item.inventoryId}_${condition.inventoryValueId}`
               preview[key] = (preview[key] || 0) + parseFloat(condition.quantity)
-              hasMatchingCondition = true
             }
           }
         })
-        
-        // 如果沒有匹配的條件，使用基礎數量
-        if (!hasMatchingCondition && item.baseQuantity) {
-          // 這裡需要選擇一個默認的庫存值，暫時使用第一個
-          const values = getInventoryValues(item.inventoryId)
-          if (values.length > 0) {
-            const key = `${item.inventoryId}_${values[0]._id}`
-            preview[key] = (preview[key] || 0) + parseFloat(item.baseQuantity)
-          }
-        }
       }
     })
     
@@ -387,10 +373,9 @@ export function useAddMenuItemDialog(props, emit) {
             quantity: item.quantity
           })),
         conditionalInventory: form.value.conditionalInventory
-          .filter(item => item.inventoryId && item.baseQuantity)
+          .filter(item => item.inventoryId)
           .map(item => ({
             inventoryId: item.inventoryId,
-            baseQuantity: item.baseQuantity,
             conditions: item.conditions
               .filter(cond => cond.optionType && cond.optionValue && cond.inventoryValueId)
               .map(cond => ({

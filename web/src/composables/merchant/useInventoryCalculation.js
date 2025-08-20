@@ -33,9 +33,7 @@ export function useInventoryCalculation() {
     // 計算條件庫存消耗
     if (dish.inventoryConfig.conditionalInventory) {
       dish.inventoryConfig.conditionalInventory.forEach(item => {
-        if (item.inventoryId && item.baseQuantity) {
-          let hasMatchingCondition = false
-          
+        if (item.inventoryId) {
           // 檢查是否有匹配的條件
           if (item.conditions && item.conditions.length > 0) {
             item.conditions.forEach(condition => {
@@ -47,15 +45,8 @@ export function useInventoryCalculation() {
                 
                 const key = `${item.inventoryId}_${condition.inventoryValueId}`
                 totalUsage[key] = (totalUsage[key] || 0) + parseFloat(condition.quantity)
-                hasMatchingCondition = true
               }
             })
-          }
-          
-          // 如果沒有匹配的條件，使用基礎數量（需要選擇默認的庫存值）
-          if (!hasMatchingCondition && item.baseQuantity) {
-            // 這裡需要根據實際情況選擇默認庫存值
-            // 暫時跳過，因為沒有足夠信息
           }
         }
       })
