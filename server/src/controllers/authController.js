@@ -28,8 +28,12 @@ const createSendToken = (merchant, statusCode, res) => {
 };
 
 // 發送 JWT Token（員工）
-const createSendEmployeeToken = (employee, statusCode, res) => {
+const createSendEmployeeToken = async (employee, statusCode, res) => {
   const token = signToken(employee._id, 'employee', { merchantId: employee.merchant });
+  
+  // 獲取餐廳信息
+  const merchant = await Merchant.findById(employee.merchant).select('businessName merchantCode');
+  
   res.status(statusCode).json({
     status: 'success',
     token,
@@ -39,6 +43,8 @@ const createSendEmployeeToken = (employee, statusCode, res) => {
         name: employee.name,
         account: employee.account,
         merchant: employee.merchant,
+        businessName: merchant?.businessName || null,
+        merchantCode: merchant?.merchantCode || null,
         role: employee.role || null
       }
     }
@@ -164,7 +170,7 @@ exports.login = catchAsync(async (req, res, next) => {
       return next(new AppError('商家代碼或員工編號錯誤', 401));
     }
     // 簽發員工 token
-    return createSendEmployeeToken(employee, 200, res);
+    return await createSendEmployeeToken(employee, 200, res);
   }
 
   // 分支二：舊版商家 email/password 登入

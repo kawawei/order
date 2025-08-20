@@ -13,9 +13,9 @@ router.get('/_catalog/permissions', (req, res) => {
   res.status(200).json({ status: 'success', data: { permissions: PERMISSIONS } });
 });
 
-// 角色管理（需「角色：管理」權限；商家/超管預設允許）
+// 角色管理
 router.route('/')
-  .get(requireOwnerOrAdmin, roleController.getAllRoles)
+  .get(requirePermissions('員工:編輯'), roleController.getAllRoles)
   .post(requireOwnerOrAdmin, roleController.createRole);
 
 router.route('/:id')

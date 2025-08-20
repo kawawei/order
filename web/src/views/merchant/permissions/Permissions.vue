@@ -262,7 +262,14 @@ const filteredAssignableRoles = computed(() => {
 // 權限卡片顯示的固定角色清單
 const displayRoles = computed(() => {
   const list = Array.isArray(roles.value) ? roles.value : []
-  return list.filter(r => isOwnerRoleName(r?.name) || isManagerRoleName(r?.name) || isStaffRoleName(r?.name))
+  const fixed = list.filter(r => isOwnerRoleName(r?.name) || isManagerRoleName(r?.name) || isStaffRoleName(r?.name))
+  
+  // 管理人員只能看到工作人員角色
+  if (isCurrentManager && !isCurrentOwner && !isAdminActor) {
+    return fixed.filter(r => isStaffRoleName(r?.name))
+  }
+  
+  return fixed
 })
 
 // 角色操作權限：
@@ -349,9 +356,19 @@ const getEmployeeCountByRole = (roleKey) => {
 }
 
 const filteredEmployees = computed(() => {
+  let filtered = employees.value
+  
+  // 管理人員只能看到工作人員
+  if (isCurrentManager && !isCurrentOwner && !isAdminActor) {
+    filtered = filtered.filter(emp => {
+      const role = roles.value.find(r => (r._id || r.id) === (emp.role?._id || emp.role))
+      return role && isStaffRoleName(role.name)
+    })
+  }
+  
   const selected = employeeRoleFilter.value
-  if (selected === 'all') return employees.value
-  return employees.value.filter(emp => emp.role === selected)
+  if (selected === 'all') return filtered
+  return filtered.filter(emp => emp.role === selected)
 })
 
 const onClickAddEmployee = () => {
@@ -394,7 +411,7 @@ const editEmployee = (employee) => {
   showAddEmployeeModal.value = true
 }
 
-const deleteEmployee = (employeeId) => {
+const deleteEmployee = async (employeeId) => {
   // 保護「老闆」帳號，不可刪除 / Protect owner account from deletion
   const target = employees.value.find(emp => emp.id === employeeId)
   if (target && (target.isOwner === true || isOwnerByRoleId(target.role))) {
@@ -414,7 +431,15 @@ const deleteEmployee = (employeeId) => {
     }
   }
   if (confirm('確定要刪除此員工嗎？')) {
-    employees.value = employees.value.filter(emp => emp.id !== employeeId)
+    try {
+      await employeeAPI.deleteEmployee(employeeId)
+      // 從本地列表中移除
+      employees.value = employees.value.filter(emp => emp.id !== employeeId)
+      alert('員工刪除成功')
+    } catch (error) {
+      console.error('刪除員工失敗:', error)
+      alert('刪除員工失敗: ' + (error.message || '未知錯誤'))
+    }
   }
 }
 
@@ -616,11 +641,20 @@ const isOwnerByRoleId = (roleId) => {
   return (r.isOwner === true) || (r.isSystem === true && name === '老闆') || name === '老闆' || name.toLowerCase() === 'owner'
 }
 
-// 僅非老闆可刪除 / Only non-owner employees can be deleted
+// 檢查是否可以刪除員工
 const canDeleteEmployee = (employee) => {
   if (!employee) return false
-  if (employee.isOwner === true) return false
-  return !isOwnerByRoleId(employee.role)
+  
+  // 老闆帳號不可刪除
+  if (employee.isOwner === true || isOwnerByRoleId(employee.role)) return false
+  
+  // 管理人員只能刪除工作人員
+  if (isCurrentManager && !isCurrentOwner && !isAdminActor) {
+    const role = roles.value.find(r => (r._id || r.id) === (employee.role?._id || employee.role))
+    return role && isStaffRoleName(role.name)
+  }
+  
+  return true
 }
 </script>
 

@@ -59,7 +59,14 @@ const ensureSystemRolesForMerchant = async (merchantId) => {
 exports.getAllRoles = catchAsync(async (req, res, next) => {
   const merchantId = getMerchantId(req);
   await ensureSystemRolesForMerchant(merchantId);
-  const roles = await Role.find({ merchant: merchantId }).sort({ createdAt: -1 });
+  
+  let roles = await Role.find({ merchant: merchantId }).sort({ createdAt: -1 });
+  
+  // 如果是管理人員（非老闆），只返回工作人員角色
+  if (req.employee && !req.employee.isOwner && !req.admin) {
+    roles = roles.filter(role => role.name === '工作人員');
+  }
+  
   res.status(200).json({ status: 'success', results: roles.length, data: { roles } });
 });
 

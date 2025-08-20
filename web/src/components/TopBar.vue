@@ -1,7 +1,7 @@
 <template>
   <div class="top-bar">
     <div class="top-bar-left">
-      <h1 class="app-title">餐廳管理系統</h1>
+      <h1 class="app-title">{{ restaurantTitle }}</h1>
     </div>
     <div class="top-bar-right">
       <div class="user-info">
@@ -40,6 +40,82 @@ const router = useRouter()
 const route = useRoute()
 const { user, logout, getUserRole } = useAuth()
 const username = ref('')
+
+// 計算餐廳標題
+const restaurantTitle = computed(() => {
+  console.log('=== TopBar 餐廳標題計算調試 ===');
+  
+  // 如果是管理員查看特定餐廳，顯示餐廳名稱
+  if (route.query.restaurantName) {
+    console.log('使用 URL 查詢參數中的餐廳名稱:', route.query.restaurantName);
+    return `${route.query.restaurantName} - 餐廳管理系統`
+  }
+  
+  // 從 localStorage 獲取餐廳信息
+  const merchantRaw = localStorage.getItem('merchant_user')
+  console.log('localStorage merchant_user 原始數據:', merchantRaw);
+  
+  if (merchantRaw) {
+    try {
+      const merchant = JSON.parse(merchantRaw)
+      console.log('解析後的 merchant 數據:', merchant);
+      console.log('merchant.role:', merchant.role);
+      console.log('merchant.businessName:', merchant.businessName);
+      console.log('merchant.merchantCode:', merchant.merchantCode);
+      
+      // 如果是商家直接登入，有 businessName
+      if (merchant.businessName) {
+        console.log('使用商家 businessName:', merchant.businessName);
+        return `${merchant.businessName} - 餐廳管理系統`
+      }
+      
+      // 如果是員工登入，檢查是否有餐廳名稱相關字段
+      if (merchant.role === 'employee') {
+        // 檢查是否有餐廳名稱字段（後端現在會返回 businessName）
+        if (merchant.businessName) {
+          console.log('使用員工 businessName:', merchant.businessName);
+          return `${merchant.businessName} - 餐廳管理系統`
+        }
+        
+        // 檢查是否有餐廳名稱字段
+        if (merchant.restaurantName || merchant.merchantName) {
+          console.log('使用員工 restaurantName/merchantName:', merchant.restaurantName || merchant.merchantName);
+          return `${merchant.restaurantName || merchant.merchantName} - 餐廳管理系統`
+        }
+        
+        // 檢查是否有商家代碼，可以用作顯示
+        if (merchant.merchantCode) {
+          console.log('使用員工 merchantCode:', merchant.merchantCode);
+          return `${merchant.merchantCode} - 餐廳管理系統`
+        }
+        
+        console.log('員工登入但沒有找到餐廳名稱相關字段');
+      }
+    } catch (e) {
+      console.error('解析 merchant_user 時出錯:', e);
+    }
+  }
+  
+  // 回退到舊的 localStorage 鍵
+  const legacyMerchantRaw = localStorage.getItem('merchant')
+  console.log('回退到舊的 merchant 鍵:', legacyMerchantRaw);
+  
+  if (legacyMerchantRaw) {
+    try {
+      const merchantData = JSON.parse(legacyMerchantRaw)
+      if (merchantData.businessName) {
+        console.log('使用舊的 merchant businessName:', merchantData.businessName);
+        return `${merchantData.businessName} - 餐廳管理系統`
+      }
+    } catch (e) {
+      console.error('解析舊的 merchant 數據時出錯:', e);
+    }
+  }
+  
+  // 如果都沒有，顯示默認標題
+  console.log('使用默認標題');
+  return '餐廳管理系統'
+})
 
 onMounted(() => {
   // 優先從統一的 user 鍵讀取，若沒有則回退舊的 merchant 鍵

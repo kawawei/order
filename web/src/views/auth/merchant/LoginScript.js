@@ -56,12 +56,22 @@ export default {
             null;
           const employeeRoleId = (employee?.role && (employee?.role?._id || employee?.role?.id)) || employee?.roleId || employee?.role || null;
           const employeeRoleName = (employee?.role && (employee?.role?.name || employee?.role?.title)) || null;
+          
+          // 添加調試信息
+          console.log('=== 員工登入前端處理 ===');
+          console.log('員工數據:', employee);
+          console.log('businessName:', employee.businessName);
+          console.log('merchantCode:', employee.merchantCode);
+          
           localStorage.setItem('merchant_user', JSON.stringify({
             ...employee,
             role: 'employee',
             merchantId,
             employeeRoleId,
-            employeeRoleName
+            employeeRoleName,
+            // 確保餐廳名稱和代碼被保存
+            businessName: employee.businessName || null,
+            merchantCode: employee.merchantCode || null
           }));
         }
         
