@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const XLSX = require('xlsx');
 const Order = require('../models/order');
 const Table = require('../models/table');
 const Dish = require('../models/dish');
@@ -9,11 +10,11 @@ const AppError = require('../utils/appError');
 // 輔助函數：獲取商家ID（支持超級管理員訪問特定商家）
 const getMerchantId = (req) => {
   // 如果是超級管理員且指定了商家ID，使用指定的商家ID
-  if (req.admin && req.query.merchantId) {
-    return req.query.merchantId;
+  if (req.admin && (req.query.merchantId || req.params.merchantId)) {
+    return req.query.merchantId || req.params.merchantId;
   }
   // 如果是超級管理員但沒有指定商家ID，返回錯誤信息
-  if (req.admin && !req.query.merchantId) {
+  if (req.admin && !req.query.merchantId && !req.params.merchantId) {
     throw new AppError('超級管理員訪問商家後台需要指定merchantId參數', 400);
   }
   // 否則使用當前登入的商家ID
@@ -787,3 +788,230 @@ exports.getTableTotal = catchAsync(async (req, res, next) => {
     }
   });
 });
+
+// 匯出歷史訂單
+exports.exportHistoryOrders = catchAsync(async (req, res, next) => {
+  const merchantId = getMerchantId(req);
+  const { startDate, endDate, searchTerm, format = 'xlsx' } = req.query;
+
+  console.log('=== 匯出調試信息 ===');
+  console.log('商家ID:', merchantId);
+  console.log('開始日期:', startDate);
+  console.log('結束日期:', endDate);
+  console.log('搜尋詞:', searchTerm);
+
+  // 建立查詢條件 - 匯出所有歷史訂單（包括已完成和已取消）
+  const query = { 
+    merchantId, 
+    status: { $in: ['completed', 'cancelled'] } // 匯出已完成和已取消的訂單
+  };
+
+  // 時間範圍過濾 - 使用 createdAt 作為備選
+  if (startDate && endDate) {
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    end.setHours(23, 59, 59, 999); // 設定為當天結束時間
+    query.$or = [
+      { completedAt: { $gte: start, $lte: end } },
+      { createdAt: { $gte: start, $lte: end } }
+    ];
+  } else if (startDate) {
+    const start = new Date(startDate);
+    const end = new Date(startDate);
+    end.setHours(23, 59, 59, 999);
+    query.$or = [
+      { completedAt: { $gte: start, $lte: end } },
+      { createdAt: { $gte: start, $lte: end } }
+    ];
+  }
+
+  // 搜尋過濾
+  if (searchTerm) {
+    const searchQuery = {
+      $or: [
+        { tableOrderNumber: { $regex: searchTerm, $options: 'i' } },
+        { tableNumber: { $regex: searchTerm, $options: 'i' } }
+      ]
+    };
+    // 合併搜尋條件
+    Object.assign(query, searchQuery);
+  }
+
+  console.log('查詢條件:', JSON.stringify(query, null, 2));
+
+  // 獲取訂單數據
+  const orders = await Order.find(query)
+    .populate([
+      { path: 'tableId', select: 'tableNumber status tableCapacity' },
+      { path: 'items.dishId', select: 'name price category' }
+    ])
+    .select('+items.selectedOptions')
+    .sort({ createdAt: -1 });
+
+  console.log('找到訂單數量:', orders.length);
+
+  if (orders.length === 0) {
+    // 如果沒有找到訂單，嘗試查找所有訂單來調試
+    const allOrders = await Order.find({ merchantId }).limit(5);
+    console.log('該商家的所有訂單樣本:', allOrders.map(o => ({
+      id: o._id,
+      status: o.status,
+      createdAt: o.createdAt,
+      completedAt: o.completedAt,
+      tableOrderNumber: o.tableOrderNumber
+    })));
+    
+    // 提供更詳細的錯誤信息
+    const errorMessage = startDate 
+      ? `沒有找到 ${startDate} 的已完成或已取消訂單。請檢查日期是否正確，或嘗試選擇其他日期範圍。`
+      : '沒有找到符合條件的訂單。請檢查查詢條件。';
+    
+    return next(new AppError(errorMessage, 404));
+  }
+
+  // 準備匯出數據
+  const exportData = [];
+  
+  orders.forEach(order => {
+    const orderTime = order.completedAt ? 
+      new Date(order.completedAt).toLocaleString('zh-TW', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit'
+      }) : '';
+
+    // 處理訂單項目
+    if (order.items && order.items.length > 0) {
+      order.items.forEach(item => {
+        // 處理選項顯示
+        let optionsText = '';
+        if (item.selectedOptions) {
+          const options = [];
+          if (item.selectedOptions instanceof Map) {
+            for (const [key, value] of item.selectedOptions.entries()) {
+              if (typeof value === 'object' && value !== null && value.name) {
+                options.push(`${key}:${value.name}`);
+              } else {
+                options.push(`${key}:${value}`);
+              }
+            }
+          } else if (typeof item.selectedOptions === 'object') {
+            for (const [key, value] of Object.entries(item.selectedOptions)) {
+              if (key.startsWith('$')) continue; // 跳過 MongoDB 元數據
+              if (typeof value === 'object' && value !== null && value.name) {
+                options.push(`${key}:${value.name}`);
+              } else {
+                options.push(`${key}:${value}`);
+              }
+            }
+          }
+          optionsText = options.join(', ');
+        }
+
+        exportData.push({
+          '訂單號': order.tableOrderNumber || order.orderNumber,
+          '桌號': order.tableNumber || (order.tableId ? order.tableId.tableNumber : '未知'),
+          '結帳時間': orderTime,
+          '總金額': order.totalAmount,
+          '桌位容量': order.tableId ? order.tableId.tableCapacity : '',
+          '商品名稱': item.name,
+          '數量': item.quantity,
+          '單價': item.unitPrice,
+          '小計': item.totalPrice || (item.unitPrice * item.quantity),
+          '選項': optionsText,
+          '備註': item.notes || ''
+        });
+      });
+    } else {
+      // 如果沒有項目，至少匯出訂單基本資訊
+      exportData.push({
+        '訂單號': order.tableOrderNumber || order.orderNumber,
+        '桌號': order.tableNumber || (order.tableId ? order.tableId.tableNumber : '未知'),
+        '結帳時間': orderTime,
+        '總金額': order.totalAmount,
+        '桌位容量': order.tableId ? order.tableId.tableCapacity : '',
+        '商品名稱': '',
+        '數量': '',
+        '單價': '',
+        '小計': '',
+        '選項': '',
+        '備註': ''
+      });
+    }
+  });
+
+  // 生成檔案名稱
+  const now = new Date();
+  const fileName = `歷史訂單_${now.getFullYear()}${(now.getMonth() + 1).toString().padStart(2, '0')}${now.getDate().toString().padStart(2, '0')}_${now.getHours().toString().padStart(2, '0')}${now.getMinutes().toString().padStart(2, '0')}`;
+
+  if (format === 'csv') {
+    // 匯出 CSV
+    const csvContent = convertToCSV(exportData);
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    // 對檔案名稱進行 URL 編碼以支援中文
+    const encodedFileName = encodeURIComponent(`${fileName}.csv`);
+    res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodedFileName}`);
+    res.send('\ufeff' + csvContent); // 添加 BOM 以支援中文
+  } else {
+    // 匯出 Excel
+    const workbook = XLSX.utils.book_new();
+    const worksheet = XLSX.utils.json_to_sheet(exportData);
+    
+    // 設定欄寬
+    const columnWidths = [
+      { wch: 15 }, // 訂單號
+      { wch: 10 }, // 桌號
+      { wch: 20 }, // 結帳時間
+      { wch: 12 }, // 總金額
+      { wch: 12 }, // 桌位容量
+      { wch: 20 }, // 商品名稱
+      { wch: 8 },  // 數量
+      { wch: 10 }, // 單價
+      { wch: 12 }, // 小計
+      { wch: 30 }, // 選項
+      { wch: 20 }  // 備註
+    ];
+    worksheet['!cols'] = columnWidths;
+
+    XLSX.utils.book_append_sheet(workbook, worksheet, '歷史訂單');
+    
+    // 設定回應標頭
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    // 對檔案名稱進行 URL 編碼以支援中文
+    const encodedFileName = encodeURIComponent(`${fileName}.xlsx`);
+    res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodedFileName}`);
+    
+    // 寫入回應
+    const buffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
+    res.send(buffer);
+  }
+});
+
+// 輔助函數：轉換為 CSV 格式
+function convertToCSV(data) {
+  if (data.length === 0) return '';
+  
+  const headers = Object.keys(data[0]);
+  const csvRows = [];
+  
+  // 添加標題行
+  csvRows.push(headers.join(','));
+  
+  // 添加數據行
+  for (const row of data) {
+    const values = headers.map(header => {
+      const value = row[header];
+      // 如果值包含逗號、引號或換行符，需要用引號包圍
+      if (typeof value === 'string' && (value.includes(',') || value.includes('"') || value.includes('\n'))) {
+        return `"${value.replace(/"/g, '""')}"`;
+      }
+      return value;
+    });
+    csvRows.push(values.join(','));
+  }
+  
+  return csvRows.join('\n');
+}

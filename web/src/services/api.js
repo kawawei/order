@@ -411,6 +411,14 @@ export const orderAPI = {
   
   // 獲取訂單統計
   getOrderStats: (merchantId, params = {}) => api.get(`/orders/merchant/${merchantId}/stats`, { params }),
+  
+  // 匯出歷史訂單
+  exportHistoryOrders: (merchantId, params = {}) => {
+    return api.get(`/orders/merchant/${merchantId}/export`, { 
+      params,
+      responseType: 'blob' // 設定回應類型為 blob 以處理檔案下載
+    })
+  },
 };
 
 // 商家管理 API（超級管理員專用）
@@ -475,6 +483,7 @@ export const orderService = {
   updateOrderStatus: orderAPI.updateOrderStatus,
   cancelOrder: orderAPI.cancelOrder,
   getOrderStats: orderAPI.getOrderStats,
+  exportHistoryOrders: orderAPI.exportHistoryOrders,
 };
 
 // 報表 API

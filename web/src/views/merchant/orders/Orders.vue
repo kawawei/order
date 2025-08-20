@@ -18,8 +18,15 @@
         <BaseButton variant="secondary" size="small" icon="refresh" @click="refreshOrders" :loading="loading">
           重新整理
         </BaseButton>
-        <BaseButton variant="secondary" size="small" icon="download">
-          匯出報表
+        <BaseButton 
+          v-if="activeTab === 'history'" 
+          variant="primary" 
+          size="small" 
+          icon="download" 
+          @click="() => exportHistoryOrders('xlsx')"
+          :loading="loading"
+        >
+          匯出歷史訂單
         </BaseButton>
       </div>
     </header>
@@ -498,6 +505,7 @@ const {
   markAsDelivered,
   viewOrderDetails,
   printReceipt,
+  exportHistoryOrders,
   formatTime,
   formatDateTime,
   getStatVariant,

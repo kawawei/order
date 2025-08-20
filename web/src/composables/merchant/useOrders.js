@@ -285,15 +285,44 @@ export function useOrders(restaurantId = null) {
     // 歷史訂單都是已完成的桌次訂單
     const completedOrders = historyOrders.value
     const totalRevenue = completedOrders.reduce((sum, order) => sum + order.totalAmount, 0)
-    const averageOrderValue = completedOrders.length > 0 
-      ? Math.round(totalRevenue / completedOrders.length) 
+    
+    // 計算總客人數（與儀表板計算方式一致）
+    const totalCustomers = completedOrders.reduce((sum, order) => {
+      return sum + (order.tableCapacity || 0)
+    }, 0)
+    
+    // 客單價 = 總營業額 / 總客人數（與儀表板計算方式一致）
+    const averageOrderValue = totalCustomers > 0 
+      ? Math.round(totalRevenue / totalCustomers) 
       : 0
+
+    // 計算高峰時段
+    const hourStats = {}
+    completedOrders.forEach(order => {
+      if (order.completedAt) {
+        const completedHour = new Date(order.completedAt).getHours()
+        hourStats[completedHour] = (hourStats[completedHour] || 0) + 1
+      }
+    })
+    
+    // 找出訂單最多的時段
+    let peakHour = ''
+    let maxOrders = 0
+    
+    Object.entries(hourStats).forEach(([hour, count]) => {
+      if (count > maxOrders) {
+        maxOrders = count
+        const startHour = hour.padStart(2, '0')
+        const endHour = ((parseInt(hour) + 1) % 24).toString().padStart(2, '0')
+        peakHour = `${startHour}:00-${endHour}:00`
+      }
+    })
 
     return {
       totalOrders: completedOrders.length,
       totalRevenue,
       averageOrderValue,
-      peakHour: '12:00-13:00'
+      peakHour
     }
   })
 
@@ -554,6 +583,7 @@ export function useOrders(restaurantId = null) {
           itemCount: 0,
           firstOrderTime: order.createdAt,
           lastOrderTime: order.createdAt,
+          tableCapacity: order.tableId?.capacity || 4, // 預設4人桌
           status: 'completed' // 歷史訂單都是已完成狀態
         }
       }
@@ -597,6 +627,7 @@ export function useOrders(restaurantId = null) {
         ...group,
         tableOrderNumber: tableOrderNumber,
         completedAt: group.lastOrderTime, // 使用最後訂單時間作為結帳時間
+        tableCapacity: group.tableCapacity, // 添加桌次容量信息
         _id: `table_${group.tableId}_${group.customerGroup}_${group.lastOrderTime}` // 創建唯一ID
       }
     })
@@ -816,6 +847,97 @@ export function useOrders(restaurantId = null) {
     stopAutoRefresh()
   })
 
+  // 匯出歷史訂單
+  const exportHistoryOrders = async (format = 'xlsx') => {
+    try {
+      const merchantId = getMerchantId()
+      if (!merchantId) {
+        console.error('無法獲取商家ID')
+        return
+      }
+
+      // 準備匯出參數
+      const params = {
+        format,
+        searchTerm: searchTerm.value
+      }
+
+      // 根據選擇的時間範圍設定日期
+      const now = new Date()
+      if (selectedTimeRange.value === 'today') {
+        // 使用本地時區的今天日期
+        const today = new Date()
+        const year = today.getFullYear()
+        const month = String(today.getMonth() + 1).padStart(2, '0')
+        const day = String(today.getDate()).padStart(2, '0')
+        params.startDate = `${year}-${month}-${day}`
+      } else if (selectedTimeRange.value === 'week') {
+        const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
+        const year = weekAgo.getFullYear()
+        const month = String(weekAgo.getMonth() + 1).padStart(2, '0')
+        const day = String(weekAgo.getDate()).padStart(2, '0')
+        params.startDate = `${year}-${month}-${day}`
+        
+        const today = new Date()
+        const todayYear = today.getFullYear()
+        const todayMonth = String(today.getMonth() + 1).padStart(2, '0')
+        const todayDay = String(today.getDate()).padStart(2, '0')
+        params.endDate = `${todayYear}-${todayMonth}-${todayDay}`
+      } else if (selectedTimeRange.value === 'month') {
+        const monthAgo = new Date(now.getFullYear(), now.getMonth() - 1, now.getDate())
+        const year = monthAgo.getFullYear()
+        const month = String(monthAgo.getMonth() + 1).padStart(2, '0')
+        const day = String(monthAgo.getDate()).padStart(2, '0')
+        params.startDate = `${year}-${month}-${day}`
+        
+        const today = new Date()
+        const todayYear = today.getFullYear()
+        const todayMonth = String(today.getMonth() + 1).padStart(2, '0')
+        const todayDay = String(today.getDate()).padStart(2, '0')
+        params.endDate = `${todayYear}-${todayMonth}-${todayDay}`
+      }
+
+      console.log('匯出參數:', params)
+
+      // 呼叫匯出 API
+      const response = await orderService.exportHistoryOrders(merchantId, params)
+      
+      // 處理檔案下載
+      const blob = new Blob([response], { 
+        type: format === 'csv' ? 'text/csv;charset=utf-8' : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      })
+      
+      const url = window.URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `歷史訂單_${new Date().toISOString().split('T')[0]}.${format}`
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      window.URL.revokeObjectURL(url)
+
+      console.log('匯出成功')
+    } catch (error) {
+      console.error('匯出失敗:', error)
+      
+      // 檢查是否是 JSON 錯誤響應
+      if (error.response && error.response.data instanceof Blob) {
+        try {
+          const errorText = await error.response.data.text()
+          const errorData = JSON.parse(errorText)
+          console.error('後端錯誤:', errorData)
+          // 可以在這裡添加錯誤提示，例如使用 toast 或 alert
+          alert(`匯出失敗: ${errorData.message || '未知錯誤'}`)
+        } catch (parseError) {
+          console.error('無法解析錯誤響應:', parseError)
+          alert('匯出失敗: 無法解析錯誤信息')
+        }
+      } else {
+        alert(`匯出失敗: ${error.message || '未知錯誤'}`)
+      }
+    }
+  }
+
   return {
     // 響應式數據
     activeTab,
@@ -852,6 +974,7 @@ export function useOrders(restaurantId = null) {
     markAsDelivered,
     viewOrderDetails,
     printReceipt,
+    exportHistoryOrders,
     formatTime,
     formatDateTime,
     getStatVariant,

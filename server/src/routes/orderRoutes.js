@@ -17,6 +17,7 @@ router.post('/table/:tableId/checkout', orderController.checkoutTable);
 router.use('/merchant/:merchantId', protectAny, enforceSameMerchantParam('merchantId'));
 router.get('/merchant/:merchantId', requirePermissions('訂單:查看'), orderController.getOrdersByMerchant);
 router.get('/merchant/:merchantId/stats', requirePermissions('報表:查看'), orderController.getOrderStats);
+router.get('/merchant/:merchantId/export', requirePermissions('報表:匯出'), orderController.exportHistoryOrders);
 
 // 訂單狀態管理 - 需要權限
 router.use('/:id', protectAny);
