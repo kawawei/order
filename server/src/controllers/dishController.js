@@ -666,6 +666,8 @@ exports.importMenu = catchAsync(async (req, res, next) => {
     return next(new AppError('請上傳檔案', 400));
   }
 
+
+
   try {
     console.log(`開始處理菜單匯入檔案：${req.file.originalname}`);
     
@@ -1095,6 +1097,49 @@ exports.importMenu = catchAsync(async (req, res, next) => {
     let created = 0;
     let updated = 0;
     let failed = 0;
+    let deleted = 0;
+    
+    // 收集匯入表格中的所有菜品識別資訊
+    const importedDishKeys = new Set();
+    for (const dishData of menuData) {
+      const key = `${dishData.name}-${dishData.category}`;
+      importedDishKeys.add(key);
+    }
+    
+    // 刪除不在匯入表格中的菜品
+    console.log('檢查需要刪除的菜品...');
+    
+    // 獲取該商家所有現有菜品
+    const existingDishes = await Dish.find({ merchant: merchantId });
+    
+    for (const existingDish of existingDishes) {
+      const key = `${existingDish.name}-${existingDish.category}`;
+      
+      if (!importedDishKeys.has(key)) {
+        try {
+          await Dish.findByIdAndDelete(existingDish._id);
+          results.push({
+            name: existingDish.name,
+            category: existingDish.category,
+            success: true,
+            action: 'deleted',
+            id: existingDish._id
+          });
+          deleted++;
+          console.log(`刪除菜品：${existingDish.name} (${existingDish.category})`);
+        } catch (error) {
+          console.error(`刪除菜品「${existingDish.name}」失敗:`, error);
+          results.push({
+            name: existingDish.name,
+            category: existingDish.category,
+            success: false,
+            action: 'delete_failed',
+            error: error.message
+          });
+          failed++;
+        }
+      }
+    }
     
     for (const dishData of menuData) {
       try {
@@ -1153,7 +1198,7 @@ exports.importMenu = catchAsync(async (req, res, next) => {
       console.warn('清理暫存檔案失敗:', error);
     }
     
-    console.log(`菜單匯入完成：新增 ${created} 項，更新 ${updated} 項，失敗 ${failed} 項`);
+    console.log(`菜單匯入完成：新增 ${created} 項，更新 ${updated} 項，刪除 ${deleted} 項，失敗 ${failed} 項`);
     
     // 調試：顯示匯入結果摘要
     console.log('=== 匯入結果摘要 ===');
@@ -1168,10 +1213,11 @@ exports.importMenu = catchAsync(async (req, res, next) => {
     
     res.status(200).json({
       status: 'success',
-      message: `菜單匯入完成：新增 ${created} 項，更新 ${updated} 項，失敗 ${failed} 項`,
+      message: `菜單匯入完成：新增 ${created} 項，更新 ${updated} 項，刪除 ${deleted} 項，失敗 ${failed} 項`,
       data: {
         created,
         updated,
+        deleted,
         failed,
         results
       }

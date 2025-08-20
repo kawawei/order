@@ -127,6 +127,7 @@
               <font-awesome-icon icon="check-circle" />
               <span>成功更新：{{ importResult.updated }} 個項目</span>
             </div>
+
             <div v-if="importResult.failed > 0" class="result-item error">
               <font-awesome-icon icon="times-circle" />
               <span>失敗：{{ importResult.failed }} 個項目</span>
