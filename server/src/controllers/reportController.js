@@ -1060,92 +1060,268 @@ exports.exportReport = catchAsync(async (req, res, next) => {
       }
     ]);
 
-    // 5. 獲取時間序列數據
-    const timeSeriesData = await Order.aggregate([
-      { 
-        $match: { 
-          merchantId: new mongoose.Types.ObjectId(merchantId),
-          status: 'completed',
-          ...dateQuery 
-        } 
-      },
-      {
-        $lookup: {
-          from: 'tables',
-          localField: 'tableId',
-          foreignField: '_id',
-          as: 'tableInfo'
-        }
-      },
-      {
-        $unwind: '$tableInfo'
-      },
-      {
-        $addFields: {
-          // 從訂單號解析客人組別
-          customerGroup: {
-            $let: {
-              vars: {
-                orderParts: { $split: ['$orderNumber', '-'] }
-              },
-              in: {
-                $cond: {
-                  if: { $gte: [{ $size: '$$orderParts' }, 2] },
-                  then: {
-                    $let: {
-                      vars: {
-                        dateGroupBatch: { $arrayElemAt: ['$$orderParts', 1] }
-                      },
-                      in: {
-                        $cond: {
-                          if: { $gte: [{ $strLenBytes: '$$dateGroupBatch' }, 12] },
-                          then: {
-                            $toString: {
-                              $toInt: { $substr: ['$$dateGroupBatch', 8, 4] }
-                            }
-                          },
-                          else: '1'
+    // 5. 獲取時間序列數據 - 根據報表類型使用不同的分組方式
+    let timeSeriesData;
+    
+    if (period === 'day') {
+      // 日報：按小時分組
+      timeSeriesData = await Order.aggregate([
+        { 
+          $match: { 
+            merchantId: new mongoose.Types.ObjectId(merchantId),
+            status: 'completed',
+            ...dateQuery 
+          } 
+        },
+        {
+          $lookup: {
+            from: 'tables',
+            localField: 'tableId',
+            foreignField: '_id',
+            as: 'tableInfo'
+          }
+        },
+        {
+          $unwind: '$tableInfo'
+        },
+        {
+          $addFields: {
+            customerGroup: {
+              $let: {
+                vars: {
+                  orderParts: { $split: ['$orderNumber', '-'] }
+                },
+                in: {
+                  $cond: {
+                    if: { $gte: [{ $size: '$$orderParts' }, 2] },
+                    then: {
+                      $let: {
+                        vars: {
+                          dateGroupBatch: { $arrayElemAt: ['$$orderParts', 1] }
+                        },
+                        in: {
+                          $cond: {
+                            if: { $gte: [{ $strLenBytes: '$$dateGroupBatch' }, 12] },
+                            then: {
+                              $toString: {
+                                $toInt: { $substr: ['$$dateGroupBatch', 8, 4] }
+                              }
+                            },
+                            else: '1'
+                          }
                         }
                       }
-                    }
-                  },
-                  else: '1'
+                    },
+                    else: '1'
+                  }
                 }
               }
             }
           }
-        }
-      },
-      {
-        $group: {
-          _id: {
-            timeSlot: {
-              $dateToString: { 
-                format: "%H:00", 
-                date: { $add: ["$createdAt", 8 * 60 * 60 * 1000] } // 轉換為台灣時區 (UTC+8)
-              }
+        },
+        {
+          $group: {
+            _id: {
+              timeSlot: {
+                $dateToString: { 
+                  format: "%H:00", 
+                  date: { $add: ["$createdAt", 8 * 60 * 60 * 1000] }
+                }
+              },
+              tableId: '$tableId',
+              customerGroup: '$customerGroup'
             },
-            tableId: '$tableId',
-            customerGroup: '$customerGroup'
-          },
-          tableCapacity: { $first: '$tableInfo.capacity' },
-          orderCount: { $sum: 1 },
-          revenue: { $sum: '$totalAmount' }
+            tableCapacity: { $first: '$tableInfo.capacity' },
+            orderCount: { $sum: 1 },
+            revenue: { $sum: '$totalAmount' }
+          }
+        },
+        {
+          $group: {
+            _id: '$_id.timeSlot',
+            revenue: { $sum: '$revenue' },
+            orderCount: { $sum: '$orderCount' },
+            customerCount: { $sum: '$tableCapacity' },
+            customerGroupCount: { $sum: 1 }
+          }
+        },
+        {
+          $sort: { _id: 1 }
         }
-      },
-      {
-        $group: {
-          _id: '$_id.timeSlot',
-          revenue: { $sum: '$revenue' },
-          orderCount: { $sum: '$orderCount' },
-          customerCount: { $sum: '$tableCapacity' },
-          customerGroupCount: { $sum: 1 } // 計算客人組數
+      ]);
+    } else if (period === 'month') {
+      // 月報：按天分組
+      timeSeriesData = await Order.aggregate([
+        { 
+          $match: { 
+            merchantId: new mongoose.Types.ObjectId(merchantId),
+            status: 'completed',
+            ...dateQuery 
+          } 
+        },
+        {
+          $lookup: {
+            from: 'tables',
+            localField: 'tableId',
+            foreignField: '_id',
+            as: 'tableInfo'
+          }
+        },
+        {
+          $unwind: '$tableInfo'
+        },
+        {
+          $addFields: {
+            customerGroup: {
+              $let: {
+                vars: {
+                  orderParts: { $split: ['$orderNumber', '-'] }
+                },
+                in: {
+                  $cond: {
+                    if: { $gte: [{ $size: '$$orderParts' }, 2] },
+                    then: {
+                      $let: {
+                        vars: {
+                          dateGroupBatch: { $arrayElemAt: ['$$orderParts', 1] }
+                        },
+                        in: {
+                          $cond: {
+                            if: { $gte: [{ $strLenBytes: '$$dateGroupBatch' }, 12] },
+                            then: {
+                              $toString: {
+                                $toInt: { $substr: ['$$dateGroupBatch', 8, 4] }
+                              }
+                            },
+                            else: '1'
+                          }
+                        }
+                      }
+                    },
+                    else: '1'
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          $group: {
+            _id: {
+              timeSlot: {
+                $dateToString: { 
+                  format: "%m/%d", 
+                  date: { $add: ["$createdAt", 8 * 60 * 60 * 1000] }
+                }
+              },
+              tableId: '$tableId',
+              customerGroup: '$customerGroup'
+            },
+            tableCapacity: { $first: '$tableInfo.capacity' },
+            orderCount: { $sum: 1 },
+            revenue: { $sum: '$totalAmount' }
+          }
+        },
+        {
+          $group: {
+            _id: '$_id.timeSlot',
+            revenue: { $sum: '$revenue' },
+            orderCount: { $sum: '$orderCount' },
+            customerCount: { $sum: '$tableCapacity' },
+            customerGroupCount: { $sum: 1 }
+          }
+        },
+        {
+          $sort: { _id: 1 }
         }
-      },
-      {
-        $sort: { _id: 1 }
-      }
-    ]);
+      ]);
+    } else if (period === 'year') {
+      // 年報：按月分組
+      timeSeriesData = await Order.aggregate([
+        { 
+          $match: { 
+            merchantId: new mongoose.Types.ObjectId(merchantId),
+            status: 'completed',
+            ...dateQuery 
+          } 
+        },
+        {
+          $lookup: {
+            from: 'tables',
+            localField: 'tableId',
+            foreignField: '_id',
+            as: 'tableInfo'
+          }
+        },
+        {
+          $unwind: '$tableInfo'
+        },
+        {
+          $addFields: {
+            customerGroup: {
+              $let: {
+                vars: {
+                  orderParts: { $split: ['$orderNumber', '-'] }
+                },
+                in: {
+                  $cond: {
+                    if: { $gte: [{ $size: '$$orderParts' }, 2] },
+                    then: {
+                      $let: {
+                        vars: {
+                          dateGroupBatch: { $arrayElemAt: ['$$orderParts', 1] }
+                        },
+                        in: {
+                          $cond: {
+                            if: { $gte: [{ $strLenBytes: '$$dateGroupBatch' }, 12] },
+                            then: {
+                              $toString: {
+                                $toInt: { $substr: ['$$dateGroupBatch', 8, 4] }
+                              }
+                            },
+                            else: '1'
+                          }
+                        }
+                      }
+                    },
+                    else: '1'
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          $group: {
+            _id: {
+              timeSlot: {
+                $dateToString: { 
+                  format: "%Y年%m月", 
+                  date: { $add: ["$createdAt", 8 * 60 * 60 * 1000] }
+                }
+              },
+              tableId: '$tableId',
+              customerGroup: '$customerGroup'
+            },
+            tableCapacity: { $first: '$tableInfo.capacity' },
+            orderCount: { $sum: 1 },
+            revenue: { $sum: '$totalAmount' }
+          }
+        },
+        {
+          $group: {
+            _id: '$_id.timeSlot',
+            revenue: { $sum: '$revenue' },
+            orderCount: { $sum: '$orderCount' },
+            customerCount: { $sum: '$tableCapacity' },
+            customerGroupCount: { $sum: 1 }
+          }
+        },
+        {
+          $sort: { _id: 1 }
+        }
+      ]);
+    }
 
     // 重新計算總客人組數，避免重複計算
     const totalCustomerGroupsResult = await Order.aggregate([
@@ -1312,23 +1488,26 @@ exports.exportReport = catchAsync(async (req, res, next) => {
     infoSheet['!cols'] = [{ wch: 15 }, { wch: 30 }];
     XLSX.utils.book_append_sheet(workbook, infoSheet, '報表資訊');
 
-    // 生成檔案名稱：使用報表期間的日期，而不是當前時間
-    let fileNameDateStr;
+    // 生成檔案名稱：根據報表類型使用不同格式
+    let fileName;
     if (period === 'day' && date) {
-      // 使用報表日期
-      fileNameDateStr = date.replace(/-/g, '');
+      // 日報：年月日-餐廳名稱-統計報表
+      fileName = `${date.replace(/-/g, '')}-${merchant.businessName}-統計報表`;
     } else if (period === 'month' && startDate) {
-      // 使用月份開始日期
-      fileNameDateStr = startDate.replace(/-/g, '');
+      // 月報：年份-月份-餐廳名稱-統計報表
+      const year = startDate.split('-')[0];
+      const month = parseInt(startDate.split('-')[1]);
+      fileName = `${year}-${month}-${merchant.businessName}-統計報表`;
     } else if (period === 'year' && startDate) {
-      // 使用年份開始日期
-      fileNameDateStr = startDate.replace(/-/g, '');
+      // 年報：年份-餐廳名稱-統計報表
+      const year = startDate.split('-')[0];
+      fileName = `${year}-${merchant.businessName}-統計報表`;
     } else {
       // 預設使用當前日期
       const now = new Date();
-      fileNameDateStr = `${now.getFullYear()}${(now.getMonth() + 1).toString().padStart(2, '0')}${now.getDate().toString().padStart(2, '0')}`;
+      const dateStr = `${now.getFullYear()}${(now.getMonth() + 1).toString().padStart(2, '0')}${now.getDate().toString().padStart(2, '0')}`;
+      fileName = `${dateStr}-${merchant.businessName}-統計報表`;
     }
-    const fileName = `${fileNameDateStr}-${merchant.businessName}-統計報表`;
     
     // 添加檔案名稱到響應標頭中，供前端使用
     res.setHeader('X-File-Name', encodeURIComponent(fileName));
