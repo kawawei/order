@@ -1,8 +1,33 @@
 const express = require('express');
 const inventoryController = require('../controllers/inventoryController');
 const { protectAny, requirePermissions } = require('../middleware/auth');
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
 
 const router = express.Router();
+
+// 上傳配置
+const tempDir = path.join(__dirname, '..', 'tmp');
+if (!fs.existsSync(tempDir)) {
+  fs.mkdirSync(tempDir, { recursive: true });
+}
+const upload = multer({
+  dest: tempDir,
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
+  fileFilter: (req, file, cb) => {
+    const allowedTypes = [
+      'application/vnd.ms-excel',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'text/csv',
+      'application/csv'
+    ];
+    if (allowedTypes.includes(file.mimetype) || file.originalname.match(/\.(xlsx|xls|csv)$/)) {
+      return cb(null, true);
+    }
+    cb(new Error('只允許上傳 Excel 或 CSV 檔案'));
+  }
+});
 
 // 商家或超級管理員登入後才能訪問的路由
 router.use(protectAny);
@@ -11,6 +36,13 @@ router.use(protectAny);
 router.route('/')
   .get(requirePermissions('庫存:查看'), inventoryController.getAllInventory)
   .post(requirePermissions('庫存:編輯'), inventoryController.createInventory);
+
+// 匯入功能
+router.post('/import', 
+  requirePermissions('庫存:編輯'), 
+  upload.single('file'), 
+  inventoryController.importInventory
+);
 
 // 批量操作
 router.patch('/batch/update', requirePermissions('庫存:編輯'), inventoryController.batchUpdateInventory);

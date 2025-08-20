@@ -213,33 +213,77 @@ export const authAPI = {
 
 export const tableAPI = {
   // 獲取桌次列表
-  getTables: (params = {}) => api.get('/tables', { params }),
+  getTables: (params = {}) => {
+    const merchantId = resolveActiveMerchantId()
+    const finalParams = merchantId ? { ...params, merchantId } : params
+    return api.get('/tables', { params: finalParams })
+  },
   
   // 創建新桌次
-  createTable: (data) => api.post('/tables', data),
+  createTable: (data) => {
+    const merchantId = resolveActiveMerchantId()
+    const params = merchantId ? { merchantId } : {}
+    return api.post('/tables', data, { params })
+  },
   
   // 更新桌次
-  updateTable: (tableId, data) => api.put(`/tables/${tableId}`, data),
+  updateTable: (tableId, data) => {
+    const merchantId = resolveActiveMerchantId()
+    const params = merchantId ? { merchantId } : {}
+    return api.put(`/tables/${tableId}`, data, { params })
+  },
   
   // 刪除桌次
-  deleteTable: (tableId) => api.delete(`/tables/${tableId}`),
+  deleteTable: (tableId) => {
+    const merchantId = resolveActiveMerchantId()
+    const params = merchantId ? { merchantId } : {}
+    return api.delete(`/tables/${tableId}`, { params })
+  },
   
   // 更新桌次狀態
-  updateTableStatus: (tableId, statusData) => api.patch(`/tables/${tableId}/status`, statusData),
+  updateTableStatus: (tableId, statusData) => {
+    const merchantId = resolveActiveMerchantId()
+    const params = merchantId ? { merchantId } : {}
+    return api.patch(`/tables/${tableId}/status`, statusData, { params })
+  },
   
   // 重新生成 QR Code
-  regenerateQRCode: (tableId) => api.post(`/tables/${tableId}/regenerate-qr`),
+  regenerateQRCode: (tableId) => {
+    const merchantId = resolveActiveMerchantId()
+    const params = merchantId ? { merchantId } : {}
+    return api.post(`/tables/${tableId}/regenerate-qr`, {}, { params })
+  },
 };
 
 export const menuAPI = {
   // 分類相關
-  getCategories: (params = {}) => api.get('/menu/categories', { params }),
-  createCategory: (data) => api.post('/menu/categories', data),
-  updateCategory: (categoryId, data) => api.patch(`/menu/categories/${categoryId}`, data),
-  deleteCategory: (categoryId) => api.delete(`/menu/categories/${categoryId}`),
+  getCategories: (params = {}) => {
+    const merchantId = resolveActiveMerchantId()
+    const finalParams = merchantId ? { ...params, merchantId } : params
+    return api.get('/menu/categories', { params: finalParams })
+  },
+  createCategory: (data) => {
+    const merchantId = resolveActiveMerchantId()
+    const params = merchantId ? { merchantId } : {}
+    return api.post('/menu/categories', data, { params })
+  },
+  updateCategory: (categoryId, data) => {
+    const merchantId = resolveActiveMerchantId()
+    const params = merchantId ? { merchantId } : {}
+    return api.patch(`/menu/categories/${categoryId}`, data, { params })
+  },
+  deleteCategory: (categoryId) => {
+    const merchantId = resolveActiveMerchantId()
+    const params = merchantId ? { merchantId } : {}
+    return api.delete(`/menu/categories/${categoryId}`, { params })
+  },
   
   // 菜品相關
-  getDishes: (params = {}) => api.get('/menu/dishes', { params }),
+  getDishes: (params = {}) => {
+    const merchantId = resolveActiveMerchantId()
+    const finalParams = merchantId ? { ...params, merchantId } : params
+    return api.get('/menu/dishes', { params: finalParams })
+  },
   // 使用 multipart/form-data 上傳圖片與 JSON 欄位
   createDish: (data) => {
     const form = new FormData()
@@ -252,8 +296,11 @@ export const menuAPI = {
         form.append(key, value)
       }
     })
+    const merchantId = resolveActiveMerchantId()
+    const params = merchantId ? { merchantId } : {}
     return api.post('/menu/dishes', form, {
-      headers: { 'Content-Type': 'multipart/form-data' }
+      headers: { 'Content-Type': 'multipart/form-data' },
+      params
     })
   },
   updateDish: (dishId, data) => {
@@ -267,15 +314,30 @@ export const menuAPI = {
         form.append(key, value)
       }
     })
+    const merchantId = resolveActiveMerchantId()
+    const params = merchantId ? { merchantId } : {}
     return api.put(`/menu/dishes/${dishId}`, form, {
-      headers: { 'Content-Type': 'multipart/form-data' }
+      headers: { 'Content-Type': 'multipart/form-data' },
+      params
     })
   },
-  deleteDish: (dishId) => api.delete(`/menu/dishes/${dishId}`),
+  deleteDish: (dishId) => {
+    const merchantId = resolveActiveMerchantId()
+    const params = merchantId ? { merchantId } : {}
+    return api.delete(`/menu/dishes/${dishId}`, { params })
+  },
   
   // 菜單相關
-  getMenu: (params = {}) => api.get('/menu', { params }),
-  updateMenuStructure: (data) => api.put('/menu/structure', data),
+  getMenu: (params = {}) => {
+    const merchantId = resolveActiveMerchantId()
+    const finalParams = merchantId ? { ...params, merchantId } : params
+    return api.get('/menu', { params: finalParams })
+  },
+  updateMenuStructure: (data) => {
+    const merchantId = resolveActiveMerchantId()
+    const params = merchantId ? { merchantId } : {}
+    return api.put('/menu/structure', data, { params })
+  },
   
   // 客戶端公開菜單
   getPublicMenu: (merchantId) => api.get(`/menu/public/${merchantId}`),
@@ -284,34 +346,70 @@ export const menuAPI = {
 // 為了向後兼容，創建 menuService 對象
 export const orderAPI = {
   // 創建訂單
-  createOrder: (data) => api.post('/orders', data),
+  createOrder: (data) => {
+    const merchantId = resolveActiveMerchantId()
+    const params = merchantId ? { merchantId } : {}
+    return api.post('/orders', data, { params })
+  },
   
   // 結帳功能 (舊版本，保持向後兼容)
-  checkout: (data) => api.post('/orders/checkout', data),
+  checkout: (data) => {
+    const merchantId = resolveActiveMerchantId()
+    const params = merchantId ? { merchantId } : {}
+    return api.post('/orders/checkout', data, { params })
+  },
   
   // 新的桌子結帳功能 - 合併所有批次
-  checkoutTable: (tableId) => api.post(`/orders/table/${tableId}/checkout`),
+  checkoutTable: (tableId) => {
+    const merchantId = resolveActiveMerchantId()
+    const params = merchantId ? { merchantId } : {}
+    return api.post(`/orders/table/${tableId}/checkout`, {}, { params })
+  },
   
   // 獲取桌子的所有批次訂單
-  getTableBatches: (tableId) => api.get(`/orders/table/${tableId}/batches`),
+  getTableBatches: (tableId) => {
+    const merchantId = resolveActiveMerchantId()
+    const params = merchantId ? { merchantId } : {}
+    return api.get(`/orders/table/${tableId}/batches`, { params })
+  },
   
   // 獲取桌子當前總金額
-  getTableTotal: (tableId) => api.get(`/orders/table/${tableId}/total`),
+  getTableTotal: (tableId) => {
+    const merchantId = resolveActiveMerchantId()
+    const params = merchantId ? { merchantId } : {}
+    return api.get(`/orders/table/${tableId}/total`, { params })
+  },
   
   // 獲取訂單詳情
-  getOrder: (orderId) => api.get(`/orders/${orderId}`),
+  getOrder: (orderId) => {
+    const merchantId = resolveActiveMerchantId()
+    const params = merchantId ? { merchantId } : {}
+    return api.get(`/orders/${orderId}`, { params })
+  },
   
   // 根據桌子獲取訂單列表
-  getOrdersByTable: (tableId, params = {}) => api.get(`/orders/table/${tableId}`, { params }),
+  getOrdersByTable: (tableId, params = {}) => {
+    const merchantId = resolveActiveMerchantId()
+    const finalParams = merchantId ? { ...params, merchantId } : params
+    return api.get(`/orders/table/${tableId}`, { params: finalParams })
+  },
   
   // 根據商家獲取訂單列表（後台用）
   getOrdersByMerchant: (merchantId, params = {}) => api.get(`/orders/merchant/${merchantId}`, { params }),
   
   // 更新訂單狀態
-  updateOrderStatus: (orderId, data) => api.patch(`/orders/${orderId}/status`, data),
+  updateOrderStatus: (orderId, data) => {
+    const merchantId = resolveActiveMerchantId()
+    const params = merchantId ? { merchantId } : {}
+    return api.patch(`/orders/${orderId}/status`, data, { params })
+  },
   
   // 取消訂單
-  cancelOrder: (orderId) => api.patch(`/orders/${orderId}/cancel`),
+  cancelOrder: (orderId) => {
+    const merchantId = resolveActiveMerchantId()
+    const params = merchantId ? { merchantId } : {}
+    return api.patch(`/orders/${orderId}/cancel`, {}, { params })
+  },
   
   // 獲取訂單統計
   getOrderStats: (merchantId, params = {}) => api.get(`/orders/merchant/${merchantId}/stats`, { params }),
@@ -527,58 +625,168 @@ export const employeeAPI = {
 // 庫存管理 API
 export const inventoryAPI = {
   // 獲取所有庫存項目
-  getAllInventory: (params = {}) => api.get('/inventory', { params }),
+  getAllInventory: (params = {}) => {
+    const merged = { ...(params || {}) }
+    if (!merged.merchantId) {
+      const merchantId = resolveActiveMerchantId()
+      if (merchantId) merged.merchantId = merchantId
+    }
+    return api.get('/inventory', { params: merged })
+  },
   
   // 獲取單個庫存項目
-  getInventory: (id) => api.get(`/inventory/${id}`),
+  getInventory: (inventoryId, params = {}) => {
+    const merged = { ...(params || {}) }
+    if (!merged.merchantId) {
+      const merchantId = resolveActiveMerchantId()
+      if (merchantId) merged.merchantId = merchantId
+    }
+    return api.get(`/inventory/${inventoryId}`, { params: merged })
+  },
   
   // 創建庫存項目
-  createInventory: (data) => api.post('/inventory', data),
+  createInventory: (data, params = {}) => {
+    const merged = { ...(params || {}) }
+    if (!merged.merchantId) {
+      const merchantId = resolveActiveMerchantId()
+      if (merchantId) merged.merchantId = merchantId
+    }
+    return api.post('/inventory', data, { params: merged })
+  },
   
   // 更新庫存項目
-  updateInventory: (id, data) => api.patch(`/inventory/${id}`, data),
+  updateInventory: (inventoryId, data, params = {}) => {
+    const merged = { ...(params || {}) }
+    if (!merged.merchantId) {
+      const merchantId = resolveActiveMerchantId()
+      if (merchantId) merged.merchantId = merchantId
+    }
+    return api.patch(`/inventory/${inventoryId}`, data, { params: merged })
+  },
   
   // 刪除庫存項目
-  deleteInventory: (id) => api.delete(`/inventory/${id}`),
+  deleteInventory: (inventoryId, params = {}) => {
+    const merged = { ...(params || {}) }
+    if (!merged.merchantId) {
+      const merchantId = resolveActiveMerchantId()
+      if (merchantId) merged.merchantId = merchantId
+    }
+    return api.delete(`/inventory/${inventoryId}`, { params: merged })
+  },
   
   // 批量更新庫存
-  batchUpdateInventory: (data) => api.patch('/inventory/batch/update', data),
+  batchUpdateInventory: (updates, params = {}) => {
+    const merged = { ...(params || {}) }
+    if (!merged.merchantId) {
+      const merchantId = resolveActiveMerchantId()
+      if (merchantId) merged.merchantId = merchantId
+    }
+    return api.patch('/inventory/batch/update', { updates }, { params: merged })
+  },
   
   // 獲取庫存統計概覽
-  getInventoryStats: () => api.get('/inventory/stats/overview'),
+  getInventoryStats: (params = {}) => {
+    const merged = { ...(params || {}) }
+    if (!merged.merchantId) {
+      const merchantId = resolveActiveMerchantId()
+      if (merchantId) merged.merchantId = merchantId
+    }
+    return api.get('/inventory/stats/overview', { params: merged })
+  },
   
   // 獲取庫存分類統計
-  getInventoryCategories: () => api.get('/inventory/categories'),
+  getInventoryCategories: (params = {}) => {
+    const merged = { ...(params || {}) }
+    if (!merged.merchantId) {
+      const merchantId = resolveActiveMerchantId()
+      if (merchantId) merged.merchantId = merchantId
+    }
+    return api.get('/inventory/categories', { params: merged })
+  },
   
   // 搜索庫存項目
-  searchInventory: (query) => api.get('/inventory/search', { params: { q: query } })
+  searchInventory: (params = {}) => {
+    const merged = { ...(params || {}) }
+    if (!merged.merchantId) {
+      const merchantId = resolveActiveMerchantId()
+      if (merchantId) merged.merchantId = merchantId
+    }
+    return api.get('/inventory/search', { params: merged })
+  },
+  
+  // 匯入庫存項目
+  importInventory: (formData, params = {}) => {
+    const merged = { ...(params || {}) }
+    if (!merged.merchantId) {
+      const merchantId = resolveActiveMerchantId()
+      if (merchantId) merged.merchantId = merchantId
+    }
+    return api.post('/inventory/import', formData, {
+      params: merged,
+      headers: {
+        'Content-Type': 'multipart/form-data'
+      }
+    })
+  }
 };
 
 // 庫存分類管理 API
 export const inventoryCategoryAPI = {
   // 獲取所有分類
-  getAllCategories: () => api.get('/inventory-categories'),
+  getAllCategories: () => {
+    const merchantId = resolveActiveMerchantId()
+    const params = merchantId ? { merchantId } : {}
+    return api.get('/inventory-categories', { params })
+  },
   
   // 獲取單個分類
-  getCategory: (id) => api.get(`/inventory-categories/${id}`),
+  getCategory: (id) => {
+    const merchantId = resolveActiveMerchantId()
+    const params = merchantId ? { merchantId } : {}
+    return api.get(`/inventory-categories/${id}`, { params })
+  },
   
   // 創建新分類
-  createCategory: (data) => api.post('/inventory-categories', data),
+  createCategory: (data) => {
+    const merchantId = resolveActiveMerchantId()
+    const params = merchantId ? { merchantId } : {}
+    return api.post('/inventory-categories', data, { params })
+  },
   
   // 更新分類
-  updateCategory: (id, data) => api.patch(`/inventory-categories/${id}`, data),
+  updateCategory: (id, data) => {
+    const merchantId = resolveActiveMerchantId()
+    const params = merchantId ? { merchantId } : {}
+    return api.patch(`/inventory-categories/${id}`, data, { params })
+  },
   
   // 刪除分類
-  deleteCategory: (id) => api.delete(`/inventory-categories/${id}`),
+  deleteCategory: (id) => {
+    const merchantId = resolveActiveMerchantId()
+    const params = merchantId ? { merchantId } : {}
+    return api.delete(`/inventory-categories/${id}`, { params })
+  },
   
   // 更新分類排序
-  updateCategoriesOrder: (data) => api.patch('/inventory-categories/order', data),
+  updateCategoriesOrder: (data) => {
+    const merchantId = resolveActiveMerchantId()
+    const params = merchantId ? { merchantId } : {}
+    return api.patch('/inventory-categories/order', data, { params })
+  },
   
   // 獲取分類統計
-  getCategoryStats: () => api.get('/inventory-categories/stats'),
+  getCategoryStats: () => {
+    const merchantId = resolveActiveMerchantId()
+    const params = merchantId ? { merchantId } : {}
+    return api.get('/inventory-categories/stats', { params })
+  },
   
   // 初始化系統預設分類
-  initializeSystemCategories: () => api.post('/inventory-categories/initialize')
+  initializeSystemCategories: () => {
+    const merchantId = resolveActiveMerchantId()
+    const params = merchantId ? { merchantId } : {}
+    return api.post('/inventory-categories/initialize', {}, { params })
+  }
 };
 
 // 為了向後兼容，創建 inventoryService 對象
@@ -593,6 +801,7 @@ export const inventoryService = {
   getInventoryStats: inventoryAPI.getInventoryStats,
   getInventoryCategories: inventoryAPI.getInventoryCategories,
   searchInventory: inventoryAPI.searchInventory,
+  importInventory: inventoryAPI.importInventory,
   
   // 庫存分類相關方法
   getCategories: inventoryCategoryAPI.getAllCategories,

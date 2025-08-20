@@ -142,7 +142,7 @@ exports.signup = catchAsync(async (req, res, next) => {
     const Role = require('../models/role');
     const defaultRoles = [
       { name: '老闆', permissions: ['菜單:查看','菜單:編輯','庫存:查看','庫存:編輯','訂單:查看','訂單:更新狀態','訂單:結帳','桌位:查看','桌位:管理','報表:查看','商家設定:編輯','員工:查看','員工:編輯','角色:管理'], isSystem: true },
-      { name: '管理人員', permissions: ['菜單:查看','庫存:查看','訂單:查看','訂單:更新狀態','桌位:查看','桌位:管理','報表:查看','員工:查看','員工:編輯'], isSystem: true },
+      { name: '管理人員', permissions: ['菜單:查看','菜單:編輯','庫存:查看','庫存:編輯','訂單:查看','訂單:更新狀態','訂單:結帳','桌位:查看','桌位:管理','報表:查看','員工:查看','員工:編輯'], isSystem: true },
       { name: '工作人員', permissions: ['訂單:查看','訂單:更新狀態','訂單:結帳','桌位:查看'], isSystem: true }
     ];
     const createdRoles = await Role.insertMany(defaultRoles.map(r => ({ ...r, merchant: newMerchant._id })));

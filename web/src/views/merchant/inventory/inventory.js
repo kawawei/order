@@ -9,6 +9,7 @@ const showEditModal = ref(false)
 const showStockModal = ref(false)
 const showCategoryModal = ref(false)
 const showCategoryEditModal = ref(false)
+const showImportModal = ref(false)
 const selectedItem = ref(null)
 const selectedCategoryForEdit = ref(null)
 const loading = ref(false)
@@ -52,6 +53,17 @@ const categoryForm = ref({
   description: '',
   icon: ''
 })
+
+const importForm = ref({
+  file: null,
+  preview: [],
+  removeMissing: false // 是否刪除不在Excel中的項目
+})
+
+// 匯入相關狀態
+const importing = ref(false)
+const importResult = ref(null)
+const fileInput = ref(null)
 
 // 庫存數據
 const inventoryItems = ref([])
@@ -144,8 +156,12 @@ const loadInventory = async () => {
       categories.value = [
         { value: '', label: '全部' },
         ...(categoriesResponse.data.categories || []).map(cat => ({
-          value: cat,
-          label: cat
+          value: cat.name,
+          label: cat.name,
+          id: cat._id,
+          description: cat.description,
+          color: cat.color,
+          isSystem: cat.isSystem
         }))
       ]
     }
@@ -157,133 +173,123 @@ const loadInventory = async () => {
   }
 }
 
+// 初始化系統預設分類
 const initializeSystemCategories = async () => {
   try {
-    const response = await inventoryCategoryAPI.initializeSystemCategories()
-    if (response.data.categories) {
-      categories.value = [
-        { value: '', label: '全部' },
-        ...response.data.categories.map(cat => ({
-          value: cat.name,
-          label: cat.name,
-          id: cat._id,
-          description: cat.description,
-          color: cat.color,
-          isSystem: cat.isSystem
-        }))
-      ]
-    }
+    await inventoryCategoryAPI.initializeSystemCategories()
+    const categoriesResponse = await inventoryCategoryAPI.getAllCategories()
+    categories.value = [
+      { value: '', label: '全部' },
+      ...categoriesResponse.data.categories.map(cat => ({
+        value: cat.name,
+        label: cat.name,
+        id: cat._id,
+        description: cat.description,
+        color: cat.color,
+        isSystem: cat.isSystem
+      }))
+    ]
   } catch (err) {
     console.error('初始化系統分類失敗:', err)
   }
 }
 
+// 篩選方法
 const filterByCategory = (category) => {
   selectedCategory.value = category
 }
 
+// 顯示方法
 const getCategoryLabel = (category) => {
-  const found = categories.value.find(c => c.value === category)
-  return found ? found.label : category
+  const cat = categories.value.find(c => c.value === category)
+  return cat ? cat.label : category
 }
 
 const getCategoryClass = (category) => {
-  const classMap = {
-    '食品': 'primary',
-    '飲料': 'warning',
-    '包裝': 'info',
-    '設備': 'secondary'
-  }
-  return classMap[category] || 'default'
+  const cat = categories.value.find(c => c.value === category)
+  return cat?.color || 'default'
 }
 
 const hasVariants = (item) => {
-  return item && item.type === 'multiSpec' && item.multiSpecStock.length > 0
+  return item.type === 'multiSpec' && item.multiSpecStock && item.multiSpecStock.length > 1
 }
 
 const getTotalQuantity = (item) => {
-  if (item.type === 'multiSpec') {
-    return item.multiSpecStock.reduce((sum, v) => sum + v.quantity, 0)
+  if (item.type === 'single') {
+    return item.singleStock.quantity
+  } else if (item.type === 'multiSpec') {
+    return item.multiSpecStock.reduce((sum, spec) => sum + spec.quantity, 0)
   }
-  return item.singleStock.quantity
+  return 0
 }
 
 const getVariantCostRangeText = (item) => {
-  if (item.type !== 'multiSpec') return ''
-  const costs = item.multiSpecStock.map(v => v.unitPrice)
-  const minCost = Math.min(...costs)
-  const maxCost = Math.max(...costs)
-  if (minCost === maxCost) {
-    return `$${minCost.toFixed(2)}`
+  if (item.type === 'multiSpec' && item.multiSpecStock.length > 0) {
+    const prices = item.multiSpecStock.map(spec => spec.unitPrice)
+    const minPrice = Math.min(...prices)
+    const maxPrice = Math.max(...prices)
+    if (minPrice === maxPrice) {
+      return `$${minPrice.toFixed(2)}`
+    }
+    return `$${minPrice.toFixed(2)} - $${maxPrice.toFixed(2)}`
   }
-  return `$${minCost.toFixed(2)} - $${maxCost.toFixed(2)}`
+  return ''
 }
 
 const getQuantityClass = (item) => {
-  const totalQty = getTotalQuantity(item)
-  if (totalQty === 0) return 'out-of-stock'
-  
-  if (item.type === 'multiSpec') {
-    const hasLowStock = item.multiSpecStock.some(v => v.quantity <= v.minStock && v.quantity > 0)
-    if (hasLowStock) return 'low-stock'
-  } else if (item.singleStock.quantity <= item.singleStock.minStock) {
-    return 'low-stock'
+  const totalQuantity = getTotalQuantity(item)
+  if (totalQuantity === 0) return 'out-of-stock'
+  if (item.type === 'single') {
+    return totalQuantity <= item.singleStock.minStock ? 'low-stock' : 'normal'
+  } else if (item.type === 'multiSpec') {
+    const hasLowStock = item.multiSpecStock.some(spec => spec.quantity <= spec.minStock)
+    return hasLowStock ? 'low-stock' : 'normal'
   }
-  
   return 'normal'
 }
 
 const getStatusClass = (item) => {
-  const totalQty = getTotalQuantity(item)
-  if (totalQty === 0) return 'danger'
-  
-  if (item.type === 'multiSpec') {
-    const hasLowStock = item.multiSpecStock.some(v => v.quantity <= v.minStock && v.quantity > 0)
-    if (hasLowStock) return 'warning'
-  } else if (item.singleStock.quantity <= item.singleStock.minStock) {
-    return 'warning'
-  }
-  
-  return 'success'
+  if (!item.isActive) return 'inactive'
+  if (item.status === 'discontinued') return 'discontinued'
+  return 'active'
 }
 
 const getStatusText = (item) => {
-  const totalQty = getTotalQuantity(item)
-  if (totalQty === 0) return '缺貨'
-  
-  if (item.type === 'multiSpec') {
-    const hasLowStock = item.multiSpecStock.some(v => v.quantity <= v.minStock && v.quantity > 0)
-    if (hasLowStock) return '庫存不足'
-  } else if (item.singleStock.quantity <= item.singleStock.minStock) {
-    return '庫存不足'
-  }
-  
+  if (!item.isActive) return '停用'
+  if (item.status === 'discontinued') return '停產'
   return '正常'
 }
 
 const getRowClass = (item) => {
-  const totalQty = getTotalQuantity(item)
-  if (totalQty === 0) return 'row-out-of-stock'
-  
-  if (item.type === 'multiSpec') {
-    const hasLowStock = item.multiSpecStock.some(v => v.quantity <= v.minStock && v.quantity > 0)
-    if (hasLowStock) return 'row-low-stock'
-  } else if (item.singleStock.quantity <= item.singleStock.minStock) {
-    return 'row-low-stock'
-  }
-  
-  return ''
+  const quantityClass = getQuantityClass(item)
+  const statusClass = getStatusClass(item)
+  return `${quantityClass} ${statusClass}`
 }
 
 const formatDate = (date) => {
   return new Date(date).toLocaleDateString('zh-TW')
 }
 
+// 操作方法
 const editItem = (item) => {
   selectedItem.value = item
-  formData.value = { 
-    ...item,
-    multiSpecStock: item.multiSpecStock ? [...item.multiSpecStock] : []
+  formData.value = {
+    name: item.name,
+    description: item.description || '',
+    category: item.category,
+    type: item.type,
+    singleStock: item.type === 'single' ? { ...item.singleStock } : {
+      quantity: 0,
+      unit: '',
+      minStock: 0,
+      maxStock: 1000
+    },
+    multiSpecStock: item.type === 'multiSpec' ? [...item.multiSpecStock] : [],
+    cost: { ...item.cost },
+    status: item.status,
+    isActive: item.isActive,
+    stockAlert: { ...item.stockAlert },
+    notes: item.notes || ''
   }
   showEditModal.value = true
 }
@@ -300,33 +306,34 @@ const adjustStock = (item) => {
 }
 
 const deleteItem = async (item) => {
-  if (confirm(`確定要刪除原料「${item.name}」嗎？`)) {
-    try {
-      await inventoryAPI.deleteInventory(item._id)
-      await loadInventory()
-    } catch (err) {
-      console.error('刪除失敗:', err)
-      alert('刪除失敗: ' + (err.message || '未知錯誤'))
-    }
+  if (!confirm(`確定要刪除「${item.name}」嗎？`)) return
+  
+  try {
+    await inventoryAPI.deleteInventory(item._id)
+    await loadInventory()
+  } catch (err) {
+    console.error('刪除失敗:', err)
+    alert('刪除失敗：' + (err.message || '未知錯誤'))
   }
 }
 
+// 模態框方法
 const closeModal = () => {
   showAddModal.value = false
   showEditModal.value = false
-  selectedItem.value = null
   resetForm()
 }
 
 const closeStockModal = () => {
   showStockModal.value = false
   selectedItem.value = null
-  stockForm.value = {
-    type: 'add',
-    quantity: 0,
-    reason: '',
-    variantIndex: 0
-  }
+}
+
+const closeImportModal = () => {
+  showImportModal.value = false
+  importForm.value = { file: null, preview: [] }
+  importResult.value = null
+  importing.value = false
 }
 
 const resetForm = () => {
@@ -354,13 +361,15 @@ const resetForm = () => {
     },
     notes: ''
   }
+  selectedItem.value = null
 }
 
+// 表單操作方法
 const addVariant = () => {
   formData.value.multiSpecStock.push({
     specName: '',
     quantity: 0,
-    unit: formData.value.singleStock.unit || '',
+    unit: '',
     minStock: 0,
     maxStock: 1000,
     unitPrice: 0
@@ -373,60 +382,126 @@ const removeVariant = (index) => {
 
 const submitForm = async () => {
   try {
-    if (showEditModal.value) {
-      // 更新現有項目
+    if (selectedItem.value) {
       await inventoryAPI.updateInventory(selectedItem.value._id, formData.value)
     } else {
-      // 創建新項目
       await inventoryAPI.createInventory(formData.value)
     }
-    
     await loadInventory()
     closeModal()
   } catch (err) {
     console.error('保存失敗:', err)
-    alert('保存失敗: ' + (err.message || '未知錯誤'))
+    alert('保存失敗：' + (err.message || '未知錯誤'))
   }
 }
 
 const submitStockAdjustment = async () => {
   try {
+    const { type, quantity, reason, variantIndex } = stockForm.value
     const item = selectedItem.value
-    let newQuantity = stockForm.value.quantity
-    
-    if (stockForm.value.type === 'add') {
-      newQuantity = stockForm.value.quantity
-    } else if (stockForm.value.type === 'subtract') {
-      newQuantity = -stockForm.value.quantity
-    }
     
     if (item.type === 'single') {
-      const updatedData = {
-        ...item,
+      await inventoryAPI.updateInventory(item._id, {
         singleStock: {
           ...item.singleStock,
-          quantity: Math.max(0, item.singleStock.quantity + newQuantity)
+          quantity: type === 'set' ? quantity : item.singleStock.quantity + (type === 'add' ? quantity : -quantity)
         }
-      }
-      await inventoryAPI.updateInventory(item._id, updatedData)
+      })
     } else if (item.type === 'multiSpec') {
-      const updatedVariants = [...item.multiSpecStock]
-      if (updatedVariants[stockForm.value.variantIndex]) {
-        updatedVariants[stockForm.value.variantIndex].quantity = Math.max(0, updatedVariants[stockForm.value.variantIndex].quantity + newQuantity)
+      const updatedSpecs = [...item.multiSpecStock]
+      const spec = updatedSpecs[variantIndex]
+      if (spec) {
+        spec.quantity = type === 'set' ? quantity : spec.quantity + (type === 'add' ? quantity : -quantity)
+        await inventoryAPI.updateInventory(item._id, {
+          multiSpecStock: updatedSpecs
+        })
       }
-      
-      const updatedData = {
-        ...item,
-        multiSpecStock: updatedVariants
-      }
-      await inventoryAPI.updateInventory(item._id, updatedData)
     }
     
     await loadInventory()
     closeStockModal()
   } catch (err) {
     console.error('調整庫存失敗:', err)
-    alert('調整庫存失敗: ' + (err.message || '未知錯誤'))
+    alert('調整庫存失敗：' + (err.message || '未知錯誤'))
+  }
+}
+
+// 匯入相關方法
+const triggerFileInput = () => {
+  fileInput.value?.click()
+}
+
+const handleFileSelect = (event) => {
+  const file = event.target.files[0]
+  if (file) {
+    importForm.value.file = file
+    importResult.value = null
+  }
+}
+
+const handleFileDrop = (event) => {
+  event.preventDefault()
+  const files = event.dataTransfer.files
+  if (files.length > 0) {
+    const file = files[0]
+    if (file.type.includes('excel') || file.type.includes('csv') || 
+        file.name.match(/\.(xlsx|xls|csv)$/)) {
+      importForm.value.file = file
+      importResult.value = null
+    }
+  }
+}
+
+const removeFile = () => {
+  importForm.value.file = null
+  importResult.value = null
+  if (fileInput.value) {
+    fileInput.value.value = ''
+  }
+}
+
+const formatFileSize = (bytes) => {
+  if (bytes === 0) return '0 Bytes'
+  const k = 1024
+  const sizes = ['Bytes', 'KB', 'MB', 'GB']
+  const i = Math.floor(Math.log(bytes) / Math.log(k))
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
+}
+
+const submitImport = async () => {
+  if (!importForm.value.file) return
+  
+  try {
+    importing.value = true
+    importResult.value = null
+    
+    const formData = new FormData()
+    formData.append('file', importForm.value.file)
+    
+    const response = await inventoryAPI.importInventory(formData)
+    
+    // 檢查響應狀態 - axios 響應攔截器已經返回 response.data
+    if (response && response.status === 'success') {
+      importResult.value = response.data
+      await loadInventory() // 重新載入庫存列表
+    } else {
+      throw new Error(response?.message || '匯入失敗')
+    }
+  } catch (err) {
+    console.error('匯入失敗:', err)
+    importResult.value = {
+      created: 0,
+      updated: 0,
+      failed: 1,
+      results: [{
+        name: '匯入失敗',
+        category: '',
+        success: false,
+        error: err.message || '未知錯誤'
+      }]
+    }
+  } finally {
+    importing.value = false
   }
 }
 
@@ -463,35 +538,32 @@ const resetCategoryForm = () => {
 
 const submitCategoryForm = async () => {
   try {
-    if (showCategoryEditModal.value) {
-      // 更新現有分類
+    if (selectedCategoryForEdit.value) {
       await inventoryCategoryAPI.updateCategory(selectedCategoryForEdit.value.id, categoryForm.value)
     } else {
-      // 創建新分類
       await inventoryCategoryAPI.createCategory(categoryForm.value)
     }
-    
-    await loadInventory() // 重新載入分類
+    await loadInventory() // 重新載入以更新分類列表
     closeCategoryModal()
   } catch (err) {
     console.error('保存分類失敗:', err)
-    alert('保存分類失敗: ' + (err.message || '未知錯誤'))
+    alert('保存分類失敗：' + (err.message || '未知錯誤'))
   }
 }
 
 const deleteCategory = async (category) => {
-  if (confirm(`確定要刪除分類「${category.label}」嗎？`)) {
-    try {
-      await inventoryCategoryAPI.deleteCategory(category.id)
-      await loadInventory() // 重新載入分類
-    } catch (err) {
-      console.error('刪除分類失敗:', err)
-      alert('刪除分類失敗: ' + (err.message || '未知錯誤'))
-    }
+  if (!confirm(`確定要刪除分類「${category.label}」嗎？`)) return
+  
+  try {
+    await inventoryCategoryAPI.deleteCategory(category.id)
+    await loadInventory() // 重新載入以更新分類列表
+  } catch (err) {
+    console.error('刪除分類失敗:', err)
+    alert('刪除分類失敗：' + (err.message || '未知錯誤'))
   }
 }
 
-// 初始化函數
+// 初始化
 const initData = () => {
   loadInventory()
 }
@@ -503,6 +575,7 @@ export {
   showAddModal,
   showEditModal,
   showStockModal,
+  showImportModal,
   showCategoryModal,
   showCategoryEditModal,
   selectedItem,
@@ -511,10 +584,14 @@ export {
   error,
   formData,
   stockForm,
+  importForm,
   categoryForm,
   inventoryItems,
   stats,
   categories,
+  importing,
+  importResult,
+  fileInput,
   
   // 計算屬性
   filteredItems,
@@ -541,11 +618,18 @@ export {
   deleteItem,
   closeModal,
   closeStockModal,
+  closeImportModal,
   resetForm,
   addVariant,
   removeVariant,
   submitForm,
   submitStockAdjustment,
+  triggerFileInput,
+  handleFileSelect,
+  handleFileDrop,
+  removeFile,
+  formatFileSize,
+  submitImport,
   openCategoryModal,
   openCategoryEditModal,
   closeCategoryModal,

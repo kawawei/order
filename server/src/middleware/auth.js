@@ -292,18 +292,41 @@ exports.protectAny = catchAsync(async (req, res, next) => {
 // 權限檢查：管理員、商家擁有所有權限；員工依其角色權限
 exports.requirePermissions = (...requiredPermissions) => {
   return (req, res, next) => {
+    console.log('=== 權限檢查調試 ===');
+    console.log('需要權限:', requiredPermissions);
+    console.log('用戶類型:', req.admin ? 'admin' : req.merchant ? 'merchant' : req.employee ? 'employee' : 'unknown');
+    
     // 超級管理員與管理員：允許
-    if (req.admin) return next();
+    if (req.admin) {
+      console.log('管理員權限檢查通過');
+      return next();
+    }
     // 商家：允許
-    if (req.merchant) return next();
+    if (req.merchant) {
+      console.log('商家權限檢查通過');
+      return next();
+    }
     // 員工：檢查權限
     if (req.employee && req.employee.role && Array.isArray(req.employee.role.permissions)) {
       const employeePerms = req.employee.role.permissions;
+      console.log('員工權限:', employeePerms);
+      console.log('員工角色:', req.employee.role.name);
+      console.log('員工是否為老闆:', req.employee.isOwner);
+      
       const ok = requiredPermissions.every(p => employeePerms.includes(p));
-      if (ok) return next();
+      console.log('權限檢查結果:', ok);
+      
+      if (ok) {
+        console.log('員工權限檢查通過');
+        return next();
+      }
     }
     // 特殊情況：員工如果是老闆（isOwner=true），也允許所有操作
-    if (req.employee && req.employee.isOwner) return next();
+    if (req.employee && req.employee.isOwner) {
+      console.log('員工老闆權限檢查通過');
+      return next();
+    }
+    console.log('權限檢查失敗');
     return next(new AppError('您沒有權限執行此操作', 403));
   };
 };

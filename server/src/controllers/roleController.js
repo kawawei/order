@@ -24,9 +24,12 @@ const ensureSystemRolesForMerchant = async (merchantId) => {
       name: '管理人員',
       permissions: normalizePermissionKeys([
         '菜單:查看',
+        '菜單:編輯',
         '庫存:查看',
+        '庫存:編輯',
         '訂單:查看',
         '訂單:更新狀態',
+        '訂單:結帳',
         '桌位:查看',
         '桌位:管理',
         '報表:查看',

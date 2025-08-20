@@ -3,10 +3,16 @@
     <!-- 頁面標題 -->
     <div class="page-header">
       <h1 class="page-title">庫存管理</h1>
-      <button @click="showAddModal = true" class="btn btn-primary">
-        <font-awesome-icon icon="plus" class="mr-2" />
-        新增原料
-      </button>
+      <div class="header-buttons">
+        <button @click="showImportModal = true" class="btn btn-secondary">
+          <font-awesome-icon icon="upload" class="mr-2" />
+          匯入原料
+        </button>
+        <button @click="showAddModal = true" class="btn btn-primary">
+          <font-awesome-icon icon="plus" class="mr-2" />
+          新增原料
+        </button>
+      </div>
     </div>
 
     <!-- 統計卡片 -->
@@ -412,6 +418,190 @@
       </div>
     </div>
 
+    <!-- 匯入原料模態框 -->
+    <div v-if="showImportModal" class="modal-overlay" @click="closeImportModal">
+      <div class="modal-content import-modal" @click.stop>
+        <div class="modal-header">
+          <h2>匯入庫存項目</h2>
+          <button @click="closeImportModal" class="btn-close">
+            <font-awesome-icon icon="times" />
+          </button>
+        </div>
+        
+        <div class="import-content">
+          <!-- 檔案上傳區域 -->
+          <div class="upload-section">
+            <div class="upload-area" @click="triggerFileInput" @drop="handleFileDrop" @dragover.prevent>
+              <div v-if="!importForm.file" class="upload-placeholder">
+                <font-awesome-icon icon="upload" size="3x" />
+                <h3>選擇 Excel 或 CSV 檔案</h3>
+                <p>拖拽檔案到此處或點擊選擇檔案</p>
+                <p class="file-types">支援格式：.xlsx, .xls, .csv</p>
+              </div>
+              <div v-else class="file-selected">
+                <font-awesome-icon icon="file-excel" size="2x" />
+                <div class="file-info">
+                  <h4>{{ importForm.file.name }}</h4>
+                  <p>{{ formatFileSize(importForm.file.size) }}</p>
+                </div>
+                <button @click.stop="removeFile" class="btn-remove">
+                  <font-awesome-icon icon="times" />
+                </button>
+              </div>
+            </div>
+            <input
+              ref="fileInput"
+              type="file"
+              accept=".xlsx,.xls,.csv"
+              @change="handleFileSelect"
+              class="hidden"
+            />
+          </div>
+
+          <!-- 格式說明 -->
+          <div class="format-guide">
+            <h3>匯入格式說明</h3>
+            <div class="format-table">
+              <table>
+                <thead>
+                  <tr>
+                    <th>欄位名稱</th>
+                    <th>必填</th>
+                    <th>說明</th>
+                    <th>範例</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>原料名稱</td>
+                    <td>✓</td>
+                    <td>庫存項目名稱</td>
+                    <td>果糖、吸管、杯子</td>
+                  </tr>
+                  <tr>
+                    <td>庫存分類</td>
+                    <td>✓</td>
+                    <td>分類名稱</td>
+                    <td>食材、耗材、包裝</td>
+                  </tr>
+                  <tr>
+                    <td>原料類型</td>
+                    <td>✓</td>
+                    <td>單一規格 或 多規格</td>
+                    <td>單一規格</td>
+                  </tr>
+                  <tr>
+                    <td>規格名稱</td>
+                    <td>多規格必填</td>
+                    <td>多規格時填寫</td>
+                    <td>粗、細、大、中、小</td>
+                  </tr>
+                  <tr>
+                    <td>單位</td>
+                    <td>✓</td>
+                    <td>計量單位</td>
+                    <td>cc、根、杯</td>
+                  </tr>
+                  <tr>
+                    <td>庫存</td>
+                    <td>✓</td>
+                    <td>當前庫存數量</td>
+                    <td>10000</td>
+                  </tr>
+                  <tr>
+                    <td>單價</td>
+                    <td>✓</td>
+                    <td>單價（數字）</td>
+                    <td>1.00</td>
+                  </tr>
+                  <tr>
+                    <td>最低庫存</td>
+                    <td></td>
+                    <td>最低庫存警告</td>
+                    <td>100</td>
+                  </tr>
+                  <tr>
+                    <td>最高庫存</td>
+                    <td></td>
+                    <td>最高庫存警告</td>
+                    <td>1000</td>
+                  </tr>
+                  <tr>
+                    <td>狀態</td>
+                    <td></td>
+                    <td>正常、停用</td>
+                    <td>正常</td>
+                  </tr>
+                  <tr>
+                    <td>描述</td>
+                    <td></td>
+                    <td>項目描述</td>
+                    <td>調味用果糖</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- 匯入結果 -->
+          <div v-if="importResult" class="import-result">
+            <h3>匯入結果</h3>
+            <div class="result-summary">
+              <div v-if="importResult.created > 0" class="result-item success">
+                <font-awesome-icon icon="check-circle" />
+                <span>成功創建：{{ importResult.created }} 個項目</span>
+              </div>
+              <div v-if="importResult.updated > 0" class="result-item success">
+                <font-awesome-icon icon="check-circle" />
+                <span>成功更新：{{ importResult.updated }} 個項目</span>
+              </div>
+              <div v-if="importResult.failed > 0" class="result-item error">
+                <font-awesome-icon icon="times-circle" />
+                <span>失敗：{{ importResult.failed }} 個項目</span>
+              </div>
+            </div>
+            
+            <div v-if="importResult.results && importResult.results.length > 0" class="result-details">
+              <h4>詳細結果</h4>
+              <div class="result-list">
+                <div 
+                  v-for="(result, index) in importResult.results" 
+                  :key="index"
+                  :class="['result-row', { success: result.success, error: !result.success }]"
+                >
+                  <span class="item-name">{{ result.name }}</span>
+                  <span class="item-category">{{ result.category }}</span>
+                  <span v-if="result.success" class="status-success">
+                    <font-awesome-icon icon="check" />
+                    {{ result.action === 'updated' ? '更新' : '創建' }}
+                  </span>
+                  <span v-else class="status-error">
+                    <font-awesome-icon icon="times" />
+                    {{ result.error }}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 操作按鈕 -->
+          <div class="import-actions">
+            <button 
+              @click="submitImport" 
+              :disabled="!importForm.file || importing"
+              class="btn btn-primary"
+            >
+              <font-awesome-icon v-if="importing" icon="spinner" spin />
+              {{ importing ? '匯入中...' : '開始匯入' }}
+            </button>
+            <button @click="closeImportModal" class="btn btn-secondary">
+              取消
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- 分類管理模態框 -->
     <div v-if="showCategoryModal" class="modal-overlay" @click="closeCategoryModal">
       <div class="modal-content category-modal" @click.stop>
@@ -549,6 +739,7 @@ import {
   showAddModal,
   showEditModal,
   showStockModal,
+  showImportModal,
   showCategoryModal,
   showCategoryEditModal,
   selectedItem,
@@ -557,10 +748,14 @@ import {
   error,
   formData,
   stockForm,
+  importForm,
   categoryForm,
   inventoryItems,
   stats,
   categories,
+  importing,
+  importResult,
+  fileInput,
   
   // 計算屬性
   filteredItems,
@@ -587,11 +782,18 @@ import {
   deleteItem,
   closeModal,
   closeStockModal,
+  closeImportModal,
   resetForm,
   addVariant,
   removeVariant,
   submitForm,
   submitStockAdjustment,
+  triggerFileInput,
+  handleFileSelect,
+  handleFileDrop,
+  removeFile,
+  formatFileSize,
+  submitImport,
   openCategoryModal,
   openCategoryEditModal,
   closeCategoryModal,

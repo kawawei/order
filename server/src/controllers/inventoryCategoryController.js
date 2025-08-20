@@ -123,6 +123,7 @@ exports.updateCategory = catchAsync(async (req, res, next) => {
     }
   }
   
+  // 更新分類
   const updatedCategory = await InventoryCategory.findByIdAndUpdate(
     req.params.id,
     req.body,
@@ -131,6 +132,44 @@ exports.updateCategory = catchAsync(async (req, res, next) => {
       runValidators: true
     }
   ).populate('itemCount');
+  
+  // 如果分類名稱有變更，更新所有使用該分類的庫存項目
+  if (req.body.name && req.body.name !== category.name) {
+    console.log(`更新分類名稱：${category.name} -> ${req.body.name}`);
+    console.log(`開始更新使用該分類的庫存項目...`);
+    
+    try {
+      // 更新所有使用舊分類名稱的庫存項目
+      const updateResult = await Inventory.updateMany(
+        {
+          merchant: merchantId,
+          category: category.name
+        },
+        {
+          $set: { category: req.body.name }
+        }
+      );
+      
+      console.log(`✓ 成功更新 ${updateResult.modifiedCount} 個庫存項目的分類`);
+      
+      // 如果有規格，也需要更新規格中的分類
+      const updateSpecsResult = await Inventory.updateMany(
+        {
+          merchant: merchantId,
+          'specifications.category': category.name
+        },
+        {
+          $set: { 'specifications.$.category': req.body.name }
+        }
+      );
+      
+      console.log(`✓ 成功更新 ${updateSpecsResult.modifiedCount} 個規格的分類`);
+      
+    } catch (error) {
+      console.error('更新庫存項目分類時發生錯誤:', error);
+      // 不中斷整個操作，但記錄錯誤
+    }
+  }
   
   res.status(200).json({
     status: 'success',
