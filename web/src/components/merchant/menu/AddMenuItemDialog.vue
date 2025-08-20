@@ -1,6 +1,7 @@
 <template>
   <BaseDialog
-    v-model="dialogVisible"
+    :model-value="dialogVisible"
+    @update:model-value="dialogVisible = $event"
     :title="`${props.editingItem ? '編輯' : '添加'}菜品`"
     class="add-menu-item-dialog"
   >

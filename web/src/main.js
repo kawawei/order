@@ -83,7 +83,8 @@ import {
   faTags,
   faFileExcel,
   faTimes,
-  faSync
+  faSync,
+  faCloudUploadAlt
 } from '@fortawesome/free-solid-svg-icons'
 
 /* Import Base Components */
@@ -164,7 +165,8 @@ library.add(
   faTags,
   faFileExcel,
   faTimes,
-  faSync
+  faSync,
+  faCloudUploadAlt
 )
 
 const app = createApp(App)

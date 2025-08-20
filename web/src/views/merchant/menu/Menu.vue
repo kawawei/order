@@ -2,10 +2,16 @@
   <div class="menu-page">
     <header class="page-header">
       <h1>菜單管理</h1>
-      <BaseButton variant="primary" @click="handleAddCategory">
-        <font-awesome-icon icon="cog" />
-        種類管理
-      </BaseButton>
+              <div class="header-actions">
+          <button @click="handleImportMenu" class="btn btn-secondary">
+            <font-awesome-icon icon="upload" />
+            匯入菜單
+          </button>
+        <BaseButton variant="primary" @click="handleAddCategory">
+          <font-awesome-icon icon="cog" />
+          種類管理
+        </BaseButton>
+      </div>
     </header>
 
     <main class="menu-content">
@@ -76,6 +82,17 @@
       :editing-item="editingItem"
       @confirm="handleConfirmAddMenuItem"
     />
+
+    <!-- 匯入菜單對話框 -->
+    <ImportDialog
+      v-model:show="showImportDialog"
+      title="匯入菜單"
+      description="請上傳包含菜單資料的 Excel 或 CSV 檔案。"
+      :instructions="importInstructions"
+      :format-guide="menuFormatGuide"
+      :on-import="handleImportMenuData"
+      @import-success="handleImportSuccess"
+    />
   </div>
 </template>
 
@@ -86,6 +103,7 @@ import { useAuth } from '../../../composables/useAuth'
 import AddCategoryDialog from '../../../components/merchant/menu/AddCategoryDialog.vue'
 import AddMenuItemDialog from '../../../components/merchant/menu/AddMenuItemDialog.vue'
 import MenuItemCard from '../../../components/merchant/menu/MenuItemCard.vue'
+import ImportDialog from '../../../components/common/ImportDialog.vue'
 import '../../../assets/styles/menu.css'
 
 const route = useRoute()
@@ -116,7 +134,13 @@ const {
   handleAddMenuItem,
   handleConfirmAddMenuItem,
   handleEditMenuItem,
-  handleDeleteMenuItem
+  handleDeleteMenuItem,
+  handleImportMenu,
+  showImportDialog,
+  importInstructions,
+  menuFormatGuide,
+  handleImportMenuData,
+  handleImportSuccess
 } = useMenuPage(route.query.restaurantId)
 </script>
 
