@@ -216,9 +216,52 @@ const getBusinessTypeText = (type) => {
 }
 
 // 組件掛載時載入桌次資訊
-onMounted(() => {
+onMounted(async () => {
   if (tableCode.value) {
-    loadTableInfo()
+    // 檢查是否從商家後台進入
+    const fromMerchant = route.query.from === 'merchant'
+    
+    if (fromMerchant) {
+      // 從商家後台進入，直接載入桌次資訊並跳轉到點餐頁面
+      try {
+        isLoading.value = true
+        const response = await api.get(`/tables/public/${tableCode.value}`)
+        
+        if (response.status === 'success') {
+          tableData.value = response.data.table
+          
+          // 將桌次和商家資訊保存到 sessionStorage
+          sessionStorage.setItem('currentTable', JSON.stringify({
+            id: tableData.value.id,
+            tableNumber: tableData.value.tableNumber,
+            tableName: tableData.value.tableName,
+            capacity: tableData.value.capacity,
+            status: tableData.value.status,
+            merchant: tableData.value.merchant,
+            uniqueCode: tableCode.value,
+            isAvailable: tableData.value.isAvailable
+          }))
+          
+          // 直接跳轉到菜單頁面，跳過歡迎畫面
+          router.push({
+            name: 'CustomerMenu',
+            query: {
+              table: tableData.value.tableNumber,
+              code: tableCode.value
+            }
+          })
+        } else {
+          throw new Error('獲取桌次資訊失敗')
+        }
+      } catch (err) {
+        console.error('載入桌次資訊失敗:', err)
+        error.value = '載入桌次資訊時發生錯誤，請稍後再試'
+        isLoading.value = false
+      }
+    } else {
+      // 正常流程，載入桌次資訊並顯示歡迎頁面
+      loadTableInfo()
+    }
   } else {
     error.value = '無效的桌次代碼'
     isLoading.value = false

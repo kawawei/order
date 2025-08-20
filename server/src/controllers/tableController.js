@@ -69,11 +69,18 @@ exports.getAllTables = catchAsync(async (req, res, next) => {
     .sort(sortBy)
     .populate('merchant', 'businessName');
   
+  // 為每個桌次生成 customerUrl
+  const tablesWithUrls = tables.map(table => {
+    const tableObj = table.toObject();
+    tableObj.customerUrl = table.generateCustomerUrl();
+    return tableObj;
+  });
+  
   res.status(200).json({
     status: 'success',
-    results: tables.length,
+    results: tablesWithUrls.length,
     data: {
-      tables
+      tables: tablesWithUrls
     }
   });
 });

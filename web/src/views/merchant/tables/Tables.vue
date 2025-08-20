@@ -62,6 +62,14 @@
             <!-- 連結操作區域 -->
             <div class="link-actions">
               <button 
+                @click="enterTable(table._id || table.id, table.tableNumber)" 
+                class="action-btn enter-btn"
+                title="進入桌次"
+              >
+                <font-awesome-icon icon="sign-in-alt" />
+                進入桌次
+              </button>
+              <button 
                 @click="copyCustomerLink(table.customerUrl)" 
                 class="action-btn copy-btn"
                 title="複製連結"
@@ -104,6 +112,13 @@
             class="status-btn clear-btn"
           >
             清理桌次
+          </button>
+          <button 
+            v-if="table.status === 'occupied'" 
+            @click="checkoutTable(table._id || table.id)"
+            class="status-btn checkout-btn"
+          >
+            結帳
           </button>
           <button 
             v-if="table.status === 'available'" 
@@ -212,11 +227,12 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
-import { useRoute } from 'vue-router'
-import { tableAPI } from '@/services/api'
+import { useRoute, useRouter } from 'vue-router'
+import { tableAPI, orderAPI } from '@/services/api'
 import './Tables.css'
 
 const route = useRoute()
+const router = useRouter()
 
 // 響應式數據
 const tables = ref([])
@@ -413,6 +429,36 @@ const toggleQRCode = (tableId) => {
   showQRCode.value[tableId] = !showQRCode.value[tableId]
 }
 
+// 進入桌次
+const enterTable = (tableId, tableNumber) => {
+  // 找到對應的桌次數據
+  const table = tables.value.find(t => (t._id || t.id) === tableId)
+  
+  if (!table) {
+    alert('找不到指定的桌次')
+    return
+  }
+  
+  console.log('桌次數據:', table) // 調試信息
+  
+  // 使用桌次的 customerUrl 或 uniqueCode 來構建正確的連結
+  if (table.customerUrl) {
+    console.log('使用 customerUrl:', table.customerUrl)
+    // 從商家後台進入，直接跳轉到點餐頁面
+    const directUrl = `${table.customerUrl}?from=merchant`
+    window.open(directUrl, '_blank')
+  } else if (table.uniqueCode) {
+    // 使用 uniqueCode 構建連結
+    const baseUrl = window.location.origin
+    const tableUrl = `${baseUrl}/table/${table.uniqueCode}?from=merchant`
+    console.log('使用 uniqueCode 構建連結:', tableUrl)
+    window.open(tableUrl, '_blank')
+  } else {
+    console.log('桌次缺少 customerUrl 和 uniqueCode')
+    alert('此桌次暫無客戶端連結，請重新生成 QR Code')
+  }
+}
+
 // 複製客戶端連結
 const copyCustomerLink = async (customerUrl) => {
   if (!customerUrl) {
@@ -471,6 +517,50 @@ const regenerateQRCode = async (tableId) => {
       console.error('重新生成 QR Code 失敗:', error)
       alert('重新生成 QR Code 失敗：' + (error.message || '未知錯誤'))
     }
+  }
+}
+
+// 結帳功能
+const checkoutTable = async (tableId) => {
+  try {
+    // 先獲取桌子的總金額
+    const totalResponse = await orderAPI.getTableTotal(tableId)
+    
+    if (!totalResponse.data || totalResponse.data.totalAmount === 0) {
+      alert('此桌次目前沒有任何餐點可以結帳')
+      return
+    }
+
+    const totalAmount = totalResponse.data.totalAmount
+    const batchCount = totalResponse.data.batchCount
+    
+    const confirmMessage = batchCount > 1 
+      ? `確定要為此桌次結帳嗎？\n共有 ${batchCount} 批次訂單\n總金額：NT$ ${totalAmount}`
+      : `確定要為此桌次結帳嗎？\n總金額：NT$ ${totalAmount}`
+    
+    if (confirm(confirmMessage)) {
+      // 調用結帳 API
+      const response = await orderAPI.checkoutTable(tableId)
+      
+      if (response.status === 'success') {
+        const checkoutData = response.data
+        
+        // 重新載入桌次列表
+        await loadTables()
+        
+        // 顯示結帳成功訊息
+        const successMessage = batchCount > 1 
+          ? `結帳成功！\n共有 ${batchCount} 批次訂單\n總金額：NT$ ${checkoutData.totalAmount}\n桌次已自動設為可用狀態`
+          : `結帳成功！\n總金額：NT$ ${checkoutData.totalAmount}\n桌次已自動設為可用狀態`
+        
+        alert(successMessage)
+      } else {
+        alert('結帳失敗，請稍後再試')
+      }
+    }
+  } catch (error) {
+    console.error('結帳失敗:', error)
+    alert('結帳失敗：' + (error.message || '請稍後再試'))
   }
 }
 

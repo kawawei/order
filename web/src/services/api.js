@@ -357,53 +357,39 @@ export const menuAPI = {
 
 // 為了向後兼容，創建 menuService 對象
 export const orderAPI = {
-  // 創建訂單
+  // 創建訂單（顧客使用，不需要商家ID）
   createOrder: (data) => {
-    const merchantId = resolveActiveMerchantId()
-    const params = merchantId ? { merchantId } : {}
-    return api.post('/orders', data, { params })
+    return api.post('/orders', data)
   },
   
-  // 結帳功能 (舊版本，保持向後兼容)
+  // 結帳功能 (舊版本，保持向後兼容)（顧客使用，不需要商家ID）
   checkout: (data) => {
-    const merchantId = resolveActiveMerchantId()
-    const params = merchantId ? { merchantId } : {}
-    return api.post('/orders/checkout', data, { params })
+    return api.post('/orders/checkout', data)
   },
   
-  // 新的桌子結帳功能 - 合併所有批次
+  // 新的桌子結帳功能 - 合併所有批次（顧客使用，不需要商家ID）
   checkoutTable: (tableId) => {
-    const merchantId = resolveActiveMerchantId()
-    const params = merchantId ? { merchantId } : {}
-    return api.post(`/orders/table/${tableId}/checkout`, {}, { params })
+    return api.post(`/orders/table/${tableId}/checkout`)
   },
   
-  // 獲取桌子的所有批次訂單
+  // 獲取桌子的所有批次訂單（顧客使用，不需要商家ID）
   getTableBatches: (tableId) => {
-    const merchantId = resolveActiveMerchantId()
-    const params = merchantId ? { merchantId } : {}
-    return api.get(`/orders/table/${tableId}/batches`, { params })
+    return api.get(`/orders/table/${tableId}/batches`)
   },
   
-  // 獲取桌子當前總金額
+  // 獲取桌子當前總金額（顧客使用，不需要商家ID）
   getTableTotal: (tableId) => {
-    const merchantId = resolveActiveMerchantId()
-    const params = merchantId ? { merchantId } : {}
-    return api.get(`/orders/table/${tableId}/total`, { params })
+    return api.get(`/orders/table/${tableId}/total`)
   },
   
-  // 獲取訂單詳情
+  // 獲取訂單詳情（顧客使用，不需要商家ID）
   getOrder: (orderId) => {
-    const merchantId = resolveActiveMerchantId()
-    const params = merchantId ? { merchantId } : {}
-    return api.get(`/orders/${orderId}`, { params })
+    return api.get(`/orders/${orderId}`)
   },
   
-  // 根據桌子獲取訂單列表
+  // 根據桌子獲取訂單列表（顧客使用，不需要商家ID）
   getOrdersByTable: (tableId, params = {}) => {
-    const merchantId = resolveActiveMerchantId()
-    const finalParams = merchantId ? { ...params, merchantId } : params
-    return api.get(`/orders/table/${tableId}`, { params: finalParams })
+    return api.get(`/orders/table/${tableId}`, { params })
   },
   
   // 根據商家獲取訂單列表（後台用）

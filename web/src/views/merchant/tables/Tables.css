@@ -181,6 +181,15 @@
   background: #d97706;
 }
 
+.checkout-btn {
+  background: #8b5cf6;
+  color: white;
+}
+
+.checkout-btn:hover {
+  background: #7c3aed;
+}
+
 /* QR Code 和客戶端連結樣式 */
 .customer-access-section {
   margin-top: 1rem;
@@ -277,6 +286,15 @@
 .action-btn:hover {
   background: #f1f5f9;
   border-color: #cbd5e1;
+}
+
+.enter-btn {
+  color: #7c3aed;
+}
+
+.enter-btn:hover {
+  background: #f3f4f6;
+  border-color: #c4b5fd;
 }
 
 .copy-btn {
