@@ -372,9 +372,9 @@ exports.updateMerchant = catchAsync(async (req, res, next) => {
     update.taxId = cleanedTaxId || undefined;
   }
   if (typeof businessPhone !== 'undefined') {
-    const cleanedPhone = String(businessPhone || '').replace(/\D/g, '').slice(0, 10);
-    if (cleanedPhone && !/^\d{10}$/.test(cleanedPhone)) {
-      return next(new AppError('請提供有效的電話號碼（10位數字）', 400));
+    const cleanedPhone = String(businessPhone || '').replace(/\D/g, '');
+    if (cleanedPhone && cleanedPhone.length > 10) {
+      return next(new AppError('電話號碼不能超過10位數字', 400));
     }
     update.phone = cleanedPhone || '0000000000';
   }
@@ -411,7 +411,13 @@ exports.updateMerchant = catchAsync(async (req, res, next) => {
     const owner = await Employee.findOne({ merchant: merchant._id, isOwner: true });
     if (owner) {
       if (ownerName != null) owner.name = String(ownerName).trim() || owner.name;
-      if (ownerPhone != null) owner.phone = (ownerPhone || '').toString().trim() || owner.phone;
+      if (ownerPhone != null) {
+        const cleanedOwnerPhone = String(ownerPhone || '').replace(/\D/g, '');
+        if (cleanedOwnerPhone && cleanedOwnerPhone.length > 10) {
+          return next(new AppError('老闆電話號碼不能超過10位數字', 400));
+        }
+        owner.phone = cleanedOwnerPhone || owner.phone;
+      }
       await owner.save();
     }
   }
@@ -895,11 +901,22 @@ exports.importMerchants = catchAsync(async (req, res, next) => {
               });
             }
             
-            const createdTables = await Table.insertMany(tables);
-            const tableMsg = `第 ${rowNumber} 行：為餐廳 "${businessName}" 創建了 ${tableCountNum} 個桌次`;
-            console.log('✅ 桌次創建成功:', tableMsg);
-            console.log('創建的桌次:', createdTables.map(t => t.tableNumber));
-            results.success.push(tableMsg);
+            try {
+              // 逐個創建桌次，確保 uniqueCode 能正確生成
+              const createdTables = [];
+              for (const tableData of tables) {
+                const table = await Table.create(tableData);
+                createdTables.push(table);
+              }
+              const tableMsg = `第 ${rowNumber} 行：為餐廳 "${businessName}" 創建了 ${tableCountNum} 個桌次`;
+              console.log('✅ 桌次創建成功:', tableMsg);
+              console.log('創建的桌次:', createdTables.map(t => t.tableNumber));
+              results.success.push(tableMsg);
+            } catch (tableError) {
+              console.error('❌ 桌次創建失敗:', tableError);
+              const tableErrorMsg = `第 ${rowNumber} 行：桌次創建失敗 - ${tableError.message}`;
+              results.errors.push(tableErrorMsg);
+            }
           } else {
             console.log('餐廳已有桌次，跳過桌次創建');
             const tableMsg = `第 ${rowNumber} 行：餐廳 "${businessName}" 已有 ${existingTables.length} 個桌次，跳過創建`;

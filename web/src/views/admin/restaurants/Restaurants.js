@@ -36,7 +36,8 @@ export const useUsers = () => {
     if (!phone) return ''
     // 若為全 0 或非數字，視為無電話
     if (/^0+$/.test(phone)) return ''
-    return phone
+    // 移除尾部的 0，但保留原始長度
+    return phone.replace(/0+$/, '') || phone
   }
 
   const formatAddress = (address) => {
@@ -129,6 +130,7 @@ export const useUsers = () => {
       businessPhone: sanitizePhoneForDisplay(user.businessPhone),
       ownerPhone: sanitizePhoneForDisplay(user.ownerPhone)
     }
+    console.log('編輯用戶資料:', editingUser.value)
     isEditDialogOpen.value = true
   }
 

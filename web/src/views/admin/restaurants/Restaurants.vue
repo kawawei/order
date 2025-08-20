@@ -72,7 +72,7 @@
         </div>
 
         <!-- 數據表格 -->
-        <div v-else>
+        <div v-else class="table-container">
           <BaseTable
             :columns="columns"
             :data="filteredUsers"
@@ -562,6 +562,7 @@ const handleSaveEdit = async () => {
       ownerPhone: (editingUser.value.ownerPhone || '').trim() || undefined,
       status: editingUser.value.status
     }
+    console.log('更新商家資料:', payload)
     await merchantAPI.updateMerchant(editingUser.value.id, payload)
     // 重新載入列表
     await loadMerchants(currentPage.value, searchQuery.value)

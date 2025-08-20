@@ -2,7 +2,7 @@
 .restaurants-page {
   padding: 1.5rem;
   height: calc(100vh - 60px - 3rem); /* 減去頂部導航欄高度和頁面padding */
-  overflow: hidden; /* 防止整個頁面捲動 */
+  overflow: auto; /* 允許頁面滾動 */
   display: flex;
   flex-direction: column;
 }
@@ -101,6 +101,26 @@
   height: 100%;
   flex: 1;
   min-height: 0;
+}
+
+/* 確保表格容器可以滾動 */
+.table-container {
+  height: calc(100vh - 300px);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* 表格內容區域 */
+.restaurants-table :deep(.table-container) {
+  height: 100%;
+  flex: 1;
+  min-height: 0;
+}
+
+.restaurants-table :deep(.table-wrapper) {
+  height: 100%;
+  overflow: auto;
 }
 
 .restaurant-name {
