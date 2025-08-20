@@ -875,12 +875,12 @@ exports.importMerchants = catchAsync(async (req, res, next) => {
           results.createdCount++;
         }
 
-        // 處理桌次創建（無論是新建還是更新）
+        // 處理桌次創建或更新（無論是新建還是更新）
         const currentMerchant = existingMerchant || await Merchant.findOne({ merchantCode: String(merchantCode).trim() });
         
         if (tableCount && parseInt(tableCount) > 0) {
           const tableCountNum = parseInt(tableCount);
-          console.log(`處理桌次創建，指定數量: ${tableCountNum}`);
+          console.log(`處理桌次管理，指定數量: ${tableCountNum}`);
           
           // 檢查是否已有桌次
           const existingTables = await Table.find({ merchant: currentMerchant._id });
@@ -918,9 +918,111 @@ exports.importMerchants = catchAsync(async (req, res, next) => {
               results.errors.push(tableErrorMsg);
             }
           } else {
-            console.log('餐廳已有桌次，跳過桌次創建');
-            const tableMsg = `第 ${rowNumber} 行：餐廳 "${businessName}" 已有 ${existingTables.length} 個桌次，跳過創建`;
-            results.success.push(tableMsg);
+            // 餐廳已有桌次，檢查是否需要更新數量
+            console.log(`餐廳已有 ${existingTables.length} 個桌次，檢查是否需要更新數量`);
+            
+            if (tableCountNum > existingTables.length) {
+              // 需要增加桌次
+              const additionalCount = tableCountNum - existingTables.length;
+              console.log(`需要增加 ${additionalCount} 個桌次`);
+              
+              try {
+                const additionalTables = [];
+                for (let j = existingTables.length + 1; j <= tableCountNum; j++) {
+                  additionalTables.push({
+                    tableNumber: String(j),
+                    merchant: currentMerchant._id,
+                    capacity: 4, // 預設容量
+                    isActive: true,
+                    status: 'available'
+                  });
+                }
+                
+                // 逐個創建新增的桌次
+                const createdTables = [];
+                for (const tableData of additionalTables) {
+                  const table = await Table.create(tableData);
+                  createdTables.push(table);
+                }
+                
+                const tableMsg = `第 ${rowNumber} 行：為餐廳 "${businessName}" 新增了 ${additionalCount} 個桌次（從 ${existingTables.length} 個增加到 ${tableCountNum} 個）`;
+                console.log('✅ 桌次新增成功:', tableMsg);
+                console.log('新增的桌次:', createdTables.map(t => t.tableNumber));
+                results.success.push(tableMsg);
+              } catch (tableError) {
+                console.error('❌ 桌次新增失敗:', tableError);
+                const tableErrorMsg = `第 ${rowNumber} 行：桌次新增失敗 - ${tableError.message}`;
+                results.errors.push(tableErrorMsg);
+              }
+            } else if (tableCountNum < existingTables.length) {
+              // 需要減少桌次
+              const reduceCount = existingTables.length - tableCountNum;
+              console.log(`需要減少 ${reduceCount} 個桌次`);
+              
+              try {
+                // 按桌號排序，優先刪除較大的桌號
+                const sortedTables = existingTables.sort((a, b) => {
+                  const aNum = parseInt(a.tableNumber);
+                  const bNum = parseInt(b.tableNumber);
+                  return aNum - bNum;
+                });
+                
+                console.log('現有桌次狀態統計:');
+                const statusCount = {};
+                sortedTables.forEach(table => {
+                  statusCount[table.status] = (statusCount[table.status] || 0) + 1;
+                });
+                console.log('桌次狀態統計:', statusCount);
+                
+                // 優先刪除可用狀態的桌次，從最大的桌號開始刪除
+                let tablesToDelete = sortedTables
+                  .filter(table => table.status === 'available')
+                  .slice(-reduceCount);
+                
+                console.log(`找到 ${tablesToDelete.length} 個可用狀態的桌次可以刪除`);
+                
+                // 如果可用狀態的桌次不夠，也考慮刪除其他狀態的桌次（除了 occupied）
+                if (tablesToDelete.length < reduceCount) {
+                  const remainingCount = reduceCount - tablesToDelete.length;
+                  console.log(`需要再刪除 ${remainingCount} 個桌次`);
+                  
+                  const additionalTables = sortedTables
+                    .filter(table => table.status !== 'available' && table.status !== 'occupied')
+                    .slice(-remainingCount);
+                  
+                  console.log(`找到 ${additionalTables.length} 個其他狀態的桌次可以刪除`);
+                  tablesToDelete = tablesToDelete.concat(additionalTables);
+                }
+                
+                if (tablesToDelete.length >= reduceCount) {
+                  // 刪除指定的桌次
+                  const deletedTableNumbers = [];
+                  for (const table of tablesToDelete) {
+                    await Table.findByIdAndDelete(table._id);
+                    deletedTableNumbers.push(table.tableNumber);
+                  }
+                  
+                  const tableMsg = `第 ${rowNumber} 行：為餐廳 "${businessName}" 減少了 ${tablesToDelete.length} 個桌次（從 ${existingTables.length} 個減少到 ${tableCountNum} 個）`;
+                  console.log('✅ 桌次減少成功:', tableMsg);
+                  console.log('刪除的桌次:', deletedTableNumbers);
+                  results.success.push(tableMsg);
+                } else {
+                  const occupiedCount = sortedTables.filter(table => table.status === 'occupied').length;
+                  const tableMsg = `第 ${rowNumber} 行：餐廳 "${businessName}" 無法減少桌次，因為有 ${occupiedCount} 個桌次正在使用中，只能刪除 ${tablesToDelete.length} 個桌次`;
+                  console.log('⚠️ 無法完全減少桌次:', tableMsg);
+                  results.success.push(tableMsg);
+                }
+              } catch (tableError) {
+                console.error('❌ 桌次減少失敗:', tableError);
+                const tableErrorMsg = `第 ${rowNumber} 行：桌次減少失敗 - ${tableError.message}`;
+                results.errors.push(tableErrorMsg);
+              }
+            } else {
+              // 桌次數量相同，無需更新
+              console.log('桌次數量相同，無需更新');
+              const tableMsg = `第 ${rowNumber} 行：餐廳 "${businessName}" 桌次數量保持不變（${existingTables.length} 個）`;
+              results.success.push(tableMsg);
+            }
           }
         } else {
           console.log('未指定桌次數量，跳過桌次創建');
