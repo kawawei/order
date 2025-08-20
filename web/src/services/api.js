@@ -341,6 +341,18 @@ export const menuAPI = {
   
   // 客戶端公開菜單
   getPublicMenu: (merchantId) => api.get(`/menu/public/${merchantId}`),
+  
+  // 匯入菜單項目
+  importMenu: (formData) => {
+    const merchantId = resolveActiveMerchantId()
+    const params = merchantId ? { merchantId } : {}
+    return api.post('/menu/import', formData, {
+      params,
+      headers: {
+        'Content-Type': 'multipart/form-data'
+      }
+    })
+  }
 };
 
 // 為了向後兼容，創建 menuService 對象
@@ -463,6 +475,9 @@ export const menuService = {
   
   // 客戶端公開菜單
   getPublicMenu: menuAPI.getPublicMenu,
+  
+  // 匯入菜單
+  importMenu: menuAPI.importMenu,
 };
 
 // 為了向後兼容，創建 orderService 對象
@@ -722,6 +737,21 @@ export const inventoryAPI = {
       if (merchantId) merged.merchantId = merchantId
     }
     return api.post('/inventory/import', formData, {
+      params: merged,
+      headers: {
+        'Content-Type': 'multipart/form-data'
+      }
+    })
+  },
+  
+  // 匯入菜單項目
+  importMenu: (formData, params = {}) => {
+    const merged = { ...(params || {}) }
+    if (!merged.merchantId) {
+      const merchantId = resolveActiveMerchantId()
+      if (merchantId) merged.merchantId = merchantId
+    }
+    return api.post('/menu/import', formData, {
       params: merged,
       headers: {
         'Content-Type': 'multipart/form-data'

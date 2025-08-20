@@ -14,12 +14,24 @@ const tempDir = path.join(__dirname, '..', 'tmp');
 if (!fs.existsSync(tempDir)) {
   fs.mkdirSync(tempDir, { recursive: true });
 }
-const upload = multer({
+
+// 圖片上傳配置
+const imageUpload = multer({
   dest: tempDir,
   limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
   fileFilter: (req, file, cb) => {
     if (/^image\/(png|jpe?g|gif|webp)$/.test(file.mimetype)) return cb(null, true);
     cb(new Error('只允許上傳圖片檔案'));
+  }
+});
+
+// Excel 檔案上傳配置
+const excelUpload = multer({
+  dest: tempDir,
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
+  fileFilter: (req, file, cb) => {
+    if (/\.(xlsx|xls|csv)$/i.test(file.originalname)) return cb(null, true);
+    cb(new Error('只允許上傳 Excel 或 CSV 檔案'));
   }
 });
 
@@ -48,12 +60,12 @@ router.get('/categories/stats', requirePermissions('報表:查看'), menuCategor
 // 菜品路由
 router.route('/dishes')
   .get(requirePermissions('菜單:查看'), dishController.getAllDishes)
-  .post(requirePermissions('菜單:編輯'), upload.single('image'), dishController.createDish);
+  .post(requirePermissions('菜單:編輯'), imageUpload.single('image'), dishController.createDish);
 
 router.route('/dishes/:id')
   .get(requirePermissions('菜單:查看'), dishController.getDish)
-  .patch(requirePermissions('菜單:編輯'), upload.single('image'), dishController.updateDish)
-  .put(requirePermissions('菜單:編輯'), upload.single('image'), dishController.updateDish)  // 向後兼容 PUT 方法
+  .patch(requirePermissions('菜單:編輯'), imageUpload.single('image'), dishController.updateDish)
+  .put(requirePermissions('菜單:編輯'), imageUpload.single('image'), dishController.updateDish)  // 向後兼容 PUT 方法
   .delete(requirePermissions('菜單:編輯'), dishController.deleteDish);
 
 // 批量操作
@@ -61,5 +73,8 @@ router.patch('/dishes/batch', requirePermissions('菜單:編輯'), dishControlle
 
 // 菜品統計
 router.get('/dishes/stats', requirePermissions('報表:查看'), dishController.getDishStats);
+
+// 菜單匯入
+router.post('/import', requirePermissions('菜單:編輯'), excelUpload.single('file'), dishController.importMenu);
 
 module.exports = router;

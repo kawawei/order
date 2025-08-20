@@ -1,6 +1,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useMenu } from './useMenu'
 import { inventoryService } from '@/services/api'
+import { menuAPI } from '@/services/api' // Added import for menuAPI
 
 export function useMenuPage(restaurantId = null) {
   const {
@@ -162,46 +163,130 @@ export function useMenuPage(restaurantId = null) {
   // 匯入相關狀態
   const showImportDialog = ref(false)
   
+  // 範本數據
+  const templateData = [
+    {
+      '品名': '奶茶',
+      '分類': '飲料',
+      '基礎價格': '30',
+      '描述': '香濃奶茶',
+      '容量': '容量',
+      '容量數量': '1',
+      '容量加價': '10',
+      '甜度': '果糖',
+      '甜度數量': '2',
+      '甜度加價': '0',
+      '加料': '珍珠',
+      '加料數量': '1',
+      '加料加價': '5'
+    },
+    {
+      '品名': '綠茶',
+      '分類': '飲料',
+      '基礎價格': '25',
+      '描述': '清香綠茶',
+      '容量': '容量',
+      '容量數量': '1',
+      '容量加價': '0',
+      '甜度': '果糖',
+      '甜度數量': '1',
+      '甜度加價': '0',
+      '加料': '',
+      '加料數量': '',
+      '加料加價': ''
+    }
+  ]
+  
   // 匯入說明
   const importInstructions = [
-    '請確保檔案包含所有必填欄位',
-    '菜品名稱不能重複',
-    '價格必須為數字格式',
+    '請確保檔案格式正確，支援 Excel (.xlsx) 和 CSV (.csv) 格式',
+    '必填欄位：品名、分類、基礎價格',
     '分類名稱必須與現有分類匹配',
+    '選項名稱會自動對應庫存原料進行關聯',
+    '單一規格庫存（如：果糖）會根據數量欄位扣減',
+    '多規格庫存（如：珍珠）會根據選項值對應規格扣減',
     '建議先下載範本檔案進行編輯'
   ]
 
   // 菜單匯入格式指南
   const menuFormatGuide = [
     {
-      name: '菜品名稱',
+      name: '品名',
       required: true,
-      description: '菜品的顯示名稱',
-      example: '宮保雞丁'
+      description: '菜品的基礎名稱',
+      example: '奶茶'
     },
     {
       name: '分類',
       required: true,
-      description: '菜品所屬分類',
-      example: '主菜'
+      description: '菜品所屬的分類',
+      example: '飲料'
     },
     {
-      name: '價格',
+      name: '基礎價格',
       required: true,
-      description: '菜品價格（數字）',
-      example: '120'
+      description: '菜品的基礎價格（數字）',
+      example: '30'
     },
     {
       name: '描述',
       required: false,
-      description: '菜品詳細描述',
-      example: '經典川菜，雞肉配花生'
+      description: '菜品的描述',
+      example: '香濃奶茶'
     },
     {
-      name: '庫存配置',
+      name: '容量',
       required: false,
-      description: '庫存扣減配置（JSON格式）',
-      example: '{"雞肉":1,"花生":0.5}'
+      description: '容量選項名稱（對應庫存原料）',
+      example: '容量'
+    },
+    {
+      name: '容量數量',
+      required: false,
+      description: '容量選項的數量（用於單一規格庫存扣減）',
+      example: '1'
+    },
+    {
+      name: '容量加價',
+      required: false,
+      description: '容量選項的加價金額',
+      example: '10'
+    },
+    {
+      name: '甜度',
+      required: false,
+      description: '甜度選項名稱（對應庫存原料，如：果糖）',
+      example: '果糖'
+    },
+    {
+      name: '甜度數量',
+      required: false,
+      description: '甜度選項的數量（用於單一規格庫存扣減）',
+      example: '2'
+    },
+    {
+      name: '甜度加價',
+      required: false,
+      description: '甜度選項的加價金額',
+      example: '0'
+    },
+    {
+      name: '加料',
+      required: false,
+      description: '加料選項名稱（對應庫存原料）',
+      example: '珍珠'
+    },
+    {
+      name: '加料數量',
+      required: false,
+      description: '加料選項的數量',
+      example: '1'
+    },
+    {
+      name: '加料加價',
+      required: false,
+      description: '加料選項的加價金額',
+      example: '5'
     }
   ]
 
@@ -212,30 +297,23 @@ export function useMenuPage(restaurantId = null) {
 
   // 處理菜單匯入數據
   const handleImportMenuData = async (file) => {
+    console.log('🚀 [菜單匯入] 開始處理檔案:', file.name)
+    
     try {
-      // 讀取檔案內容
-      const data = await readFileContent(file)
+      // 創建 FormData 對象
+      const formData = new FormData()
+      formData.append('file', file)
       
-      // 解析數據
-      const menuItems = parseMenuData(data)
+      // 發送到後端處理
+      const response = await menuAPI.importMenu(formData)
       
-      // 驗證數據
-      const validationResult = validateMenuData(menuItems)
-      if (!validationResult.valid) {
-        throw new Error(`數據驗證失敗：${validationResult.errors.join(', ')}`)
-      }
-
-      // 執行匯入
-      const result = await importMenuItems(menuItems)
-      
-      return {
-        created: result.created,
-        updated: result.updated,
-        failed: result.failed,
-        results: result.results
+      if (response.status === 'success') {
+        return response.data
+      } else {
+        throw new Error(response.message || '匯入失敗')
       }
     } catch (error) {
-      console.error('匯入失敗:', error)
+      console.error('❌ [菜單匯入] 匯入失敗:', error)
       throw error
     }
   }
@@ -247,178 +325,94 @@ export function useMenuPage(restaurantId = null) {
     initializePageData()
   }
 
-  // 讀取檔案內容
-  const readFileContent = (file) => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader()
-      
-      reader.onload = (e) => {
-        try {
-          const content = e.target.result
-          if (file.name.toLowerCase().endsWith('.csv')) {
-            resolve(parseCSV(content))
-          } else {
-            // Excel 檔案處理
-            resolve(parseExcel(content))
-          }
-        } catch (error) {
-          reject(error)
-        }
-      }
-      
-      reader.onerror = () => reject(new Error('讀取檔案失敗'))
-      
-      if (file.name.toLowerCase().endsWith('.csv')) {
-        reader.readAsText(file)
-      } else {
-        reader.readAsArrayBuffer(file)
-      }
-    })
-  }
-
-  // 解析 CSV
-  const parseCSV = (csvText) => {
-    const lines = csvText.split('\n')
-    if (lines.length < 2) return []
-
-    const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''))
-    const data = []
-
-    for (let i = 1; i < lines.length; i++) {
-      if (lines[i].trim()) {
-        const values = lines[i].split(',').map(v => v.trim().replace(/"/g, ''))
-        const row = {}
-        headers.forEach((header, index) => {
-          row[header] = values[index] || ''
-        })
-        data.push(row)
-      }
-    }
-
-    return data
-  }
-
-  // 解析 Excel（簡化版本）
-  const parseExcel = (data) => {
-    // 這裡需要額外的 xlsx 庫支援
-    console.warn('Excel 解析需要額外的 xlsx 庫支援')
-    return []
-  }
-
-  // 解析菜單數據
-  const parseMenuData = (data) => {
-    return data.map(row => ({
-      name: row['菜品名稱'] || row['name'] || '',
-      category: row['分類'] || row['category'] || '',
-      price: parseFloat(row['價格'] || row['price'] || 0),
-      description: row['描述'] || row['description'] || '',
-      inventoryConfig: row['庫存配置'] || row['inventoryConfig'] || '{}'
-    }))
-  }
-
-  // 驗證菜單數據
-  const validateMenuData = (menuItems) => {
-    const errors = []
+  
+  
+  // 處理選項和庫存關聯
+  const processOptionsAndInventory = async (options) => {
+    console.log('🔍 [庫存關聯] 開始處理選項和庫存關聯...')
     
-    menuItems.forEach((item, index) => {
-      if (!item.name.trim()) {
-        errors.push(`第 ${index + 1} 行：菜品名稱不能為空`)
-      }
-      if (!item.category.trim()) {
-        errors.push(`第 ${index + 1} 行：分類不能為空`)
-      }
-      if (isNaN(item.price) || item.price <= 0) {
-        errors.push(`第 ${index + 1} 行：價格必須為正數`)
-      }
+    if (!options || options.length === 0) {
+      console.log('ℹ️ [庫存關聯] 無選項需要處理')
+      return []
+    }
+    
+    const processedOptions = []
+    
+    for (const option of options) {
+      console.log(`🔍 [庫存關聯] 處理選項: ${option.name}`)
       
-      // 檢查分類是否存在
-      const categoryExists = categories.value.some(cat => 
-        cat.label === item.category || cat.name === item.category
+      // 檢查庫存中是否存在對應的原料
+      const inventoryItem = availableInventory.value.find(inv => 
+        inv.name === option.name || inv.label === option.name
       )
-      if (!categoryExists) {
-        errors.push(`第 ${index + 1} 行：分類「${item.category}」不存在`)
-      }
-    })
-
-    return {
-      valid: errors.length === 0,
-      errors
-    }
-  }
-
-  // 匯入菜單項目
-  const importMenuItems = async (menuItems) => {
-    const result = {
-      created: 0,
-      updated: 0,
-      failed: 0,
-      results: []
-    }
-
-    for (const item of menuItems) {
-      try {
-        // 查找對應的分類
-        const category = categories.value.find(cat => 
-          cat.label === item.category || cat.name === item.category
-        )
+      
+      if (inventoryItem) {
+        console.log(`✅ [庫存關聯] 找到庫存項目: ${inventoryItem.name}`)
         
-        if (!category) {
-          result.failed++
-          result.results.push({
-            name: item.name,
-            category: item.category,
-            success: false,
-            error: '分類不存在'
+        // 檢查是否為多規格庫存
+        if (inventoryItem.specifications && inventoryItem.specifications.length > 0) {
+          console.log(`📦 [庫存關聯] 多規格庫存: ${inventoryItem.name}`)
+          
+          const processedValues = option.values.map(value => {
+            // 查找對應的規格
+            const spec = inventoryItem.specifications.find(s => 
+              s.name === value.value || s.label === value.value
+            )
+            
+            if (spec) {
+              console.log(`✅ [庫存關聯] 找到規格: ${spec.name}`)
+              return {
+                ...value,
+                inventoryId: inventoryItem._id,
+                specificationId: spec._id,
+                inventoryType: 'multi-spec'
+              }
+            } else {
+              console.warn(`⚠️ [庫存關聯] 未找到規格: ${value.value}`)
+              return {
+                ...value,
+                inventoryId: inventoryItem._id,
+                inventoryType: 'multi-spec'
+              }
+            }
           })
-          continue
-        }
-
-        // 檢查是否已存在相同名稱的菜品
-        const existingDish = dishes.value.find(dish => 
-          dish.name === item.name && dish.category._id === category._id
-        )
-
-        const dishData = {
-          name: item.name,
-          price: item.price,
-          description: item.description,
-          category: category._id,
-          inventoryConfig: item.inventoryConfig
-        }
-
-        if (existingDish) {
-          // 更新現有菜品
-          await updateDish(existingDish._id, dishData)
-          result.updated++
-          result.results.push({
-            name: item.name,
-            category: item.category,
-            success: true,
-            action: 'updated'
+          
+          processedOptions.push({
+            ...option,
+            values: processedValues,
+            inventoryId: inventoryItem._id,
+            inventoryType: 'multi-spec'
           })
         } else {
-          // 創建新菜品
-          await addDish(dishData)
-          result.created++
-          result.results.push({
-            name: item.name,
-            category: item.category,
-            success: true,
-            action: 'created'
+          console.log(`📦 [庫存關聯] 單一規格庫存: ${inventoryItem.name}`)
+          
+          const processedValues = option.values.map(value => ({
+            ...value,
+            inventoryId: inventoryItem._id,
+            inventoryType: 'single-spec'
+          }))
+          
+          processedOptions.push({
+            ...option,
+            values: processedValues,
+            inventoryId: inventoryItem._id,
+            inventoryType: 'single-spec'
           })
         }
-      } catch (error) {
-        result.failed++
-        result.results.push({
-          name: item.name,
-          category: item.category,
-          success: false,
-          error: error.message || '未知錯誤'
+      } else {
+        console.warn(`⚠️ [庫存關聯] 未找到庫存項目: ${option.name}`)
+        
+        // 即使沒有找到庫存項目，也要保留選項（可能用於顯示）
+        processedOptions.push({
+          ...option,
+          inventoryId: null,
+          inventoryType: 'none'
         })
       }
     }
-
-    return result
+    
+    console.log('✅ [庫存關聯] 處理完成:', processedOptions)
+    return processedOptions
   }
 
   // 初始化數據
@@ -458,6 +452,7 @@ export function useMenuPage(restaurantId = null) {
     showImportDialog,
     importInstructions,
     menuFormatGuide,
+    templateData,
     handleImportMenuData,
     handleImportSuccess,
     loadAvailableInventory

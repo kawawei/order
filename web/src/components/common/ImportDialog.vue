@@ -28,6 +28,12 @@
               {{ instruction }}
             </li>
           </ul>
+          <div v-if="showTemplateDownload" class="template-download">
+            <button @click="downloadTemplate" class="btn btn-outline">
+              <font-awesome-icon icon="download" />
+              下載範本檔案
+            </button>
+          </div>
         </div>
 
         <!-- 檔案上傳區域 -->
@@ -203,6 +209,14 @@ export default {
     onImport: {
       type: Function,
       required: true
+    },
+    showTemplateDownload: {
+      type: Boolean,
+      default: false
+    },
+    templateData: {
+      type: Array,
+      default: null
     }
   },
   emits: ['update:show', 'import-success'],
@@ -271,64 +285,18 @@ export default {
     }
 
     const readFilePreview = async (file) => {
-      return new Promise((resolve, reject) => {
-        const reader = new FileReader()
-        
-        reader.onload = (e) => {
-          try {
-            const data = e.target.result
-            let preview = []
-
-            if (file.name.toLowerCase().endsWith('.csv')) {
-              preview = parseCSV(data)
-            } else if (file.name.toLowerCase().endsWith('.xlsx')) {
-              // 對於 Excel 檔案，我們需要額外的處理
-              // 這裡簡化處理，實際應該使用 xlsx 庫
-              preview = parseExcel(data)
-            }
-
-            resolve(preview)
-          } catch (error) {
-            reject(error)
-          }
-        }
-
-        reader.onerror = () => reject(new Error('讀取檔案失敗'))
-
-        if (file.name.toLowerCase().endsWith('.csv')) {
-          reader.readAsText(file)
-        } else {
-          reader.readAsArrayBuffer(file)
-        }
+      // 由於 Excel 解析已移至後端處理，這裡只提供基本的檔案信息
+      // 實際的數據解析將在後端進行
+      return new Promise((resolve) => {
+        // 對於預覽，我們只顯示檔案信息，不進行實際解析
+        // 實際的數據處理將在後端完成
+        resolve([{
+          '檔案名稱': file.name,
+          '檔案大小': formatFileSize(file.size),
+          '檔案類型': file.type || '未知',
+          '狀態': '將在匯入時解析'
+        }])
       })
-    }
-
-    const parseCSV = (csvText) => {
-      const lines = csvText.split('\n')
-      if (lines.length < 2) return []
-
-      const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''))
-      const data = []
-
-      for (let i = 1; i < lines.length; i++) {
-        if (lines[i].trim()) {
-          const values = lines[i].split(',').map(v => v.trim().replace(/"/g, ''))
-          const row = {}
-          headers.forEach((header, index) => {
-            row[header] = values[index] || ''
-          })
-          data.push(row)
-        }
-      }
-
-      return data
-    }
-
-    const parseExcel = (data) => {
-      // 簡化的 Excel 解析，實際應該使用 xlsx 庫
-      // 這裡返回空陣列，實際實現需要額外的庫
-      console.warn('Excel 解析需要額外的 xlsx 庫支援')
-      return []
     }
 
     const removeFile = () => {
@@ -395,6 +363,33 @@ export default {
       emit('update:show', false)
     }
 
+    const downloadTemplate = () => {
+      if (!props.templateData) {
+        console.warn('沒有範本數據可下載')
+        return
+      }
+
+      // 創建 CSV 內容
+      const headers = Object.keys(props.templateData[0])
+      const csvContent = [
+        headers.join(','),
+        ...props.templateData.map(row => 
+          headers.map(header => `"${row[header] || ''}"`).join(',')
+        )
+      ].join('\n')
+
+      // 創建下載連結
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+      const link = document.createElement('a')
+      const url = URL.createObjectURL(blob)
+      link.setAttribute('href', url)
+      link.setAttribute('download', 'menu_import_template.csv')
+      link.style.visibility = 'hidden'
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+    }
+
     return {
       fileInput,
       importing,
@@ -407,7 +402,8 @@ export default {
       handleFileDrop,
       removeFile,
       formatFileSize,
-      submitImport
+      submitImport,
+      downloadTemplate
     }
   }
 }

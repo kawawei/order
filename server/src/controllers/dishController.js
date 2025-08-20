@@ -1,10 +1,12 @@
 const mongoose = require('mongoose');
 const Dish = require('../models/dish');
 const MenuCategory = require('../models/menuCategory');
+const Inventory = require('../models/inventory');
 const catchAsync = require('../utils/catchAsync');
 const AppError = require('../utils/appError');
 const fs = require('fs');
 const path = require('path');
+const xlsx = require('xlsx');
 
 // 輔助函數：獲取商家ID（支持超級管理員與員工訪問特定商家）
 const getMerchantId = (req) => {
@@ -90,6 +92,77 @@ const safeMoveFileSync = (sourcePath, destinationPath) => {
       throw error;
     }
   }
+};
+
+// 將選項欄位映射到庫存項目名稱
+const mapOptionToInventory = (fieldName) => {
+  // 移除「選-」前綴
+  const cleanFieldName = fieldName.replace(/^選-/, '');
+  
+  const mapping = {
+    '吸管': '吸管',
+    '杯子': '杯子',
+    '果糖': '果糖',
+    '珍珠': '珍珠'
+  };
+  
+  const mappedName = mapping[cleanFieldName] || cleanFieldName;
+  console.log(`映射選項：${fieldName} -> ${cleanFieldName} -> 庫存：${mappedName}`);
+  
+  return mappedName;
+};
+
+// 根據名稱查找庫存項目
+const findInventoryByName = async (inventoryName, merchantId) => {
+  try {
+    console.log(`查找庫存項目：名稱="${inventoryName}"，商家ID="${merchantId}"`);
+    
+    const inventory = await Inventory.findOne({
+      name: inventoryName,
+      merchant: merchantId
+    });
+    
+    if (inventory) {
+      console.log(`找到庫存項目：${inventory.name} (ID: ${inventory._id})`);
+    } else {
+      console.log(`未找到庫存項目：${inventoryName}`);
+      
+      // 列出該商家的所有庫存項目，幫助調試
+      const allInventories = await Inventory.find({ merchant: merchantId }).select('name type');
+      console.log(`該商家的所有庫存項目：${allInventories.map(inv => `${inv.name}(${inv.type})`).join(', ')}`);
+    }
+    
+    return inventory;
+  } catch (error) {
+    console.warn(`查找庫存項目「${inventoryName}」失敗:`, error.message);
+    return null;
+  }
+};
+
+// 在多規格庫存中查找對應的規格值
+const findInventorySpec = (inventory, optionLabel) => {
+  if (!inventory.multiSpecStock || inventory.multiSpecStock.length === 0) {
+    console.log(`庫存 ${inventory.name} 沒有多規格庫存數據`);
+    return null;
+  }
+  
+  console.log(`在庫存 ${inventory.name} 中查找規格：${optionLabel}`);
+  console.log(`可用規格：${inventory.multiSpecStock.map(spec => spec.specName).join(', ')}`);
+  
+  // 嘗試匹配規格名稱
+  const matchedSpec = inventory.multiSpecStock.find(spec => 
+    spec.specName.toLowerCase() === optionLabel.toLowerCase() ||
+    spec.specName.toLowerCase().includes(optionLabel.toLowerCase()) ||
+    optionLabel.toLowerCase().includes(spec.specName.toLowerCase())
+  );
+  
+  if (matchedSpec) {
+    console.log(`找到匹配規格：${matchedSpec.specName}`);
+  } else {
+    console.log(`未找到匹配規格：${optionLabel}`);
+  }
+  
+  return matchedSpec;
 };
 
 // 獲取商家的所有菜品
@@ -528,4 +601,485 @@ exports.getDishStats = catchAsync(async (req, res, next) => {
       categories: categoryStats
     }
   });
+});
+
+// 匯入菜單
+exports.importMenu = catchAsync(async (req, res, next) => {
+  const merchantId = getMerchantId(req);
+  
+  if (!req.file) {
+    return next(new AppError('請上傳檔案', 400));
+  }
+
+  try {
+    console.log(`開始處理菜單匯入檔案：${req.file.originalname}`);
+    
+    // 讀取檔案
+    const workbook = xlsx.readFile(req.file.path);
+    const sheetName = workbook.SheetNames[0];
+    const worksheet = workbook.Sheets[sheetName];
+    
+    console.log(`檔案包含工作表：${workbook.SheetNames.join(', ')}`);
+    console.log(`使用工作表：${sheetName}`);
+    
+    // 轉換為 JSON
+    const rawData = xlsx.utils.sheet_to_json(worksheet, { header: 1 });
+    console.log(`解析到 ${rawData.length} 行數據（包含標題行）`);
+    
+    // 檢查標題行
+    const headers = rawData[0];
+    console.log(`標題行：${headers.join(', ')}`);
+    
+    const requiredHeaders = ['品名', '分類', '基礎價格'];
+    const optionalHeaders = ['描述', '容量', '容量數量', '容量加價', '甜度', '甜度數量', '甜度加價', '加料', '加料數量', '加料加價'];
+    
+    // 檢查必要欄位
+    const missingHeaders = requiredHeaders.filter(header => !headers.includes(header));
+    if (missingHeaders.length > 0) {
+      console.error(`缺少必要欄位：${missingHeaders.join(', ')}`);
+      return next(new AppError(`缺少必要欄位：${missingHeaders.join(', ')}`, 400));
+    }
+    
+    console.log('所有必要欄位檢查通過');
+    
+    // 解析數據
+    const menuData = [];
+    const errors = [];
+    let processedRows = 0;
+    let skippedRows = 0;
+    
+    // 全局選項收集器，用於收集所有行的選項數據
+    const dishOptionsCollector = {};
+    
+    console.log('開始解析數據行...');
+    
+    // 新的解析邏輯：支持混合格式（全局標題行 + 個別菜品標題行）
+    let currentDishHeaders = headers; // 預設使用全局標題行
+    let currentDishName = null;
+    
+    for (let i = 1; i < rawData.length; i++) {
+      const row = rawData[i];
+      
+      // 檢查是否為空行
+      if (row.length === 0 || row.every(cell => !cell)) {
+        skippedRows++;
+        continue;
+      }
+      
+      processedRows++;
+      console.log(`處理第 ${i + 1} 行：${row.slice(0, 3).join(', ')}...`);
+      
+      try {
+        // 檢查是否為標題行（第一欄包含「分類」）
+        const firstCell = String(row[0] || '').trim();
+        if (firstCell === '分類') {
+          console.log(`第${i + 1}行：檢測到菜品標題行，更新當前標題`);
+          currentDishHeaders = row;
+          currentDishName = null; // 重置當前菜品名稱
+          skippedRows++;
+          continue;
+        }
+        
+        // 檢查是否為菜品行（第一欄包含分類名稱，第二欄包含菜品名稱）
+        const categoryCell = String(row[0] || '').trim();
+        const dishNameCell = String(row[1] || '').trim();
+        
+        if (categoryCell && dishNameCell) {
+          // 這是菜品行
+          currentDishName = dishNameCell;
+          console.log(`處理菜品：${currentDishName}，使用標題：${currentDishHeaders ? currentDishHeaders.slice(0, 3).join(', ') : '無'}`);
+          
+          // 使用當前菜品的標題行來解析數據
+          const rowData = {};
+          currentDishHeaders.forEach((header, index) => {
+            rowData[header] = row[index] || '';
+          });
+          
+          // 驗證必要欄位
+          const missingFields = [];
+          if (!rowData['品名']) missingFields.push('品名');
+          if (!rowData['分類']) missingFields.push('分類');
+          if (!rowData['基礎價格']) missingFields.push('基礎價格');
+          
+          if (missingFields.length > 0) {
+            const errorMsg = `第${i + 1}行：缺少必要欄位 [${missingFields.join(', ')}]`;
+            console.error(errorMsg);
+            errors.push(errorMsg);
+            continue;
+          }
+          
+          // 驗證價格
+          const basePrice = parseFloat(rowData['基礎價格']);
+          if (isNaN(basePrice) || basePrice < 0) {
+            const errorMsg = `第${i + 1}行：基礎價格「${rowData['基礎價格']}」無效，必須是正數`;
+            console.error(errorMsg);
+            errors.push(errorMsg);
+            continue;
+          }
+          
+          // 檢查分類是否存在，如果不存在則自動創建
+          let category = await MenuCategory.findOne({
+            label: rowData['分類'].trim(),
+            merchant: merchantId
+          });
+          
+          if (!category) {
+            console.log(`分類「${rowData['分類']}」不存在，正在自動創建...`);
+            try {
+              // 生成唯一的 name，使用時間戳確保唯一性
+              const timestamp = Date.now();
+              const categoryData = {
+                name: `${rowData['分類'].trim().replace(/\s+/g, '-')}-${timestamp}`,
+                label: rowData['分類'].trim(),
+                description: `${rowData['分類']}類別菜品`,
+                merchant: merchantId
+              };
+              
+              category = await MenuCategory.create(categoryData);
+              console.log(`成功創建分類：${category.label} (ID: ${category._id})`);
+            } catch (createError) {
+              const errorMsg = `第${i + 1}行：無法創建分類「${rowData['分類']}」 - ${createError.message}`;
+              console.error(errorMsg);
+              errors.push(errorMsg);
+              continue;
+            }
+          }
+          
+          // 構建菜品數據
+          const dishData = {
+            name: rowData['品名'].trim(),
+            category: category._id,
+            merchant: merchantId,
+            price: basePrice,
+            description: rowData['描述'] || '',
+            isActive: true
+          };
+          
+          // 收集當前行的選項數據，使用當前菜品的標題行
+          const rowOptions = [];
+          
+          console.log(`解析菜品「${currentDishName}」的選項數據，標題欄位：${currentDishHeaders.slice(3).join(', ')}`);
+          
+          // 從第4個欄位開始（跳過分類、品名、基礎價格）
+          let currentIndex = 3;
+        
+                  while (currentIndex < currentDishHeaders.length) {
+            const currentHeader = currentDishHeaders[currentIndex];
+            const currentValue = row[currentIndex] || '';
+            
+            // 如果當前欄位是選項名稱（不是數量、加價）
+            if (currentHeader !== '數量' && currentHeader !== '加價' && currentValue && String(currentValue).trim() !== '') {
+              const optionName = currentHeader;
+              const optionValue = String(currentValue).trim();
+              
+              let quantity = 0;
+              let surcharge = 0;
+              
+              // 查找該選項後面的數量和加價
+              if (currentIndex + 1 < currentDishHeaders.length && currentDishHeaders[currentIndex + 1] === '數量') {
+                quantity = parseFloat(row[currentIndex + 1]) || 0;
+                
+                if (currentIndex + 2 < currentDishHeaders.length && currentDishHeaders[currentIndex + 2] === '加價') {
+                  surcharge = parseFloat(row[currentIndex + 2]) || 0;
+                }
+              } else if (currentIndex + 1 < currentDishHeaders.length && currentDishHeaders[currentIndex + 1] === '加價') {
+                // 如果沒有數量欄位，直接有加價欄位
+                surcharge = parseFloat(row[currentIndex + 1]) || 0;
+              }
+              
+              console.log(`解析選項：${optionName} = ${optionValue}，數量：${quantity}，加價：${surcharge}`);
+              
+              // 收集選項數據
+              rowOptions.push({
+                name: optionName,
+                value: optionValue,
+                quantity: quantity,
+                surcharge: surcharge
+              });
+              
+              // 移動到下一個選項組
+              if (currentIndex + 1 < currentDishHeaders.length && currentDishHeaders[currentIndex + 1] === '數量') {
+                if (currentIndex + 2 < currentDishHeaders.length && currentDishHeaders[currentIndex + 2] === '加價') {
+                  currentIndex += 3; // 跳過選項名稱、數量、加價
+                } else {
+                  currentIndex += 2; // 跳過選項名稱、數量
+                }
+              } else if (currentIndex + 1 < currentDishHeaders.length && currentDishHeaders[currentIndex + 1] === '加價') {
+                currentIndex += 2; // 跳過選項名稱、加價
+              } else {
+                currentIndex += 1; // 只有選項名稱
+              }
+            } else {
+              // 如果當前欄位不是選項名稱，跳到下一個
+              currentIndex += 1;
+            }
+                    }
+          
+          // 將當前行的選項數據添加到全局收集器
+          if (!dishOptionsCollector[dishData.name]) {
+            dishOptionsCollector[dishData.name] = [];
+          }
+          dishOptionsCollector[dishData.name].push(...rowOptions);
+          
+          // 暫時不處理選項，先收集數據
+          menuData.push(dishData);
+          
+          // 暫時不處理庫存，先收集數據
+        } else {
+          // 這不是菜品行，可能是選項數據行
+          console.log(`第${i + 1}行：跳過非菜品行`);
+          skippedRows++;
+          continue;
+        }
+        
+      } catch (error) {
+        const errorMsg = `第${i + 1}行：處理失敗 - ${error.message}`;
+        console.error(errorMsg);
+        errors.push(errorMsg);
+      }
+    }
+    
+    console.log(`數據解析完成：成功 ${menuData.length} 項，跳過 ${skippedRows} 行，錯誤 ${errors.length} 項`);
+    
+    // 處理選項配置 - 將收集的選項數據按菜品名稱分組
+    console.log('開始處理選項配置...');
+    console.log('收集到的選項數據：', dishOptionsCollector);
+    
+    // 為每個菜品處理選項配置
+    for (const dishData of menuData) {
+      const dishName = dishData.name;
+      const collectedOptions = dishOptionsCollector[dishName] || [];
+      
+      if (collectedOptions.length > 0) {
+        // 按選項名稱分組
+        const optionGroups = {};
+        
+        for (const option of collectedOptions) {
+          const optionName = option.name;
+          
+          if (!optionGroups[optionName]) {
+            optionGroups[optionName] = {
+              name: optionName,
+              type: optionName === '珍珠' ? 'checkbox' : 'radio',
+              required: optionName === '杯子',
+              options: []
+            };
+          }
+          
+          // 創建選項
+          let optionLabel = option.value;
+          let optionValueKey = option.value.toLowerCase().replace(/\s+/g, '-');
+          
+          // 特殊處理珍珠選項
+          if (optionName === '珍珠') {
+            optionLabel = option.value === '有' ? '珍珠' : '無珍珠';
+            optionValueKey = option.value === '有' ? 'pearl' : 'no-pearl';
+          }
+          
+          const optionConfig = {
+            label: optionLabel,
+            value: optionValueKey,
+            price: option.surcharge || 0,
+            quantity: option.quantity || 0
+          };
+          
+          // 檢查是否已存在相同值的選項
+          const existingOption = optionGroups[optionName].options.find(opt => opt.value === optionValueKey);
+          if (!existingOption) {
+            optionGroups[optionName].options.push(optionConfig);
+          }
+        }
+        
+        // 將選項組轉換為選項配置
+        const finalOptions = Object.values(optionGroups);
+        console.log(`菜品「${dishName}」的選項配置：`, finalOptions);
+        
+        dishData.customOptions = finalOptions;
+        
+        // 處理庫存關聯配置
+        const inventoryConfig = {
+          baseInventory: [],
+          conditionalInventory: []
+        };
+        
+        console.log(`處理菜品「${dishName}」的庫存關聯，選項數量：${finalOptions.length}`);
+        
+        // 根據選項值查找對應的庫存項目
+        for (const optionConfig of finalOptions) {
+          // 先查找對應的庫存項目
+          const inventoryName = mapOptionToInventory(optionConfig.name);
+          console.log(`映射選項：${optionConfig.name} -> 庫存：${inventoryName}`);
+          
+          const inventory = await findInventoryByName(inventoryName, merchantId);
+          
+          if (inventory) {
+            console.log(`找到庫存項目：${inventory.name} (ID: ${inventory._id})，類型：${inventory.type}`);
+            
+            // 根據庫存類型處理
+            if (inventory.type === 'single') {
+              // 單一規格庫存：所有選項值都對應到同一個庫存項目
+              // 只需要添加一次庫存關聯，數量會在條件庫存中處理
+              const existingInventory = inventoryConfig.baseInventory.find(
+                item => item.inventoryId.toString() === inventory._id.toString()
+              );
+              
+              if (!existingInventory) {
+                inventoryConfig.baseInventory.push({
+                  inventoryId: inventory._id,
+                  inventoryValueId: inventory._id, // 單一庫存使用自身ID
+                  quantity: 1 // 基礎數量設為1，實際數量在條件庫存中處理
+                });
+                console.log(`添加單一庫存：${inventory.name}`);
+              }
+              
+              // 為每個選項值添加條件庫存
+              for (const optionValue of optionConfig.options) {
+                if (optionValue.quantity > 0) {
+                  inventoryConfig.conditionalInventory.push({
+                    inventoryId: inventory._id,
+                    inventoryValueId: inventory._id,
+                    quantity: optionValue.quantity,
+                    condition: {
+                      optionName: optionConfig.name,
+                      optionValue: optionValue.label
+                    }
+                  });
+                  console.log(`添加條件庫存：${inventory.name} - ${optionValue.label}，數量：${optionValue.quantity}`);
+                }
+              }
+            } else if (inventory.type === 'multiSpec') {
+              // 多規格庫存：每個選項值對應不同的規格
+              for (const optionValue of optionConfig.options) {
+                if (optionValue.quantity > 0) {
+                  const specValue = findInventorySpec(inventory, optionValue.label);
+                  if (specValue) {
+                    inventoryConfig.baseInventory.push({
+                      inventoryId: inventory._id,
+                      inventoryValueId: specValue._id,
+                      quantity: optionValue.quantity
+                    });
+                    console.log(`添加多規格庫存：${inventory.name} - ${specValue.specName}，數量：${optionValue.quantity}`);
+                  } else {
+                    console.warn(`未找到匹配的規格：${optionValue.label} 在庫存 ${inventory.name} 中`);
+                  }
+                }
+              }
+            }
+          } else {
+            console.warn(`未找到庫存項目：${inventoryName}`);
+          }
+        }
+        
+        if (inventoryConfig.baseInventory.length > 0 || inventoryConfig.conditionalInventory.length > 0) {
+          dishData.inventoryConfig = inventoryConfig;
+        }
+      }
+    }
+    
+    // 如果有錯誤，返回錯誤信息
+    if (errors.length > 0) {
+      return res.status(400).json({
+        status: 'error',
+        message: '匯入過程中發現錯誤',
+        errors: errors,
+        data: {
+          processed: processedRows,
+          skipped: skippedRows,
+          errors: errors.length,
+          valid: menuData.length
+        }
+      });
+    }
+    
+    // 執行匯入
+    console.log('開始執行菜單匯入...');
+    const results = [];
+    let created = 0;
+    let updated = 0;
+    let failed = 0;
+    
+    for (const dishData of menuData) {
+      try {
+        // 檢查是否已存在同名菜品
+        const existingDish = await Dish.findOne({
+          name: dishData.name,
+          category: dishData.category,
+          merchant: merchantId
+        });
+        
+        if (existingDish) {
+          // 更新現有菜品
+          const updatedDish = await Dish.findByIdAndUpdate(
+            existingDish._id,
+            dishData,
+            { new: true, runValidators: true }
+          );
+          
+          results.push({
+            name: dishData.name,
+            category: dishData.category,
+            success: true,
+            action: 'updated',
+            id: updatedDish._id
+          });
+          updated++;
+        } else {
+          // 創建新菜品
+          const newDish = await Dish.create(dishData);
+          
+          results.push({
+            name: dishData.name,
+            category: dishData.category,
+            success: true,
+            action: 'created',
+            id: newDish._id
+          });
+          created++;
+        }
+             } catch (error) {
+         console.error(`匯入菜品「${dishData.name}」失敗:`, error);
+         results.push({
+           name: dishData.name,
+           category: dishData.category,
+           success: false,
+           error: error.message
+         });
+         failed++;
+       }
+    }
+    
+    // 清理暫存檔案
+    try {
+      fs.unlinkSync(req.file.path);
+    } catch (error) {
+      console.warn('清理暫存檔案失敗:', error);
+    }
+    
+    console.log(`菜單匯入完成：新增 ${created} 項，更新 ${updated} 項，失敗 ${failed} 項`);
+    
+    res.status(200).json({
+      status: 'success',
+      message: `菜單匯入完成：新增 ${created} 項，更新 ${updated} 項，失敗 ${failed} 項`,
+      data: {
+        created,
+        updated,
+        failed,
+        results
+      }
+    });
+    
+  } catch (error) {
+    console.error('菜單匯入失敗:', error);
+    
+    // 清理暫存檔案
+    try {
+      if (req.file && req.file.path) {
+        fs.unlinkSync(req.file.path);
+      }
+    } catch (cleanupError) {
+      console.warn('清理暫存檔案失敗:', cleanupError);
+    }
+    
+    return next(new AppError(`菜單匯入失敗：${error.message}`, 500));
+  }
 });
