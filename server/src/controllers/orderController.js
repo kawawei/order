@@ -839,6 +839,14 @@ exports.exportHistoryOrders = catchAsync(async (req, res, next) => {
 
   console.log('查詢條件:', JSON.stringify(query, null, 2));
 
+  // 獲取商家信息
+  const Merchant = require('../models/merchant');
+  const merchant = await Merchant.findById(merchantId).select('businessName');
+  
+  if (!merchant) {
+    return next(new AppError('找不到商家信息', 404));
+  }
+
   // 獲取訂單數據
   const orders = await Order.find(query)
     .populate([
@@ -943,9 +951,14 @@ exports.exportHistoryOrders = catchAsync(async (req, res, next) => {
     }
   });
 
-  // 生成檔案名稱
+  // 生成檔案名稱：年月日-餐廳名稱-歷史訂單
   const now = new Date();
-  const fileName = `歷史訂單_${now.getFullYear()}${(now.getMonth() + 1).toString().padStart(2, '0')}${now.getDate().toString().padStart(2, '0')}_${now.getHours().toString().padStart(2, '0')}${now.getMinutes().toString().padStart(2, '0')}`;
+  const dateStr = `${now.getFullYear()}${(now.getMonth() + 1).toString().padStart(2, '0')}${now.getDate().toString().padStart(2, '0')}`;
+  const timeStr = `${now.getHours().toString().padStart(2, '0')}${now.getMinutes().toString().padStart(2, '0')}`;
+  const fileName = `${dateStr}-${merchant.businessName}-歷史訂單`;
+  
+  // 添加檔案名稱到響應標頭中，供前端使用
+  res.setHeader('X-File-Name', encodeURIComponent(fileName));
 
   if (format === 'csv') {
     // 匯出 CSV

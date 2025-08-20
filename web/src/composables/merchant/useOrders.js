@@ -903,14 +903,30 @@ export function useOrders(restaurantId = null) {
       const response = await orderService.exportHistoryOrders(merchantId, params)
       
       // 處理檔案下載
-      const blob = new Blob([response], { 
+      const blob = new Blob([response.data], { 
         type: format === 'csv' ? 'text/csv;charset=utf-8' : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
       })
       
       const url = window.URL.createObjectURL(blob)
       const link = document.createElement('a')
       link.href = url
-      link.download = `歷史訂單_${new Date().toISOString().split('T')[0]}.${format}`
+      
+      // 從響應標頭獲取檔案名稱
+      console.log('響應標頭:', response.headers)
+      let fileName = response.headers?.['x-file-name'] || response.headers?.['X-File-Name']
+      console.log('從標頭獲取的檔案名稱:', fileName)
+      if (fileName) {
+        fileName = decodeURIComponent(fileName)
+        console.log('解碼後的檔案名稱:', fileName)
+      } else {
+        // 如果沒有標頭信息，使用預設名稱
+        fileName = `歷史訂單_${new Date().toISOString().split('T')[0]}`
+        console.log('使用預設檔案名稱:', fileName)
+      }
+      fileName = `${fileName}.${format}`
+      console.log('最終檔案名稱:', fileName)
+      
+      link.download = fileName
       document.body.appendChild(link)
       link.click()
       document.body.removeChild(link)

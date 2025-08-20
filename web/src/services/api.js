@@ -111,7 +111,13 @@ api.interceptors.request.use(
 
 // 響應攔截器：處理錯誤
 api.interceptors.response.use(
-  (response) => response.data,
+  (response) => {
+    // 如果是 blob 響應，保留完整的響應對象以獲取標頭信息
+    if (response.config?.responseType === 'blob') {
+      return response
+    }
+    return response.data
+  },
   (error) => {
     if (error.response) {
       // 401：未授權 -> 僅清除對應情境的 token，不影響另一個身分的登入
