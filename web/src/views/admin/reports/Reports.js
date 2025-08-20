@@ -115,6 +115,10 @@ export function useReports() {
   const loadReportData = async () => {
     isLoading.value = true
     try {
+      console.log('=== 載入報表數據調試 ===')
+      console.log('選擇的餐廳:', selectedRestaurant.value)
+      console.log('選擇的時間週期:', selectedPeriod.value)
+      
       const params = {
         period: selectedPeriod.value,
         restaurantId: selectedRestaurant.value
@@ -122,39 +126,51 @@ export function useReports() {
 
       // 根據時間週期設置日期參數
       if (selectedPeriod.value === 'day') {
-        const date = customDate || selectedDate.value
+        let date = customDate.value || selectedDate.value
+        // 確保是 Date 對象
+        if (typeof date === 'string') {
+          date = new Date(date)
+        }
+        if (!(date instanceof Date) || isNaN(date)) {
+          date = new Date()
+        }
         params.date = date.toISOString().split('T')[0]
       } else if (selectedPeriod.value === 'month') {
-        const month = customDate || selectedMonth.value
+        let month = customDate.value || selectedMonth.value
+        // 確保是 Date 對象
+        if (typeof month === 'string') {
+          month = new Date(month)
+        }
+        if (!(month instanceof Date) || isNaN(month)) {
+          month = new Date()
+        }
         const startDate = new Date(month.getFullYear(), month.getMonth(), 1)
         const endDate = new Date(month.getFullYear(), month.getMonth() + 1, 0)
-        const startYear = startDate.getFullYear()
-        const startMonth = String(startDate.getMonth() + 1).padStart(2, '0')
-        const startDay = String(startDate.getDate()).padStart(2, '0')
-        const endYear = endDate.getFullYear()
-        const endMonth = String(endDate.getMonth() + 1).padStart(2, '0')
-        const endDay = String(endDate.getDate()).padStart(2, '0')
-        params.startDate = `${startYear}-${startMonth}-${startDay}`
-        params.endDate = `${endYear}-${endMonth}-${endDay}`
+        params.startDate = startDate.toISOString().split('T')[0]
+        params.endDate = endDate.toISOString().split('T')[0]
       } else if (selectedPeriod.value === 'year') {
-        const year = customDate || selectedYear.value
+        let year = customDate.value || selectedYear.value
+        // 確保是 Date 對象
+        if (typeof year === 'string') {
+          year = new Date(year)
+        }
+        if (!(year instanceof Date) || isNaN(year)) {
+          year = new Date()
+        }
         const startDate = new Date(year.getFullYear(), 0, 1)
         const endDate = new Date(year.getFullYear(), 11, 31)
-        const startYear = startDate.getFullYear()
-        const startMonth = String(startDate.getMonth() + 1).padStart(2, '0')
-        const startDay = String(startDate.getDate()).padStart(2, '0')
-        const endYear = endDate.getFullYear()
-        const endMonth = String(endDate.getMonth() + 1).padStart(2, '0')
-        const endDay = String(endDate.getDate()).padStart(2, '0')
-        params.startDate = `${startYear}-${startMonth}-${startDay}`
-        params.endDate = `${endYear}-${endMonth}-${endDay}`
+        params.startDate = startDate.toISOString().split('T')[0]
+        params.endDate = endDate.toISOString().split('T')[0]
       }
       
       // 調用 API
+      console.log('API 參數:', params)
       const response = await adminReportAPI.getPlatformStats(params)
+      console.log('API 回應:', response)
       
       if (response.status === 'success') {
         const data = response.data
+        console.log('回應數據:', data)
         
         // 更新平台統計
         platformStats.value = {
@@ -173,7 +189,16 @@ export function useReports() {
         }
         
         // 更新餐廳詳細資訊
+        console.log('更新餐廳詳細資訊，選擇的餐廳:', selectedRestaurant.value)
         if (selectedRestaurant.value !== 'all') {
+          console.log('餐廳詳細資訊數據:', {
+            popularItems: data.popularItems,
+            peakHours: data.peakHours,
+            totalOrders: data.totalOrders,
+            avgOrderValue: data.avgOrderValue,
+            completedOrders: data.completedOrders,
+            cancelledOrders: data.cancelledOrders
+          })
           restaurantDetails.value = {
             popularItems: data.popularItems || [],
             peakHours: data.peakHours || [],
@@ -181,6 +206,17 @@ export function useReports() {
             avgOrderValue: data.avgOrderValue || 0,
             completedOrders: data.completedOrders || 0,
             cancelledOrders: data.cancelledOrders || 0
+          }
+        } else {
+          // 當選擇所有餐廳時，清空餐廳詳細資訊
+          console.log('清空餐廳詳細資訊')
+          restaurantDetails.value = {
+            popularItems: [],
+            peakHours: [],
+            totalOrders: 0,
+            avgOrderValue: 0,
+            completedOrders: 0,
+            cancelledOrders: 0
           }
         }
         
@@ -243,16 +279,37 @@ export function useReports() {
       
       // 設置日期參數（與 loadReportData 相同的邏輯）
       if (selectedPeriod.value === 'day') {
-        const date = customDate || selectedDate.value
+        let date = customDate.value || selectedDate.value
+        // 確保是 Date 對象
+        if (typeof date === 'string') {
+          date = new Date(date)
+        }
+        if (!(date instanceof Date) || isNaN(date)) {
+          date = new Date()
+        }
         params.date = date.toISOString().split('T')[0]
       } else if (selectedPeriod.value === 'month') {
-        const month = customDate || selectedMonth.value
+        let month = customDate.value || selectedMonth.value
+        // 確保是 Date 對象
+        if (typeof month === 'string') {
+          month = new Date(month)
+        }
+        if (!(month instanceof Date) || isNaN(month)) {
+          month = new Date()
+        }
         const startDate = new Date(month.getFullYear(), month.getMonth(), 1)
         const endDate = new Date(month.getFullYear(), month.getMonth() + 1, 0)
         params.startDate = startDate.toISOString().split('T')[0]
         params.endDate = endDate.toISOString().split('T')[0]
       } else if (selectedPeriod.value === 'year') {
-        const year = customDate || selectedYear.value
+        let year = customDate.value || selectedYear.value
+        // 確保是 Date 對象
+        if (typeof year === 'string') {
+          year = new Date(year)
+        }
+        if (!(year instanceof Date) || isNaN(year)) {
+          year = new Date()
+        }
         const startDate = new Date(year.getFullYear(), 0, 1)
         const endDate = new Date(year.getFullYear(), 11, 31)
         params.startDate = startDate.toISOString().split('T')[0]
@@ -278,7 +335,13 @@ export function useReports() {
 
   // 時間導航
   const navigateTime = (direction) => {
-    const current = getCurrentTimeSelection()
+    let current = getCurrentTimeSelection()
+    
+    // 確保是 Date 對象
+    if (!(current instanceof Date) || isNaN(current)) {
+      current = new Date()
+    }
+    
     const newDate = new Date(current)
     
     if (selectedPeriod.value === 'day') {
@@ -297,8 +360,13 @@ export function useReports() {
 
   // 檢查是否可以導航
   const canGoPrevious = () => {
-    const current = getCurrentTimeSelection()
+    let current = getCurrentTimeSelection()
     const now = new Date()
+    
+    // 確保是 Date 對象
+    if (!(current instanceof Date) || isNaN(current)) {
+      current = new Date()
+    }
     
     if (selectedPeriod.value === 'day') {
       return current < now
@@ -312,8 +380,13 @@ export function useReports() {
   }
 
   const canGoNext = () => {
-    const current = getCurrentTimeSelection()
+    let current = getCurrentTimeSelection()
     const now = new Date()
+    
+    // 確保是 Date 對象
+    if (!(current instanceof Date) || isNaN(current)) {
+      current = new Date()
+    }
     
     if (selectedPeriod.value === 'day') {
       return current < now
@@ -328,7 +401,13 @@ export function useReports() {
 
   // 顯示時間
   const getDisplayTime = () => {
-    const current = getCurrentTimeSelection()
+    let current = getCurrentTimeSelection()
+    
+    // 確保是 Date 對象
+    if (!(current instanceof Date) || isNaN(current)) {
+      current = new Date()
+    }
+    
     if (selectedPeriod.value === 'day') {
       return current.toLocaleDateString('zh-TW')
     } else if (selectedPeriod.value === 'month') {

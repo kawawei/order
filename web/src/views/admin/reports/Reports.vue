@@ -68,7 +68,7 @@
     </div>
 
     <!-- 平台統計卡片 -->
-    <div class="stats-grid">
+    <div class="stats-grid" :class="{ 'five-cards': selectedRestaurant === 'all' }">
       <!-- 總營收 -->
       <div class="stat-card">
         <div class="stat-header">
@@ -154,8 +154,8 @@
         </div>
       </div>
 
-      <!-- 總訂單數 -->
-      <div class="stat-card">
+      <!-- 總訂單數 - 只在選擇特定餐廳時顯示 -->
+      <div v-if="selectedRestaurant !== 'all'" class="stat-card">
         <div class="stat-header">
           <div class="stat-icon orders">
             <font-awesome-icon icon="receipt" />

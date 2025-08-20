@@ -289,6 +289,63 @@ exports.protectAny = catchAsync(async (req, res, next) => {
   next();
 });
 
+// 專門用於管理員的保護中間件
+exports.protectAdmin = catchAsync(async (req, res, next) => {
+  // 1) 檢查 token 是否存在
+  let token;
+  if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
+    token = req.headers.authorization.split(' ')[1];
+  }
+
+  if (!token) {
+    return next(new AppError('您需要先登入才能訪問此資源', 401));
+  }
+
+  // 2) 驗證 token
+  let decoded;
+  try {
+    decoded = jwt.verify(token, process.env.JWT_SECRET);
+  } catch (error) {
+    if (error.name === 'JsonWebTokenError') {
+      return next(new AppError('無效的 token', 401));
+    } else if (error.name === 'TokenExpiredError') {
+      return next(new AppError('token 已過期，請重新登入', 401));
+    }
+    return next(new AppError('token 驗證失敗', 401));
+  }
+
+  // 3) 檢查是否為管理員角色
+  if (decoded.role !== 'admin' && decoded.role !== 'superadmin') {
+    return next(new AppError('只有管理員可以訪問此功能', 403));
+  }
+
+  // 4) 檢查管理員是否仍然存在
+  const currentAdmin = await Admin.findById(decoded.id).select('+isActive');
+  
+  if (!currentAdmin) {
+    return next(new AppError('該管理員已不存在', 401));
+  }
+
+  // 5) 檢查管理員是否被停用
+  if (!currentAdmin.isActive) {
+    return next(new AppError('您的帳戶已被停用，請聯繫管理員', 401));
+  }
+
+  // 6) 檢查密碼是否在 token 發放後被更改
+  if (currentAdmin.passwordChangedAt) {
+    const changedTimestamp = parseInt(currentAdmin.passwordChangedAt.getTime() / 1000, 10);
+    if (decoded.iat < changedTimestamp) {
+      return next(new AppError('密碼已被更改，請重新登入', 401));
+    }
+  }
+
+  // 7) 將管理員信息添加到請求對象
+  req.admin = currentAdmin;
+  req.user = currentAdmin;
+  
+  next();
+});
+
 // 權限檢查：管理員、商家擁有所有權限；員工依其角色權限
 exports.requirePermissions = (...requiredPermissions) => {
   return (req, res, next) => {
