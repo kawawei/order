@@ -107,7 +107,7 @@ exports.getAllEmployees = catchAsync(async (req, res, next) => {
 // 新增員工
 exports.createEmployee = catchAsync(async (req, res, next) => {
   const merchantId = getMerchantId(req);
-  const { name, roleId, email } = req.body;
+  const { name, roleId, email, serialNumber } = req.body;
   if (!name || !roleId) {
     return next(new AppError('請提供姓名與角色', 400));
   }
@@ -144,7 +144,8 @@ exports.createEmployee = catchAsync(async (req, res, next) => {
     account: employeeNumber,
     password: employeeNumber,
     role: roleId,
-    email
+    email,
+    ...(serialNumber && { serialNumber })
   });
   res.status(201).json({ status: 'success', data: { employee } });
 });
@@ -152,12 +153,13 @@ exports.createEmployee = catchAsync(async (req, res, next) => {
 // 更新員工
 exports.updateEmployee = catchAsync(async (req, res, next) => {
   const merchantId = getMerchantId(req);
-  const { name, password, roleId, isActive } = req.body;
+  const { name, password, roleId, isActive, serialNumber } = req.body;
   const employee = await Employee.findOne({ _id: req.params.id, merchant: merchantId });
   if (!employee) return next(new AppError('員工不存在', 404));
   await assertManagerCanEditTarget(req, employee);
   if (typeof name === 'string') employee.name = name;
   if (typeof isActive === 'boolean') employee.isActive = isActive;
+  if (typeof serialNumber === 'string') employee.serialNumber = serialNumber;
   if (roleId) {
     const role = await Role.findOne({ _id: roleId, merchant: merchantId });
     if (!role) return next(new AppError('角色不存在', 400));

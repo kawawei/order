@@ -401,6 +401,18 @@ export const roleAPI = {
     const merchantId = resolveActiveMerchantId()
     const params = merchantId ? { merchantId } : {}
     return api.delete(`/roles/${roleId}`, { params })
+  },
+  
+  // 匯入員工權限（Excel）
+  importPermissions: (formData) => {
+    const merchantId = resolveActiveMerchantId()
+    const params = merchantId ? { merchantId } : {}
+    return api.post('/admin/permissions/import', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data'
+      },
+      params
+    })
   }
 };
 

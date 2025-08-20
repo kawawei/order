@@ -68,6 +68,9 @@ router.route('/merchants')
 // 匯入餐廳路由
 router.post('/merchants/import', upload.single('file'), adminController.importMerchants);
 
+// 匯入員工權限路由
+router.post('/permissions/import', upload.single('file'), adminController.importPermissions);
+
 router.route('/merchants/:id')
   .get(adminController.getMerchant)
   .patch(adminController.updateMerchant)

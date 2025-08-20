@@ -1081,3 +1081,241 @@ exports.importMerchants = catchAsync(async (req, res, next) => {
     return next(new AppError('處理 Excel 檔案時發生錯誤', 500));
   }
 });
+
+// 匯入員工權限（Excel）
+exports.importPermissions = catchAsync(async (req, res, next) => {
+  if (!req.file) {
+    return next(new AppError('請上傳 Excel 檔案', 400));
+  }
+
+  try {
+    console.log('=== 員工權限 Excel 匯入開始 ===');
+    console.log('檔案路徑:', req.file.path);
+    console.log('檔案名稱:', req.file.originalname);
+
+    // 讀取 Excel 檔案
+    const workbook = XLSX.readFile(req.file.path);
+    const sheetName = workbook.SheetNames[0];
+    const worksheet = workbook.Sheets[sheetName];
+    
+    console.log('工作表名稱:', sheetName);
+    
+    // 轉換為 JSON 格式
+    const data = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+    
+    console.log('=== 原始資料結構 ===');
+    console.log('總行數:', data.length);
+    console.log('標題列:', data[0]);
+    console.log('前3行資料範例:');
+    for (let i = 0; i < Math.min(3, data.length); i++) {
+      console.log(`第${i+1}行:`, data[i]);
+    }
+    
+    if (data.length < 2) {
+      return next(new AppError('Excel 檔案中沒有足夠的資料', 400));
+    }
+
+    // 檢查標題行
+    const headers = data[0] || [];
+    const serialNumberIndex = headers.findIndex(header => 
+      header === '序號' || header === 'Serial Number' || header === '編號'
+    );
+    const managerIndex = headers.findIndex(header => 
+      header === '管理人員' || header === 'Management Personnel' || header === 'Manager'
+    );
+    const staffIndex = headers.findIndex(header => 
+      header === '工作人員' || header === 'Staff/Worker' || header === 'Staff'
+    );
+    
+    console.log('找到的欄位索引:', { serialNumberIndex, managerIndex, staffIndex });
+    
+    if (serialNumberIndex === -1) {
+      return next(new AppError('Excel 檔案格式錯誤，找不到「序號」欄位', 400));
+    }
+    
+    if (managerIndex === -1 && staffIndex === -1) {
+      return next(new AppError('Excel 檔案格式錯誤，找不到「管理人員」或「工作人員」欄位', 400));
+    }
+
+    // 獲取商家 ID
+    const merchantId = req.params.merchantId || req.body.merchantId || req.query.merchantId;
+    if (!merchantId) {
+      return next(new AppError('缺少餐廳 ID 參數', 400));
+    }
+
+    // 驗證餐廳是否存在
+    const merchant = await Merchant.findById(merchantId);
+    if (!merchant) {
+      return next(new AppError('找不到指定的餐廳', 400));
+    }
+
+    const results = {
+      success: [],
+      errors: [],
+      createdCount: 0,
+      updatedCount: 0
+    };
+
+    // 從第二行開始解析
+    for (let i = 1; i < data.length; i++) {
+      const row = data[i];
+      const rowNumber = i + 1; // Excel 行號
+
+      try {
+        console.log(`\n--- 處理第 ${rowNumber} 行 ---`);
+        console.log('原始資料:', row);
+        
+        if (!row || row.length === 0) {
+          console.log(`第 ${rowNumber} 行為空，跳過`);
+          continue;
+        }
+        
+        // 處理管理人員
+        if (managerIndex >= 0 && row[managerIndex] && String(row[managerIndex]).trim() !== '') {
+          const name = String(row[managerIndex]).trim();
+          const serialNumber = serialNumberIndex >= 0 ? row[serialNumberIndex] : null;
+          console.log(`解析到管理人員：${name} (序號：${serialNumber})`);
+          
+          try {
+            await processEmployee(name, '管理人員', serialNumber, rowNumber, merchant, results);
+          } catch (employeeError) {
+            console.error(`❌ 處理管理人員 ${name} 時發生錯誤:`, employeeError);
+            const errorMsg = `第 ${rowNumber} 行：處理管理人員 ${name} (${serialNumber}) 時發生錯誤 - ${employeeError.message}`;
+            results.errors.push(errorMsg);
+          }
+        }
+        
+        // 處理工作人員
+        if (staffIndex >= 0 && row[staffIndex] && String(row[staffIndex]).trim() !== '') {
+          const name = String(row[staffIndex]).trim();
+          const serialNumber = serialNumberIndex >= 0 ? row[serialNumberIndex] : null;
+          console.log(`解析到工作人員：${name} (序號：${serialNumber})`);
+          
+          try {
+            await processEmployee(name, '工作人員', serialNumber, rowNumber, merchant, results);
+          } catch (employeeError) {
+            console.error(`❌ 處理工作人員 ${name} 時發生錯誤:`, employeeError);
+            const errorMsg = `第 ${rowNumber} 行：處理工作人員 ${name} (${serialNumber}) 時發生錯誤 - ${employeeError.message}`;
+            results.errors.push(errorMsg);
+          }
+        }
+        
+      } catch (error) {
+        console.error(`❌ 處理第 ${rowNumber} 行時發生錯誤:`, error);
+        const errorMsg = `第 ${rowNumber} 行：${error.message || '未知錯誤'}`;
+        results.errors.push(errorMsg);
+      }
+    }
+
+    // 清理上傳的檔案
+    if (req.file && req.file.path) {
+      try {
+        fs.unlinkSync(req.file.path);
+      } catch (error) {
+        console.error('清理上傳檔案時發生錯誤:', error);
+      }
+    }
+
+    // 回傳結果
+    console.log('\n=== 員工權限匯入完成總結 ===');
+    console.log(`新增員工: ${results.createdCount} 人`);
+    console.log(`更新員工: ${results.updatedCount} 人`);
+    console.log(`失敗筆數: ${results.errors.length} 人`);
+    console.log('成功訊息:', results.success);
+    console.log('錯誤訊息:', results.errors);
+    
+    res.status(200).json({
+      status: 'success',
+      message: `匯入完成，新增 ${results.createdCount} 人，更新 ${results.updatedCount} 人，失敗 ${results.errors.length} 人`,
+      data: {
+        createdCount: results.createdCount,
+        updatedCount: results.updatedCount,
+        success: results.success,
+        errors: results.errors
+      }
+    });
+
+  } catch (error) {
+    // 清理上傳的檔案
+    if (req.file && req.file.path) {
+      try {
+        fs.unlinkSync(req.file.path);
+      } catch (cleanupError) {
+        console.error('清理上傳檔案時發生錯誤:', cleanupError);
+      }
+    }
+    
+    console.error('❌ 匯入員工權限 Excel 檔案時發生錯誤:', error);
+    console.error('錯誤堆疊:', error.stack);
+    return next(new AppError('處理 Excel 檔案時發生錯誤', 500));
+  }
+});
+
+// 處理單個員工的輔助函數
+const processEmployee = async (name, roleType, serialNumber, rowNumber, merchant, results) => {
+  // 查找或創建角色
+  let role = await Role.findOne({ 
+    merchant: merchant._id, 
+    name: roleType 
+  });
+  
+  if (!role) {
+    // 創建新角色
+    const permissions = roleType === '管理人員' ? [
+      '菜單:查看','庫存:查看','訂單:查看','訂單:更新狀態','桌位:查看','桌位:管理','報表:查看','員工:查看','員工:編輯'
+    ] : [
+      '菜單:查看','訂單:查看','訂單:更新狀態','桌位:查看'
+    ];
+    
+    role = await Role.create({
+      merchant: merchant._id,
+      name: roleType,
+      permissions,
+      isSystem: true
+    });
+    console.log(`✅ 創建新角色：${roleType}`);
+  }
+  
+  // 查找或創建員工
+  let employee = await Employee.findOne({
+    merchant: merchant._id,
+    name: name
+  });
+  
+  if (employee) {
+    // 更新現有員工的角色
+    employee.role = role._id;
+    await employee.save();
+    console.log(`✅ 更新員工 ${name} 的角色為 ${roleType}`);
+    results.updatedCount++;
+    results.success.push(`第 ${rowNumber} 行：更新員工 ${name} (${serialNumber}) 的角色為 ${roleType}`);
+  } else {
+    // 生成員工編號和帳號
+    const generateEmployeeCode = () => {
+      const letters = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+      const digits = '23456789';
+      let code = '';
+      for (let i = 0; i < 3; i++) {
+        code += letters[Math.floor(Math.random() * letters.length)];
+        code += digits[Math.floor(Math.random() * digits.length)];
+      }
+      return code;
+    };
+    
+    const employeeNumber = generateEmployeeCode();
+    
+    // 創建新員工
+    employee = await Employee.create({
+      merchant: merchant._id,
+      name: name,
+      employeeNumber: employeeNumber,
+      account: employeeNumber,
+      password: employeeNumber, // 預設密碼為員工編號
+      role: role._id,
+      isActive: true
+    });
+    console.log(`✅ 創建新員工：${name} (${roleType})`);
+    results.createdCount++;
+    results.success.push(`第 ${rowNumber} 行：創建新員工 ${name} (${serialNumber}) 角色為 ${roleType}`);
+  }
+};

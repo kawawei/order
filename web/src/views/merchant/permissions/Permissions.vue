@@ -10,10 +10,16 @@
       <div class="section-card">
         <div class="section-header">
           <h2>員工管理</h2>
-          <button class="btn-primary" @click="onClickAddEmployee">
-            <font-awesome-icon icon="plus" />
-            新增員工
-          </button>
+          <div class="header-actions">
+            <button class="btn-secondary" @click="onClickImportEmployees">
+              <font-awesome-icon icon="file-import" />
+              匯入人員
+            </button>
+            <button class="btn-primary" @click="onClickAddEmployee">
+              <font-awesome-icon icon="plus" />
+              新增員工
+            </button>
+          </div>
         </div>
         <div class="employee-filters">
           <label>
@@ -121,7 +127,85 @@
           </div>
         </form>
       </div>
+    </div>
+
+    <!-- 匯入人員對話框 -->
+    <div v-if="showImportModal" class="modal-overlay" @click="closeImportModal">
+      <div class="modal-content" @click.stop>
+        <div class="modal-header">
+          <h3>匯入人員</h3>
+          <button class="close-btn" @click="closeImportModal">
+            <font-awesome-icon icon="xmark" />
+          </button>
         </div>
+        
+        <div class="import-content">
+          <div class="import-instructions">
+            <h4>匯入說明</h4>
+            <ul>
+              <li>請上傳 Excel 檔案 (.xlsx 或 .xls)</li>
+              <li>第一行：序號（1、2、3、4、5...）</li>
+              <li>第一列：角色類型（管理人員、工作人員）</li>
+              <li>交叉位置：對應序號和角色的員工姓名</li>
+              <li>匯入時會比對序號，相同序號會更新名字，新序號會新增員工</li>
+              <li>管理人員只能匯入工作人員</li>
+            </ul>
+          </div>
+          
+          <div class="form-group">
+            <label>選擇檔案</label>
+            <input 
+              type="file" 
+              accept=".xlsx,.xls" 
+              @change="onFileSelected" 
+              ref="fileInput"
+            />
+            <small>請選擇 Excel 檔案 (.xlsx 或 .xls)</small>
+          </div>
+          
+          <div v-if="importError" class="error-message">
+            {{ importError }}
+          </div>
+          
+          <div v-if="importResults" class="import-results">
+            <h4>匯入結果</h4>
+            <div class="results-summary">
+              <p>新增員工: {{ importResults.createdCount }} 人</p>
+              <p>更新員工: {{ importResults.updatedCount }} 人</p>
+              <p>失敗筆數: {{ importResults.errors.length }} 人</p>
+            </div>
+            
+            <div v-if="importResults.success.length > 0" class="success-list">
+              <h5>成功項目:</h5>
+              <ul>
+                <li v-for="(item, index) in importResults.success" :key="index">{{ item }}</li>
+              </ul>
+            </div>
+            
+            <div v-if="importResults.errors.length > 0" class="error-list">
+              <h5>錯誤項目:</h5>
+              <ul>
+                <li v-for="(item, index) in importResults.errors" :key="index">{{ item }}</li>
+              </ul>
+            </div>
+          </div>
+          
+
+          
+          <div class="form-actions">
+            <button type="button" class="btn-secondary" @click="closeImportModal">取消</button>
+            <button 
+              type="button" 
+              class="btn-primary" 
+              @click="handleImport"
+              :disabled="!selectedFile || importing"
+            >
+              {{ importing ? '匯入中...' : '開始匯入' }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
 
   </div>
 </template>
@@ -135,6 +219,7 @@ import { roleAPI, employeeAPI } from '@/services/api'
 const employees = ref([])
 const employeeRoleFilter = ref('all')
 const showAddEmployeeModal = ref(false)
+const showImportModal = ref(false)
 const editingEmployee = ref(null)
 const employeeForm = ref({
   name: '',
@@ -142,6 +227,14 @@ const employeeForm = ref({
   account: '',
   password: ''
 })
+
+// 匯入相關
+const importPreview = ref([])
+const selectedFile = ref(null)
+const fileInput = ref(null)
+const importing = ref(false)
+const importError = ref('')
+const importResults = ref(null)
 
 // 後端角色與權限
 const roles = ref([]) // 來源：後端 /roles
@@ -270,6 +363,15 @@ const onClickAddEmployee = () => {
   showAddEmployeeModal.value = true
 }
 
+const onClickImportEmployees = () => {
+  // 僅老闆或管理人員可匯入；管理人員只能匯入「工作人員」
+  if (!isCurrentOwner && !isAdminActor && !isCurrentManager) {
+    alert('您沒有權限匯入員工')
+    return
+  }
+  showImportModal.value = true
+}
+
 const editEmployee = (employee) => {
   // 管理人員可編輯，但僅限管理「工作人員」
   if (!isCurrentOwner && !isAdminActor) {
@@ -325,6 +427,15 @@ const closeModal = () => {
   }
 }
 
+const closeImportModal = () => {
+  showImportModal.value = false
+  importPreview.value = []
+  selectedFile.value = null
+  if (fileInput.value) {
+    fileInput.value.value = ''
+  }
+}
+
 const submitEmployeeForm = async () => {
   // 新增/更新前的權限檢查
   const selectedRole = roles.value.find(r => (r._id || r.id) === employeeForm.value.roleId)
@@ -357,6 +468,77 @@ const submitEmployeeForm = async () => {
   closeModal()
 }
 
+// 匯入相關方法
+const onFileSelected = (event) => {
+  const file = event.target.files[0]
+  if (!file) return
+  
+  console.log('選擇的檔案：', file.name, '類型：', file.type)
+  
+  // 檢查檔案類型
+  const allowedTypes = ['.xlsx', '.xls']
+  const fileName = file.name.toLowerCase()
+  const isValidType = allowedTypes.some(type => fileName.endsWith(type))
+  
+  if (!isValidType) {
+    alert('請選擇 Excel 檔案 (.xlsx, .xls)')
+    if (fileInput.value) {
+      fileInput.value.value = ''
+    }
+    return
+  }
+  
+  // 檢查檔案大小 (5MB)
+  if (file.size > 5 * 1024 * 1024) {
+    alert('檔案大小不能超過 5MB')
+    if (fileInput.value) {
+      fileInput.value.value = ''
+    }
+    return
+  }
+  
+  selectedFile.value = file
+  importError.value = ''
+  importPreview.value = []
+}
+
+// 處理匯入
+const handleImport = async () => {
+  if (!selectedFile.value) {
+    importError.value = '請選擇要匯入的檔案'
+    return
+  }
+  
+  importing.value = true
+  importError.value = ''
+  importPreview.value = []
+  
+  try {
+    const formData = new FormData()
+    formData.append('file', selectedFile.value)
+    
+    const response = await roleAPI.importPermissions(formData)
+    importResults.value = response.data
+    
+    // 如果匯入成功，重新載入員工列表
+    if (response.data.success.length > 0 || response.data.updatedCount > 0) {
+      await loadEmployees()
+    }
+    
+  } catch (error) {
+    console.error('匯入失敗:', error)
+    importError.value = error.response?.data?.message || '匯入失敗，請檢查檔案格式'
+  } finally {
+    importing.value = false
+  }
+}
+
+
+
+
+
+
+
 // 取消新增/編輯/刪除角色的相關方法（固定角色）
 
 // 初始化數據
@@ -386,6 +568,9 @@ const fetchEmployees = async () => {
     employeeNumber: e.employeeNumber || e.account
   }))
 }
+
+// 為了向後兼容，添加 loadEmployees 函數
+const loadEmployees = fetchEmployees
 
 onMounted(async () => {
   await Promise.all([
@@ -479,6 +664,12 @@ const canDeleteEmployee = (employee) => {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 1.5rem;
+}
+
+.header-actions {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
 }
 
 .section-header h2 {
@@ -808,6 +999,173 @@ const canDeleteEmployee = (employee) => {
   margin-top: 1rem;
 }
 
+/* 匯入相關樣式 */
+.import-content {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.import-instructions {
+  background: #f8f9fa;
+  padding: 1rem;
+  border-radius: 8px;
+  border-left: 4px solid #1a73e8;
+}
+
+.import-instructions h4 {
+  margin: 0 0 0.75rem 0;
+  color: #1a73e8;
+  font-size: 1rem;
+}
+
+.import-instructions ul {
+  margin: 0;
+  padding-left: 1.25rem;
+}
+
+.import-instructions li {
+  margin-bottom: 0.25rem;
+  color: #666;
+  font-size: 0.875rem;
+}
+
+.import-preview {
+  border: 1px solid #eee;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.import-preview h4 {
+  margin: 0;
+  padding: 1rem;
+  background: #f8f9fa;
+  border-bottom: 1px solid #eee;
+  font-size: 1rem;
+  color: #333;
+}
+
+.preview-table {
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.preview-table table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.preview-table th,
+.preview-table td {
+  padding: 0.75rem;
+  text-align: left;
+  border-bottom: 1px solid #eee;
+}
+
+.preview-table th {
+  background: #f8f9fa;
+  font-weight: 500;
+  color: #333;
+}
+
+.preview-table tr.valid {
+  background: #f8fff8;
+}
+
+.preview-table tr.invalid {
+  background: #fff8f8;
+}
+
+.status-valid {
+  color: #2e7d32;
+  font-weight: 500;
+}
+
+.status-invalid {
+  color: #c62828;
+  font-weight: 500;
+}
+
+/* 匯入結果樣式 */
+.error-message {
+  background: #ffebee;
+  color: #c62828;
+  padding: 0.75rem;
+  border-radius: 4px;
+  margin: 1rem 0;
+  border-left: 4px solid #c62828;
+}
+
+.import-results {
+  margin: 1rem 0;
+  padding: 1rem;
+  background: #f8f9fa;
+  border-radius: 8px;
+  border: 1px solid #e9ecef;
+}
+
+.import-results h4 {
+  margin: 0 0 1rem 0;
+  color: #333;
+  font-size: 1.1rem;
+}
+
+.results-summary {
+  margin-bottom: 1rem;
+  padding: 0.75rem;
+  background: white;
+  border-radius: 4px;
+  border: 1px solid #dee2e6;
+}
+
+.results-summary p {
+  margin: 0.25rem 0;
+  color: #666;
+}
+
+.success-list,
+.error-list {
+  margin-top: 1rem;
+}
+
+.success-list h5,
+.error-list h5 {
+  margin: 0 0 0.5rem 0;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.success-list h5 {
+  color: #2e7d32;
+}
+
+.error-list h5 {
+  color: #c62828;
+}
+
+.success-list ul,
+.error-list ul {
+  margin: 0;
+  padding-left: 1.25rem;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.success-list li,
+.error-list li {
+  margin-bottom: 0.25rem;
+  font-size: 0.875rem;
+  line-height: 1.4;
+}
+
+.success-list li {
+  color: #2e7d32;
+}
+
+.error-list li {
+  color: #c62828;
+}
+
 /* 響應式設計 */
 @media (max-width: 768px) {
   .content-grid {
@@ -823,6 +1181,11 @@ const canDeleteEmployee = (employee) => {
   .actions {
     width: 100%;
     justify-content: flex-end;
+  }
+  
+  .header-actions {
+    flex-direction: column;
+    gap: 0.5rem;
   }
 }
 </style>

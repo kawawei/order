@@ -16,6 +16,11 @@ const employeeSchema = new mongoose.Schema({
     required: [true, '請提供員工編號'],
     trim: true
   },
+  serialNumber: {
+    type: String,
+    trim: true,
+    sparse: true
+  },
   account: {
     type: String,
     required: [true, '請提供員工帳號'],
