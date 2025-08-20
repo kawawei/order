@@ -775,6 +775,27 @@ export const inventoryAPI = {
 };
 
 // 庫存分類管理 API
+// 超級管理員報表統計 API
+export const adminReportAPI = {
+  // 獲取平台統計數據
+  getPlatformStats: (params = {}) => {
+    return api.get('/admin/reports/platform-stats', { params })
+  },
+  
+  // 獲取餐廳列表
+  getRestaurants: () => {
+    return api.get('/admin/reports/restaurants')
+  },
+  
+  // 匯出平台報表
+  exportPlatformReport: (params = {}) => {
+    return api.get('/admin/reports/export', { 
+      params,
+      responseType: 'blob'
+    })
+  }
+};
+
 export const inventoryCategoryAPI = {
   // 獲取所有分類
   getAllCategories: () => {

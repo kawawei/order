@@ -591,12 +591,27 @@ const processEmployeeImport = async (name, roleType, serialNumber, rowNumber, me
     console.log(`✅ [SERVER] 創建新角色成功：${roleType} (ID: ${role._id})`);
   }
   
-  // 查找或創建員工
-  console.log(`🔍 [SERVER] 查找員工: ${name}`)
-  let employee = await Employee.findOne({
-    merchant: merchant._id,
-    name: name
-  });
+  // 查找或創建員工 - 優先根據序號查找，如果沒有序號則根據姓名查找
+  console.log(`🔍 [SERVER] 查找員工: ${name} (序號: ${serialNumber})`)
+  let employee = null;
+  
+  if (serialNumber && String(serialNumber).trim() !== '') {
+    // 優先根據序號查找
+    employee = await Employee.findOne({
+      merchant: merchant._id,
+      serialNumber: String(serialNumber).trim()
+    });
+    console.log(`🔍 [SERVER] 根據序號查找結果:`, employee ? `找到員工 ${employee.name}` : '未找到員工')
+  }
+  
+  // 如果根據序號沒找到，則根據姓名查找
+  if (!employee) {
+    employee = await Employee.findOne({
+      merchant: merchant._id,
+      name: name
+    });
+    console.log(`🔍 [SERVER] 根據姓名查找結果:`, employee ? `找到員工 ${employee.name}` : '未找到員工')
+  }
   
   console.log(`👤 [SERVER] 員工查找結果:`, employee ? `找到員工 ${employee.name} (ID: ${employee._id})` : '未找到員工，需要創建')
   
@@ -611,11 +626,24 @@ const processEmployeeImport = async (name, roleType, serialNumber, rowNumber, me
       isOwner
     })
     
-    // 更新現有員工的角色和老闆標識
+    // 更新現有員工的資料
     employee.role = role._id;
     employee.isOwner = isOwner;
+    
+    // 如果提供了序號且與現有不同，則更新序號
+    if (serialNumber && String(serialNumber).trim() !== '' && employee.serialNumber !== String(serialNumber).trim()) {
+      employee.serialNumber = String(serialNumber).trim();
+      console.log(`🔄 [SERVER] 更新員工序號: ${employee.serialNumber} -> ${serialNumber}`);
+    }
+    
+    // 如果姓名不同，則更新姓名
+    if (employee.name !== name) {
+      employee.name = name;
+      console.log(`🔄 [SERVER] 更新員工姓名: ${employee.name} -> ${name}`);
+    }
+    
     await employee.save();
-    console.log(`✅ [SERVER] 更新員工 ${name} 的角色為 ${roleType}，老闆標識為 ${isOwner}`);
+    console.log(`✅ [SERVER] 更新員工 ${name} 的資料完成`);
     results.updatedCount++;
     results.success.push(`第 ${rowNumber} 行：更新員工 ${name} (${serialNumber}) 的角色為 ${roleType}`);
   } else {
