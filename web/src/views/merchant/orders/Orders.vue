@@ -85,6 +85,13 @@
             </div>
           </template>
           <div class="orders-list">
+            <div v-if="preparingOrders.length === 0" class="empty-state">
+              <div class="empty-icon">
+                <font-awesome-icon icon="clock" />
+              </div>
+              <p class="empty-text">目前沒有準備中的訂單</p>
+              <p class="empty-subtext">新訂單會出現在這裡</p>
+            </div>
             <div v-for="batch in preparingOrders" :key="batch._id" class="batch-card preparing">
               <div class="batch-header">
                 <div class="table-info">
@@ -158,6 +165,13 @@
             </div>
           </template>
           <div class="orders-list">
+            <div v-if="readyOrders.length === 0" class="empty-state">
+              <div class="empty-icon">
+                <font-awesome-icon icon="bell" />
+              </div>
+              <p class="empty-text">目前沒有準備好的訂單</p>
+              <p class="empty-subtext">製作完成的訂單會出現在這裡</p>
+            </div>
             <div v-for="batch in readyOrders" :key="batch._id" class="batch-card ready">
               <div class="batch-header">
                 <div class="table-info">
@@ -207,6 +221,13 @@
             </div>
           </template>
           <div class="orders-list">
+            <div v-if="deliveredOrders.length === 0" class="empty-state">
+              <div class="empty-icon">
+                <font-awesome-icon icon="check-circle" />
+              </div>
+              <p class="empty-text">目前沒有已送出的訂單</p>
+              <p class="empty-subtext">已出餐的訂單會出現在這裡</p>
+            </div>
             <div v-for="batch in deliveredOrders" :key="batch._id" class="batch-card delivered">
               <div class="batch-header">
                 <div class="table-info">
