@@ -463,96 +463,152 @@ export function useReports() {
   
   // 更新圖表
   const updateCharts = () => {
-    // 銷毀現有圖表
-    if (revenueChart.value) {
-      revenueChart.value.destroy()
-      revenueChart.value = null
-    }
-    if (trafficChart.value) {
-      trafficChart.value.destroy()
-      trafficChart.value = null
-    }
-    
-    // 延遲一下確保 DOM 已更新
-    setTimeout(() => {
-      // 獲取 canvas 元素
-      const revenueCanvas = document.getElementById('revenueChart')
-      const trafficCanvas = document.getElementById('trafficChart')
-      
-      if (!revenueCanvas || !trafficCanvas) {
-        console.warn('找不到圖表 canvas 元素')
+    try {
+      // 檢查數據是否有效
+      if (!chartData.value) {
+        console.warn('圖表數據無效，跳過圖表更新')
         return
       }
-    
-    // 繪製營收趨勢圖
-    const revenueCtx = revenueCanvas.getContext('2d')
-    revenueChart.value = new Chart(revenueCtx, {
-      type: 'line',
-      data: {
-        labels: chartData.value.revenue.map(item => item._id || ''),
-        datasets: [{
-          label: '營收',
-          data: chartData.value.revenue.map(item => item.revenue || 0),
-          borderColor: 'rgb(75, 192, 192)',
-          backgroundColor: 'rgba(75, 192, 192, 0.2)',
-          tension: 0.1,
-          fill: true
-        }]
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-          legend: {
-            display: false
+
+      // 銷毀現有圖表
+      if (revenueChart.value) {
+        revenueChart.value.destroy()
+        revenueChart.value = null
+      }
+      if (trafficChart.value) {
+        trafficChart.value.destroy()
+        trafficChart.value = null
+      }
+      
+      // 延遲一下確保 DOM 已更新
+      setTimeout(() => {
+        // 獲取 canvas 元素
+        const revenueCanvas = document.getElementById('revenueChart')
+        const trafficCanvas = document.getElementById('trafficChart')
+        
+        if (!revenueCanvas || !trafficCanvas) {
+          console.warn('找不到圖表 canvas 元素')
+          return
+        }
+        
+        // 檢查數據是否有效
+        if (!chartData.value.revenue || chartData.value.revenue.length === 0) {
+          console.warn('營收圖表數據為空')
+          return
+        }
+        
+        if (!chartData.value.traffic || chartData.value.traffic.length === 0) {
+          console.warn('人流量圖表數據為空')
+          return
+        }
+      
+        // 繪製營收趨勢圖
+        try {
+          // 驗證數據
+          const validRevenueData = chartData.value.revenue.filter(item => 
+            item && typeof item.revenue === 'number' && !isNaN(item.revenue)
+          )
+          
+          if (validRevenueData.length === 0) {
+            console.warn('營收圖表數據無效，跳過創建')
+            return
           }
-        },
-        scales: {
-          y: {
-            beginAtZero: true,
-            ticks: {
-              callback: function(value) {
-                return '$' + value.toLocaleString()
+          
+          const revenueCtx = revenueCanvas.getContext('2d')
+          revenueChart.value = new Chart(revenueCtx, {
+            type: 'line',
+            data: {
+              labels: chartData.value.revenue.map(item => item._id || ''),
+              datasets: [{
+                label: '營收',
+                data: chartData.value.revenue.map(item => item.revenue || 0),
+                borderColor: 'rgb(75, 192, 192)',
+                backgroundColor: 'transparent',
+                tension: 0.1,
+                fill: false,
+                pointBackgroundColor: 'rgb(75, 192, 192)',
+                pointBorderColor: 'rgb(75, 192, 192)',
+                pointRadius: 4,
+                pointHoverRadius: 6
+              }]
+            },
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              animation: {
+                duration: 750
+              },
+              plugins: {
+                legend: {
+                  display: false
+                }
+              },
+              scales: {
+                y: {
+                  beginAtZero: true,
+                  ticks: {
+                    callback: function(value) {
+                      return '$' + value.toLocaleString()
+                    }
+                  }
+                }
               }
             }
-          }
+          })
+        } catch (chartError) {
+          console.error('創建營收圖表失敗:', chartError)
         }
-      }
-    })
-    
-    // 繪製人流量趨勢圖
-    const trafficCtx = trafficCanvas.getContext('2d')
-    trafficChart.value = new Chart(trafficCtx, {
-      type: 'bar',
-      data: {
-        labels: chartData.value.traffic.map(item => item._id || ''),
-        datasets: [{
-          label: '人流量',
-          data: chartData.value.traffic.map(item => item.totalCustomers || 0),
-          backgroundColor: 'rgba(54, 162, 235, 0.8)',
-          borderColor: 'rgb(54, 162, 235)',
-          borderWidth: 1
-        }]
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-          legend: {
-            display: false
+        
+        // 繪製人流量趨勢圖
+        try {
+          // 驗證數據
+          const validTrafficData = chartData.value.traffic.filter(item => 
+            item && typeof item.totalCustomers === 'number' && !isNaN(item.totalCustomers)
+          )
+          
+          if (validTrafficData.length === 0) {
+            console.warn('人流量圖表數據無效，跳過創建')
+            return
           }
-        },
-        scales: {
-          y: {
-            beginAtZero: true,
-            ticks: {
-              stepSize: 1
+          
+          const trafficCtx = trafficCanvas.getContext('2d')
+          trafficChart.value = new Chart(trafficCtx, {
+            type: 'bar',
+            data: {
+              labels: chartData.value.traffic.map(item => item._id || ''),
+              datasets: [{
+                label: '人流量',
+                data: chartData.value.traffic.map(item => item.totalCustomers || 0),
+                backgroundColor: 'rgba(54, 162, 235, 0.8)',
+                borderColor: 'rgb(54, 162, 235)',
+                borderWidth: 1
+              }]
+            },
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              plugins: {
+                legend: {
+                  display: false
+                }
+              },
+              scales: {
+                y: {
+                  beginAtZero: true,
+                  ticks: {
+                    stepSize: 1
+                  }
+                }
+              }
             }
-          }
+          })
+        } catch (chartError) {
+          console.error('創建人流量圖表失敗:', chartError)
         }
-      }
-    })
-    }, 100) // 延遲 100ms
+      }, 100) // 延遲 100ms
+    } catch (error) {
+      console.error('更新圖表時發生錯誤:', error)
+    }
   }
   
   return {

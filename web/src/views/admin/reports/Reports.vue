@@ -237,15 +237,15 @@
     <div class="charts-section">
       <div class="chart-container">
         <h3>{{ selectedRestaurant === 'all' ? '平台' : '餐廳' }}營收趨勢</h3>
-        <div class="chart-placeholder">
-          <canvas id="revenueChart" width="400" height="200"></canvas>
+        <div id="revenueChartContainer" class="chart-placeholder">
+          <!-- Canvas 將由 JavaScript 動態創建 -->
         </div>
       </div>
 
       <div class="chart-container">
         <h3>{{ selectedRestaurant === 'all' ? '商家' : '訂單' }}活躍度趨勢</h3>
-        <div class="chart-placeholder">
-          <canvas id="activityChart" width="400" height="200"></canvas>
+        <div id="activityChartContainer" class="chart-placeholder">
+          <!-- Canvas 將由 JavaScript 動態創建 -->
         </div>
       </div>
     </div>

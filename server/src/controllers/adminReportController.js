@@ -20,7 +20,8 @@ exports.getPlatformStats = catchAsync(async (req, res, next) => {
   let previousDateQuery = {};
   
   if (period === 'day' && date) {
-    const currentDay = new Date(date);
+    // 確保日期是本地時間
+    const currentDay = new Date(date + 'T00:00:00');
     const startOfDay = new Date(currentDay.getFullYear(), currentDay.getMonth(), currentDay.getDate());
     const endOfDay = new Date(currentDay.getFullYear(), currentDay.getMonth(), currentDay.getDate() + 1);
     dateQuery.createdAt = { $gte: startOfDay, $lt: endOfDay };
@@ -97,6 +98,19 @@ exports.getPlatformStats = catchAsync(async (req, res, next) => {
     Order.aggregate([
       { $match: { status: 'completed', ...dateQuery } },
       {
+        $lookup: {
+          from: 'merchants',
+          localField: 'merchantId',
+          foreignField: '_id',
+          as: 'merchant'
+        }
+      },
+      {
+        $match: {
+          merchant: { $ne: [] }
+        }
+      },
+      {
         $addFields: {
           // 從訂單號解析客人組別（與商家報表邏輯一致）
           customerGroup: {
@@ -154,6 +168,19 @@ exports.getPlatformStats = catchAsync(async (req, res, next) => {
     Order.aggregate([
       { $match: { status: 'completed', ...previousDateQuery } },
       {
+        $lookup: {
+          from: 'merchants',
+          localField: 'merchantId',
+          foreignField: '_id',
+          as: 'merchant'
+        }
+      },
+      {
+        $match: {
+          merchant: { $ne: [] }
+        }
+      },
+      {
         $addFields: {
           // 從訂單號解析客人組別（與商家報表邏輯一致）
           customerGroup: {
@@ -210,6 +237,19 @@ exports.getPlatformStats = catchAsync(async (req, res, next) => {
     // 當前期間活躍商家數
     Order.aggregate([
       { $match: { status: 'completed', ...dateQuery } },
+      {
+        $lookup: {
+          from: 'merchants',
+          localField: 'merchantId',
+          foreignField: '_id',
+          as: 'merchant'
+        }
+      },
+      {
+        $match: {
+          merchant: { $ne: [] }
+        }
+      },
       { $group: { _id: '$merchantId' } },
       { $count: 'activeMerchants' }
     ]),
@@ -217,6 +257,19 @@ exports.getPlatformStats = catchAsync(async (req, res, next) => {
     // 前一期間活躍商家數
     Order.aggregate([
       { $match: { status: 'completed', ...previousDateQuery } },
+      {
+        $lookup: {
+          from: 'merchants',
+          localField: 'merchantId',
+          foreignField: '_id',
+          as: 'merchant'
+        }
+      },
+      {
+        $match: {
+          merchant: { $ne: [] }
+        }
+      },
       { $group: { _id: '$merchantId' } },
       { $count: 'activeMerchants' }
     ]),
@@ -224,6 +277,19 @@ exports.getPlatformStats = catchAsync(async (req, res, next) => {
     // 熱門商家排行（僅在查看所有餐廳時）
     restaurantId === 'all' ? Order.aggregate([
       { $match: { status: 'completed', ...dateQuery } },
+      {
+        $lookup: {
+          from: 'merchants',
+          localField: 'merchantId',
+          foreignField: '_id',
+          as: 'merchant'
+        }
+      },
+      {
+        $match: {
+          merchant: { $ne: [] }
+        }
+      },
       {
         $addFields: {
           // 從訂單號解析客人組別（與商家報表邏輯一致）
@@ -258,8 +324,8 @@ exports.getPlatformStats = catchAsync(async (req, res, next) => {
               }
             }
           }
-        }
-      },
+          } 
+        },
       {
         $group: {
           _id: { merchantId: '$merchantId', tableId: '$tableId', customerGroup: '$customerGroup' },
@@ -303,10 +369,78 @@ exports.getPlatformStats = catchAsync(async (req, res, next) => {
 
   // 調試訊息：查看詳細的統計數據
   console.log('=== 平台報表統計調試訊息 ===');
+  console.log('查詢條件:', dateQuery);
   console.log('當前期間統計結果:', currentStats);
   console.log('前一期間統計結果:', previousStats);
   console.log('當前期間活躍商家數:', merchantCount);
   console.log('前一期間活躍商家數:', previousMerchantCount);
+  
+  // 調試：顯示每個餐廳的詳細數據
+  const allRestaurantsData = await Order.aggregate([
+    { $match: { status: 'completed', ...dateQuery } },
+    {
+      $lookup: {
+        from: 'merchants',
+        localField: 'merchantId',
+        foreignField: '_id',
+        as: 'merchant'
+      }
+    },
+    { $unwind: '$merchant' },
+    {
+      $group: {
+        _id: '$merchantId',
+        businessName: { $first: '$merchant.businessName' },
+        merchantCode: { $first: '$merchant.merchantCode' },
+        totalRevenue: { $sum: '$totalAmount' },
+        totalCost: { $sum: '$totalCost' },
+        orderCount: { $sum: 1 },
+        orderNumbers: { $push: '$orderNumber' }
+      }
+    },
+    { $sort: { totalRevenue: -1 } }
+  ]);
+  
+  // 調試：檢查 merchantId 和商家關聯
+  const debugMerchantIds = await Order.aggregate([
+    { $match: { status: 'completed', ...dateQuery } },
+    {
+      $group: {
+        _id: '$merchantId',
+        orderCount: { $sum: 1 },
+        orderNumbers: { $push: '$orderNumber' }
+      }
+    }
+  ]);
+  
+  console.log('=== 調試：merchantId 檢查 ===');
+  console.log('找到的 merchantId:', debugMerchantIds);
+  
+  // 檢查商家是否存在
+  const merchantIds = debugMerchantIds.map(item => item._id);
+  const merchants = await mongoose.model('Merchant').find({ _id: { $in: merchantIds } });
+  console.log('對應的商家資料:', merchants.map(m => ({ id: m._id, businessName: m.businessName, merchantCode: m.merchantCode })));
+  
+  console.log('=== 各餐廳詳細數據 ===');
+  console.log('餐廳數量:', allRestaurantsData.length);
+  allRestaurantsData.forEach((restaurant, index) => {
+    console.log(`${index + 1}. ${restaurant.businessName} (${restaurant.merchantCode})`);
+    console.log(`   營收: ${restaurant.totalRevenue}, 成本: ${restaurant.totalCost}, 訂單數: ${restaurant.orderCount}`);
+    console.log(`   訂單號: ${restaurant.orderNumbers.slice(0, 5).join(', ')}${restaurant.orderNumbers.length > 5 ? '...' : ''}`);
+  });
+  
+  // 調試：顯示所有訂單的詳細信息
+  const allOrders = await Order.find({ status: 'completed', ...dateQuery })
+    .populate('merchantId', 'businessName merchantCode')
+    .select('orderNumber totalAmount totalCost createdAt merchantId')
+    .sort({ createdAt: -1 });
+  
+  console.log('=== 所有訂單詳細信息 ===');
+  console.log('訂單總數:', allOrders.length);
+  allOrders.forEach((order, index) => {
+    console.log(`${index + 1}. ${order.orderNumber} - ${order.merchantId?.businessName || 'Unknown'} (${order.merchantId?.merchantCode || 'Unknown'})`);
+    console.log(`   金額: ${order.totalAmount}, 成本: ${order.totalCost}, 時間: ${order.createdAt}`);
+  });
   
   // 調試：查看客人組數的詳細計算過程
   const debugCustomerGroups = await Order.aggregate([
@@ -449,6 +583,19 @@ async function getChartData(period, dateQuery, restaurantId) {
   const revenueData = await Order.aggregate([
     { $match: { status: 'completed', ...dateQuery } },
     {
+      $lookup: {
+        from: 'merchants',
+        localField: 'merchantId',
+        foreignField: '_id',
+        as: 'merchant'
+      }
+    },
+    {
+      $match: {
+        merchant: { $ne: [] }
+      }
+    },
+    {
       $group: {
         _id: groupBy,
         value: { $sum: '$totalAmount' }
@@ -463,6 +610,19 @@ async function getChartData(period, dateQuery, restaurantId) {
     // 平台模式：統計活躍商家數
     activityData = await Order.aggregate([
       { $match: { status: 'completed', ...dateQuery } },
+      {
+        $lookup: {
+          from: 'merchants',
+          localField: 'merchantId',
+          foreignField: '_id',
+          as: 'merchant'
+        }
+      },
+      {
+        $match: {
+          merchant: { $ne: [] }
+        }
+      },
       {
         $group: {
           _id: { period: groupBy, merchantId: '$merchantId' }
@@ -480,6 +640,19 @@ async function getChartData(period, dateQuery, restaurantId) {
     // 餐廳模式：統計客人組數
     activityData = await Order.aggregate([
       { $match: { status: 'completed', ...dateQuery } },
+      {
+        $lookup: {
+          from: 'merchants',
+          localField: 'merchantId',
+          foreignField: '_id',
+          as: 'merchant'
+        }
+      },
+      {
+        $match: {
+          merchant: { $ne: [] }
+        }
+      },
       {
         $group: {
           _id: { period: groupBy, tableId: '$tableId', customerGroup: '$customerGroup' }
@@ -636,7 +809,8 @@ exports.exportPlatformReport = catchAsync(async (req, res, next) => {
   let dateQuery = {};
   
   if (period === 'day' && date) {
-    const currentDay = new Date(date);
+    // 確保日期是本地時間
+    const currentDay = new Date(date + 'T00:00:00');
     const startOfDay = new Date(currentDay.getFullYear(), currentDay.getMonth(), currentDay.getDate());
     const endOfDay = new Date(currentDay.getFullYear(), currentDay.getMonth(), currentDay.getDate() + 1);
     dateQuery.createdAt = { $gte: startOfDay, $lt: endOfDay };
@@ -692,6 +866,19 @@ exports.exportPlatformReport = catchAsync(async (req, res, next) => {
   // 獲取商家統計數據
   const merchantStats = await Order.aggregate([
     { $match: { status: 'completed', ...dateQuery } },
+    {
+      $lookup: {
+        from: 'merchants',
+        localField: 'merchantId',
+        foreignField: '_id',
+        as: 'merchant'
+      }
+    },
+    {
+      $match: {
+        merchant: { $ne: [] }
+      }
+    },
     {
       $group: {
         _id: '$merchantId',

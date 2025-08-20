@@ -1,4 +1,4 @@
-import { ref, onMounted, watch, nextTick } from 'vue'
+import { ref, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { adminReportAPI } from '@/services/api'
 import Chart from 'chart.js/auto'
 
@@ -57,6 +57,9 @@ export function useReports() {
   // 圖表實例
   const revenueChart = ref(null)
   const activityChart = ref(null)
+  
+  // 圖表 ID 計數器
+  const chartIdCounter = ref(0)
 
   // 時間週期選項
   const periods = [
@@ -134,7 +137,7 @@ export function useReports() {
         if (!(date instanceof Date) || isNaN(date)) {
           date = new Date()
         }
-        params.date = date.toISOString().split('T')[0]
+        params.date = date.toLocaleDateString('en-CA') // 使用 YYYY-MM-DD 格式的本地時間
       } else if (selectedPeriod.value === 'month') {
         let month = customDate.value || selectedMonth.value
         // 確保是 Date 對象
@@ -146,8 +149,8 @@ export function useReports() {
         }
         const startDate = new Date(month.getFullYear(), month.getMonth(), 1)
         const endDate = new Date(month.getFullYear(), month.getMonth() + 1, 0)
-        params.startDate = startDate.toISOString().split('T')[0]
-        params.endDate = endDate.toISOString().split('T')[0]
+        params.startDate = startDate.toLocaleDateString('en-CA') // 使用 YYYY-MM-DD 格式的本地時間
+        params.endDate = endDate.toLocaleDateString('en-CA') // 使用 YYYY-MM-DD 格式的本地時間
       } else if (selectedPeriod.value === 'year') {
         let year = customDate.value || selectedYear.value
         // 確保是 Date 對象
@@ -159,8 +162,8 @@ export function useReports() {
         }
         const startDate = new Date(year.getFullYear(), 0, 1)
         const endDate = new Date(year.getFullYear(), 11, 31)
-        params.startDate = startDate.toISOString().split('T')[0]
-        params.endDate = endDate.toISOString().split('T')[0]
+        params.startDate = startDate.toLocaleDateString('en-CA') // 使用 YYYY-MM-DD 格式的本地時間
+        params.endDate = endDate.toLocaleDateString('en-CA') // 使用 YYYY-MM-DD 格式的本地時間
       }
       
       // 調用 API
@@ -229,10 +232,26 @@ export function useReports() {
           activity: data.activityChart || []
         }
         
-        // 更新圖表
-        nextTick(() => {
-          updateCharts()
-        })
+        // 檢查是否有數據
+        const hasData = (chartData.value.revenue && chartData.value.revenue.length > 0) || 
+                       (chartData.value.activity && chartData.value.activity.length > 0)
+        
+        if (hasData) {
+          // 更新圖表
+          nextTick(() => {
+            updateCharts()
+          })
+        } else {
+          // 清空圖表
+          if (revenueChart.value) {
+            revenueChart.value.destroy()
+            revenueChart.value = null
+          }
+          if (activityChart.value) {
+            activityChart.value.destroy()
+            activityChart.value = null
+          }
+        }
       }
     } catch (error) {
       console.error('載入報表數據失敗:', error)
@@ -287,7 +306,7 @@ export function useReports() {
         if (!(date instanceof Date) || isNaN(date)) {
           date = new Date()
         }
-        params.date = date.toISOString().split('T')[0]
+        params.date = date.toLocaleDateString('en-CA') // 使用 YYYY-MM-DD 格式的本地時間
       } else if (selectedPeriod.value === 'month') {
         let month = customDate.value || selectedMonth.value
         // 確保是 Date 對象
@@ -299,8 +318,8 @@ export function useReports() {
         }
         const startDate = new Date(month.getFullYear(), month.getMonth(), 1)
         const endDate = new Date(month.getFullYear(), month.getMonth() + 1, 0)
-        params.startDate = startDate.toISOString().split('T')[0]
-        params.endDate = endDate.toISOString().split('T')[0]
+        params.startDate = startDate.toLocaleDateString('en-CA') // 使用 YYYY-MM-DD 格式的本地時間
+        params.endDate = endDate.toLocaleDateString('en-CA') // 使用 YYYY-MM-DD 格式的本地時間
       } else if (selectedPeriod.value === 'year') {
         let year = customDate.value || selectedYear.value
         // 確保是 Date 對象
@@ -312,8 +331,8 @@ export function useReports() {
         }
         const startDate = new Date(year.getFullYear(), 0, 1)
         const endDate = new Date(year.getFullYear(), 11, 31)
-        params.startDate = startDate.toISOString().split('T')[0]
-        params.endDate = endDate.toISOString().split('T')[0]
+        params.startDate = startDate.toLocaleDateString('en-CA') // 使用 YYYY-MM-DD 格式的本地時間
+        params.endDate = endDate.toLocaleDateString('en-CA') // 使用 YYYY-MM-DD 格式的本地時間
       }
       
       const response = await adminReportAPI.exportPlatformReport(params)
@@ -445,86 +464,254 @@ export function useReports() {
     loadReportData()
   }
 
+  // 清理圖表實例
+  const destroyCharts = () => {
+    console.log('清理圖表實例...')
+    
+    if (revenueChart.value) {
+      try {
+        revenueChart.value.destroy()
+        console.log('銷毀營收圖表')
+      } catch (e) {
+        console.warn('銷毀營收圖表時發生錯誤:', e)
+      }
+      revenueChart.value = null
+    }
+    
+    if (activityChart.value) {
+      try {
+        activityChart.value.destroy()
+        console.log('銷毀活躍度圖表')
+      } catch (e) {
+        console.warn('銷毀活躍度圖表時發生錯誤:', e)
+      }
+      activityChart.value = null
+    }
+  }
+
+  // 創建新的 Canvas 元素
+  const createCanvas = (containerId, chartType) => {
+    const container = document.getElementById(containerId)
+    if (!container) {
+      console.error(`找不到容器: ${containerId}`)
+      return null
+    }
+    
+    // 清理容器內的所有 canvas
+    const existingCanvases = container.querySelectorAll('canvas')
+    existingCanvases.forEach(canvas => {
+      try {
+        canvas.remove()
+      } catch (e) {
+        console.warn('移除 canvas 時發生錯誤:', e)
+      }
+    })
+    
+    // 創建新的 canvas 元素，使用唯一 ID
+    const timestamp = Date.now()
+    const uniqueId = `${chartType}_${timestamp}_${chartIdCounter.value++}`
+    
+    const canvas = document.createElement('canvas')
+    canvas.id = uniqueId
+    canvas.width = 400
+    canvas.height = 200
+    canvas.style.width = '100%'
+    canvas.style.height = 'auto'
+    
+    // 確保 canvas 元素有效
+    if (!canvas.getContext) {
+      console.error('Canvas 元素不支持 getContext')
+      return null
+    }
+    
+    // 測試 2D 上下文
+    const ctx = canvas.getContext('2d')
+    if (!ctx) {
+      console.error('無法獲取 2D 上下文')
+      return null
+    }
+    
+    container.appendChild(canvas)
+    console.log(`創建新的 ${chartType} canvas: ${uniqueId}`)
+    
+    return canvas
+  }
+
   // 更新圖表
   const updateCharts = () => {
-    // 更新營收圖表
-    if (revenueChart.value) {
-      revenueChart.value.destroy()
-    }
-    
-    const revenueCtx = document.getElementById('revenueChart')
-    if (revenueCtx) {
-      revenueChart.value = new Chart(revenueCtx, {
-        type: 'line',
-        data: {
-          labels: chartData.value.revenue.map(item => item.label),
-          datasets: [{
-            label: '營收',
-            data: chartData.value.revenue.map(item => item.value),
-            borderColor: '#3b82f6',
-            backgroundColor: 'rgba(59, 130, 246, 0.1)',
-            tension: 0.4
-          }]
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          plugins: {
-            legend: {
-              display: false
-            }
-          },
-          scales: {
-            y: {
-              beginAtZero: true,
-              ticks: {
-                callback: function(value) {
-                  return formatCurrency(value)
+    try {
+      console.log('=== 開始更新圖表 ===')
+      
+      // 檢查數據是否有效
+      if (!chartData.value) {
+        console.warn('圖表數據無效，跳過圖表更新')
+        return
+      }
+
+      // 清理舊的圖表實例
+      destroyCharts()
+
+      // 使用 nextTick 確保 DOM 已更新
+      nextTick(() => {
+        // 添加延遲確保 DOM 完全準備好
+        setTimeout(() => {
+          // 創建新的 Canvas 元素
+          const revenueCanvas = createCanvas('revenueChartContainer', 'revenue')
+          const activityCanvas = createCanvas('activityChartContainer', 'activity')
+          
+          if (!revenueCanvas || !activityCanvas) {
+            console.error('無法創建 Canvas 元素')
+            return
+          }
+
+          // 再次檢查 Canvas 是否有效
+          if (!revenueCanvas.getContext || !activityCanvas.getContext) {
+            console.error('Canvas 元素無效')
+            return
+          }
+
+          // 創建營收圖表
+          if (chartData.value.revenue && chartData.value.revenue.length > 0) {
+            const validRevenueData = chartData.value.revenue.filter(item => 
+              item && typeof item.value === 'number' && !isNaN(item.value)
+            )
+            
+            if (validRevenueData.length > 0) {
+              try {
+                const ctx = revenueCanvas.getContext('2d')
+                if (!ctx) {
+                  console.error('無法獲取營收圖表 2D 上下文')
+                  return
                 }
+                
+                revenueChart.value = new Chart(ctx, {
+                  type: 'line',
+                  data: {
+                    labels: chartData.value.revenue.map(item => item.label || ''),
+                    datasets: [{
+                      label: '營收',
+                      data: chartData.value.revenue.map(item => item.value || 0),
+                      borderColor: '#3b82f6',
+                      backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                      borderWidth: 2,
+                      tension: 0.1,
+                      fill: false,
+                      pointBackgroundColor: '#3b82f6',
+                      pointBorderColor: '#ffffff',
+                      pointBorderWidth: 2,
+                      pointRadius: 4,
+                      pointHoverRadius: 6
+                    }]
+                  },
+                  options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    animation: {
+                      duration: 800
+                    },
+                    plugins: {
+                      legend: {
+                        display: false
+                      }
+                    },
+                    scales: {
+                      x: {
+                        grid: {
+                          display: false
+                        }
+                      },
+                      y: {
+                        beginAtZero: true,
+                        grid: {
+                          color: 'rgba(0, 0, 0, 0.1)'
+                        },
+                        ticks: {
+                          callback: function(value) {
+                            return formatCurrency(value)
+                          }
+                        }
+                      }
+                    }
+                  }
+                })
+                console.log('營收圖表創建成功')
+              } catch (chartError) {
+                console.error('創建營收圖表失敗:', chartError)
               }
+            } else {
+              console.warn('營收圖表數據無效，跳過創建')
             }
           }
-        }
-      })
-    }
-    
-    // 更新活躍度圖表
-    if (activityChart.value) {
-      activityChart.value.destroy()
-    }
-    
-    const activityCtx = document.getElementById('activityChart')
-    if (activityCtx) {
-      activityChart.value = new Chart(activityCtx, {
-        type: 'bar',
-        data: {
-          labels: chartData.value.activity.map(item => item.label),
-          datasets: [{
-            label: selectedRestaurant.value === 'all' ? '活躍商家數' : '訂單數',
-            data: chartData.value.activity.map(item => item.value),
-            backgroundColor: '#10b981',
-            borderColor: '#059669',
-            borderWidth: 1
-          }]
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          plugins: {
-            legend: {
-              display: false
-            }
-          },
-          scales: {
-            y: {
-              beginAtZero: true,
-              ticks: {
-                stepSize: 1
+          
+          // 創建活躍度圖表
+          if (chartData.value.activity && chartData.value.activity.length > 0) {
+            const validActivityData = chartData.value.activity.filter(item => 
+              item && typeof item.value === 'number' && !isNaN(item.value)
+            )
+            
+            if (validActivityData.length > 0) {
+              try {
+                const ctx = activityCanvas.getContext('2d')
+                if (!ctx) {
+                  console.error('無法獲取活躍度圖表 2D 上下文')
+                  return
+                }
+                
+                activityChart.value = new Chart(ctx, {
+                  type: 'bar',
+                  data: {
+                    labels: chartData.value.activity.map(item => item.label || ''),
+                    datasets: [{
+                      label: selectedRestaurant.value === 'all' ? '活躍商家數' : '訂單數',
+                      data: chartData.value.activity.map(item => item.value || 0),
+                      backgroundColor: 'rgba(16, 185, 129, 0.8)',
+                      borderColor: '#059669',
+                      borderWidth: 1,
+                      borderRadius: 2
+                    }]
+                  },
+                  options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    animation: {
+                      duration: 800
+                    },
+                    plugins: {
+                      legend: {
+                        display: false
+                      }
+                    },
+                    scales: {
+                      x: {
+                        grid: {
+                          display: false
+                        }
+                      },
+                      y: {
+                        beginAtZero: true,
+                        grid: {
+                          color: 'rgba(0, 0, 0, 0.1)'
+                        },
+                        ticks: {
+                          stepSize: 1
+                        }
+                      }
+                    }
+                  }
+                })
+                console.log('活躍度圖表創建成功')
+              } catch (chartError) {
+                console.error('創建活躍度圖表失敗:', chartError)
               }
+            } else {
+              console.warn('活躍度圖表數據無效，跳過創建')
             }
           }
-        }
+        }, 100) // 延遲 100ms 確保 DOM 完全準備好
       })
+    } catch (error) {
+      console.error('更新圖表時發生錯誤:', error)
+      destroyCharts()
     }
   }
 
@@ -537,6 +724,12 @@ export function useReports() {
   onMounted(() => {
     loadRestaurants()
     loadReportData()
+  })
+
+  // 組件卸載時清理圖表
+  onUnmounted(() => {
+    // 使用統一的清理函數
+    destroyAllCharts()
   })
 
   return {
