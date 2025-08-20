@@ -856,6 +856,8 @@ export function useOrders(restaurantId = null) {
     formatDateTime,
     getStatVariant,
     getOrderStatusVariant,
-    getOrderStatusText
+    getOrderStatusText,
+    getOptionLabel,
+    getOptionValueLabel
   }
 }

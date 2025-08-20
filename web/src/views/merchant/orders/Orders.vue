@@ -413,10 +413,27 @@
               <div v-for="item in order.items" :key="item._id" class="item-detail">
                 <div class="item-info">
                   <span class="item-name">{{ item.name }}</span>
-                  <span class="item-price">${{ item.price }}</span>
+                  <span class="item-price">${{ item.unitPrice }}</span>
+                </div>
+                <div class="item-options" v-if="item.selectedOptions && Object.keys(item.selectedOptions).length > 0">
+                  <div v-for="(value, key) in item.selectedOptions" :key="key" class="option-item">
+                    <span class="option-label">{{ getOptionLabel(key) }}:</span>
+                    <span class="option-value">
+                      <template v-if="typeof value === 'object' && value !== null && value.name">
+                        {{ value.name }}
+                      </template>
+                      <template v-else>
+                        {{ getOptionValueLabel(key, value) }}
+                      </template>
+                    </span>
+                  </div>
+                </div>
+                <div class="item-notes" v-if="item.notes">
+                  <span class="notes-label">備註:</span>
+                  <span class="notes-value">{{ item.notes }}</span>
                 </div>
                 <div class="item-quantity">x{{ item.quantity }}</div>
-                <div class="item-subtotal">${{ item.price * item.quantity }}</div>
+                <div class="item-subtotal">${{ item.unitPrice * item.quantity }}</div>
               </div>
             </div>
             <div class="batch-total">
@@ -485,6 +502,8 @@ const {
   formatDateTime,
   getStatVariant,
   getOrderStatusVariant,
-  getOrderStatusText
+  getOrderStatusText,
+  getOptionLabel,
+  getOptionValueLabel
 } = useOrders(route.query.restaurantId)
 </script>

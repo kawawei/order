@@ -10,11 +10,7 @@
             {{ currentDate }}
           </BaseTag>
         </div>
-        <div class="header-actions">
-          <BaseButton variant="secondary" size="small" icon="print">
-            匯出報表
-          </BaseButton>
-        </div>
+
       </header>
     
     <div class="dashboard-grid">

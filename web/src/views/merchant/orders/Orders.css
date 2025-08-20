@@ -558,7 +558,7 @@
   display: grid;
   grid-template-columns: 1fr auto auto;
   gap: 1rem;
-  align-items: center;
+  align-items: start;
   padding: 0.75rem;
   background: #f8f9fa;
   border-radius: 6px;
@@ -578,6 +578,55 @@
 .item-price {
   font-size: 0.875rem;
   color: #6b7280;
+}
+
+.item-options {
+  margin-top: 0.5rem;
+}
+
+.option-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.25rem;
+  font-size: 0.8rem;
+}
+
+.option-label {
+  color: #6b7280;
+  font-weight: 500;
+  min-width: 60px;
+}
+
+.option-value {
+  color: #374151;
+  background: #e5e7eb;
+  padding: 0.125rem 0.375rem;
+  border-radius: 4px;
+  font-size: 0.75rem;
+}
+
+.item-notes {
+  margin-top: 0.5rem;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  font-size: 0.8rem;
+}
+
+.notes-label {
+  color: #6b7280;
+  font-weight: 500;
+  min-width: 40px;
+}
+
+.notes-value {
+  color: #dc2626;
+  font-style: italic;
+  background: #fef2f2;
+  padding: 0.125rem 0.375rem;
+  border-radius: 4px;
+  border-left: 3px solid #dc2626;
 }
 
 .item-quantity {
