@@ -829,6 +829,9 @@ exports.importMenu = catchAsync(async (req, res, next) => {
               const optionName = currentHeader;
               const optionValue = String(currentValue).trim();
               
+              // 檢查是否為基礎庫存選項
+              const isBaseInventory = optionValue === '基礎' || optionValue === 'base';
+              
               let quantity = 0;
               let surcharge = 0;
               
@@ -844,14 +847,15 @@ exports.importMenu = catchAsync(async (req, res, next) => {
                 surcharge = parseFloat(row[currentIndex + 1]) || 0;
               }
               
-              console.log(`解析選項：${optionName} = ${optionValue}，數量：${quantity}，加價：${surcharge}`);
+              console.log(`解析選項：${optionName} = ${optionValue}，數量：${quantity}，加價：${surcharge}${isBaseInventory ? ' (基礎庫存)' : ''}`);
               
               // 收集選項數據
               rowOptions.push({
                 name: optionName,
                 value: optionValue,
                 quantity: quantity,
-                surcharge: surcharge
+                surcharge: surcharge,
+                isBaseInventory: isBaseInventory
               });
               
               // 移動到下一個選項組
@@ -911,7 +915,22 @@ exports.importMenu = catchAsync(async (req, res, next) => {
         // 按選項名稱分組
         const optionGroups = {};
         
+        // 分離基礎庫存選項和用戶選項
+        const baseInventoryOptions = [];
+        const userOptions = [];
+        
         for (const option of collectedOptions) {
+          if (option.isBaseInventory) {
+            // 基礎庫存選項，不作為用戶可選擇的選項
+            baseInventoryOptions.push(option);
+          } else {
+            // 用戶可選擇的選項
+            userOptions.push(option);
+          }
+        }
+        
+        // 處理用戶可選擇的選項
+        for (const option of userOptions) {
           const optionName = cleanOptionName(option.name); // 清理選項名稱，移除「選-」前綴
           
           if (!optionGroups[optionName]) {
@@ -960,6 +979,44 @@ exports.importMenu = catchAsync(async (req, res, next) => {
         };
         
         console.log(`處理菜品「${dishName}」的庫存關聯，選項數量：${finalOptions.length}`);
+        
+        // 先處理基礎庫存選項
+        console.log(`處理基礎庫存選項：${baseInventoryOptions.length} 項`);
+        for (const baseOption of baseInventoryOptions) {
+          const inventoryName = mapOptionToInventory(baseOption.name);
+          console.log(`處理基礎庫存：${baseOption.name} -> 庫存：${inventoryName}`);
+          
+          const inventory = await findInventoryByName(inventoryName, merchantId);
+          
+          if (inventory) {
+            console.log(`找到基礎庫存項目：${inventory.name} (ID: ${inventory._id})，類型：${inventory.type}`);
+            
+            if (inventory.type === 'single') {
+              // 單一規格庫存
+              inventoryConfig.baseInventory.push({
+                inventoryId: inventory._id,
+                inventoryValueId: inventory._id, // 單一庫存使用自身ID
+                quantity: baseOption.quantity || 1
+              });
+              console.log(`添加基礎庫存（單一規格）：${inventory.name}，數量：${baseOption.quantity || 1}`);
+            } else if (inventory.type === 'multiSpec') {
+              // 多規格庫存，使用第一個規格作為預設
+              if (inventory.multiSpecStock && inventory.multiSpecStock.length > 0) {
+                const defaultSpec = inventory.multiSpecStock[0];
+                inventoryConfig.baseInventory.push({
+                  inventoryId: inventory._id,
+                  inventoryValueId: defaultSpec._id,
+                  quantity: baseOption.quantity || 1
+                });
+                console.log(`添加基礎庫存（多規格）：${inventory.name} - ${defaultSpec.specName}，數量：${baseOption.quantity || 1}`);
+              } else {
+                console.warn(`庫存 ${inventory.name} 沒有可用的規格`);
+              }
+            }
+          } else {
+            console.warn(`未找到基礎庫存項目：${inventoryName}`);
+          }
+        }
         
         // 根據選項值查找對應的庫存項目
         for (const optionConfig of finalOptions) {
