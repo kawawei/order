@@ -10,7 +10,7 @@
       <div class="section-card">
         <div class="section-header">
           <h2>員工管理</h2>
-          <div class="header-actions">
+          <div class="header-actions" v-if="canManageEmployees">
             <button class="btn-secondary" @click="onClickImportEmployees">
               <font-awesome-icon icon="file-import" />
               匯入人員
@@ -355,6 +355,16 @@ const getEmployeeCountByRole = (roleKey) => {
   return employees.value.filter(emp => emp.role === roleKey).length
 }
 
+// 判斷是否可以管理員工（新增/匯入）
+const canManageEmployees = computed(() => {
+  // 超級管理員、老闆可以管理員工
+  if (isAdminActor || isCurrentOwner) {
+    return true
+  }
+  // 管理人員不能新增/匯入員工
+  return false
+})
+
 const filteredEmployees = computed(() => {
   let filtered = employees.value
   
@@ -372,8 +382,8 @@ const filteredEmployees = computed(() => {
 })
 
 const onClickAddEmployee = () => {
-  // 僅老闆或管理人員可新增；管理人員只能新增「工作人員」
-  if (!isCurrentOwner && !isAdminActor && !isCurrentManager) {
+  // 僅老闆和超級管理員可以新增員工
+  if (!isCurrentOwner && !isAdminActor) {
     alert('您沒有權限新增員工')
     return
   }
@@ -381,8 +391,8 @@ const onClickAddEmployee = () => {
 }
 
 const onClickImportEmployees = () => {
-  // 僅老闆或管理人員可匯入；管理人員只能匯入「工作人員」
-  if (!isCurrentOwner && !isAdminActor && !isCurrentManager) {
+  // 僅老闆和超級管理員可以匯入員工
+  if (!isCurrentOwner && !isAdminActor) {
     alert('您沒有權限匯入員工')
     return
   }
@@ -529,32 +539,52 @@ const onFileSelected = (event) => {
 
 // 處理匯入
 const handleImport = async () => {
+  console.log('🔄 [UI] 開始處理匯入...')
+  
   if (!selectedFile.value) {
+    console.warn('⚠️ [UI] 未選擇檔案')
     importError.value = '請選擇要匯入的檔案'
     return
   }
+  
+  console.log('📁 [UI] 選擇的檔案:', {
+    name: selectedFile.value.name,
+    size: selectedFile.value.size,
+    type: selectedFile.value.type
+  })
   
   importing.value = true
   importError.value = ''
   importPreview.value = []
   
   try {
+    console.log('📦 [UI] 準備 FormData...')
     const formData = new FormData()
     formData.append('file', selectedFile.value)
     
+    console.log('📤 [UI] 調用 API 匯入...')
     const response = await roleAPI.importPermissions(formData)
+    
+    console.log('✅ [UI] API 調用成功:', response.data)
     importResults.value = response.data
     
     // 如果匯入成功，重新載入員工列表
     if (response.data.success.length > 0 || response.data.updatedCount > 0) {
+      console.log('🔄 [UI] 重新載入員工列表...')
       await loadEmployees()
+      console.log('✅ [UI] 員工列表重新載入完成')
     }
     
   } catch (error) {
-    console.error('匯入失敗:', error)
+    console.error('❌ [UI] 匯入失敗:', {
+      message: error.message,
+      response: error.response?.data,
+      status: error.response?.status
+    })
     importError.value = error.response?.data?.message || '匯入失敗，請檢查檔案格式'
   } finally {
     importing.value = false
+    console.log('🏁 [UI] 匯入處理完成')
   }
 }
 

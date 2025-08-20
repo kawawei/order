@@ -145,10 +145,63 @@ exports.signup = catchAsync(async (req, res, next) => {
       { name: '管理人員', permissions: ['菜單:查看','庫存:查看','訂單:查看','訂單:更新狀態','桌位:查看','桌位:管理','報表:查看','員工:查看','員工:編輯'], isSystem: true },
       { name: '工作人員', permissions: ['訂單:查看','訂單:更新狀態','訂單:結帳','桌位:查看'], isSystem: true }
     ];
-    await Role.insertMany(defaultRoles.map(r => ({ ...r, merchant: newMerchant._id })));
+    const createdRoles = await Role.insertMany(defaultRoles.map(r => ({ ...r, merchant: newMerchant._id })));
+    
+    // 找到老闆角色
+    const ownerRole = createdRoles.find(role => role.name === '老闆');
+    
+    // 生成老闆員工編號
+    const generateEmployeeCode = () => {
+      const letters = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+      const digits = '23456789';
+      let code = '';
+      for (let i = 0; i < 3; i++) {
+        code += letters[Math.floor(Math.random() * letters.length)];
+        code += digits[Math.floor(Math.random() * digits.length)];
+      }
+      return code;
+    };
+    
+    // 創建老闆員工記錄
+    const Employee = require('../models/employee');
+    const ownerEmployeeCode = generateEmployeeCode();
+    const ownerEmployee = await Employee.create({
+      merchant: newMerchant._id,
+      name: '老闆',
+      employeeNumber: ownerEmployeeCode,
+      account: ownerEmployeeCode,
+      password: ownerEmployeeCode, // 預設密碼為員工編號
+      role: ownerRole._id,
+      isActive: true,
+      isOwner: true
+    });
+    
+    // 更新商家的 ownerEmployeeCode
+    await Merchant.findByIdAndUpdate(newMerchant._id, {
+      ownerEmployeeCode: ownerEmployeeCode
+    });
+    
+    console.log('老闆員工創建成功:', {
+      employeeCode: ownerEmployeeCode,
+      employeeId: ownerEmployee._id
+    });
 
     // 生成並發送 Token
-    createSendToken(newMerchant, 201, res);
+    const token = signToken(newMerchant._id, 'merchant');
+
+    // 移除密碼
+    newMerchant.password = undefined;
+
+    res.status(201).json({
+      status: 'success',
+      token,
+      data: {
+        merchant: {
+          ...newMerchant.toObject(),
+          ownerEmployeeCode: ownerEmployeeCode
+        }
+      }
+    });
   } catch (error) {
     console.error('創建商家失敗:', error);
     return next(new AppError('創建商家帳戶失敗，請檢查輸入的數據', 400));
@@ -211,6 +264,17 @@ exports.protect = catchAsync(async (req, res, next) => {
     // 將商家信息添加到請求對象
     req.merchant = merchant;
     req.user = merchant;
+  } else if (decoded.role === 'employee') {
+    const Employee = require('../models/employee');
+    const employee = await Employee.findById(decoded.id).populate('role');
+    if (!employee) {
+      return next(new AppError('此 Token 對應的員工不存在', 401));
+    }
+    // 將員工信息添加到請求對象
+    req.employee = employee;
+    req.user = employee;
+    // 同時設置 merchant 信息，方便後續使用
+    req.merchant = { _id: employee.merchant };
   } else if (decoded.role === 'admin' || decoded.role === 'superadmin') {
     const Admin = require('../models/admin');
     const admin = await Admin.findById(decoded.id);

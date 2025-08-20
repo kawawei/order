@@ -3,6 +3,8 @@ const Employee = require('../models/employee');
 const Role = require('../models/role');
 const AppError = require('../utils/appError');
 const catchAsync = require('../utils/catchAsync');
+const XLSX = require('xlsx');
+const fs = require('fs');
 
 const signToken = (employee) => {
   return jwt.sign(
@@ -355,4 +357,317 @@ exports.deleteEmployee = catchAsync(async (req, res, next) => {
   res.status(204).json({ status: 'success', data: null });
 });
 
+// 匯入員工（Excel）
+exports.importEmployees = catchAsync(async (req, res, next) => {
+  console.log('🚀 [SERVER] 員工匯入端點被調用')
+  console.log('👤 [SERVER] 請求用戶信息:', {
+    isAdmin: !!req.admin,
+    isMerchant: !!req.merchant,
+    isEmployee: !!req.employee,
+    userId: req.admin?._id || req.merchant?._id || req.employee?._id
+  })
+  
+  if (!req.file) {
+    console.error('❌ [SERVER] 沒有上傳檔案')
+    return next(new AppError('請上傳 Excel 檔案', 400));
+  }
 
+  try {
+    console.log('=== 員工 Excel 匯入開始 ===');
+    console.log('📁 [SERVER] 檔案信息:', {
+      path: req.file.path,
+      originalname: req.file.originalname,
+      size: req.file.size,
+      mimetype: req.file.mimetype
+    })
+
+    // 讀取 Excel 檔案
+    const workbook = XLSX.readFile(req.file.path);
+    const sheetName = workbook.SheetNames[0];
+    const worksheet = workbook.Sheets[sheetName];
+    
+    console.log('工作表名稱:', sheetName);
+    
+    // 轉換為 JSON 格式
+    const data = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+    
+    console.log('=== 原始資料結構 ===');
+    console.log('總行數:', data.length);
+    console.log('標題列:', data[0]);
+    console.log('前3行資料範例:');
+    for (let i = 0; i < Math.min(3, data.length); i++) {
+      console.log(`第${i+1}行:`, data[i]);
+    }
+    
+    if (data.length < 2) {
+      return next(new AppError('Excel 檔案中沒有足夠的資料', 400));
+    }
+
+    // 檢查標題行
+    const headers = data[0] || [];
+    const serialNumberIndex = headers.findIndex(header => 
+      header === '序號' || header === 'Serial Number' || header === '編號'
+    );
+    const managerIndex = headers.findIndex(header => 
+      header === '管理人員' || header === 'Management Personnel' || header === 'Manager'
+    );
+    const staffIndex = headers.findIndex(header => 
+      header === '工作人員' || header === 'Staff/Worker' || header === 'Staff'
+    );
+    
+    console.log('找到的欄位索引:', { serialNumberIndex, managerIndex, staffIndex });
+    
+    if (serialNumberIndex === -1) {
+      return next(new AppError('Excel 檔案格式錯誤，找不到「序號」欄位', 400));
+    }
+    
+    if (managerIndex === -1 && staffIndex === -1) {
+      return next(new AppError('Excel 檔案格式錯誤，找不到「管理人員」或「工作人員」欄位', 400));
+    }
+
+    // 獲取商家 ID
+    const merchantId = getMerchantId(req);
+    console.log('商家ID:', merchantId);
+
+    // 驗證商家是否存在
+    const Merchant = require('../models/merchant');
+    const merchant = await Merchant.findById(merchantId);
+    if (!merchant) {
+      return next(new AppError('找不到指定的商家', 400));
+    }
+
+    const results = {
+      success: [],
+      errors: [],
+      createdCount: 0,
+      updatedCount: 0
+    };
+
+    // 從第二行開始解析
+    for (let i = 1; i < data.length; i++) {
+      const row = data[i];
+      const rowNumber = i + 1; // Excel 行號
+
+      try {
+        console.log(`\n--- 處理第 ${rowNumber} 行 ---`);
+        console.log('原始資料:', row);
+        
+        if (!row || row.length === 0) {
+          console.log(`第 ${rowNumber} 行為空，跳過`);
+          continue;
+        }
+        
+        // 處理管理人員
+        if (managerIndex >= 0 && row[managerIndex] && String(row[managerIndex]).trim() !== '') {
+          const name = String(row[managerIndex]).trim();
+          const serialNumber = serialNumberIndex >= 0 ? row[serialNumberIndex] : null;
+          console.log(`解析到管理人員：${name} (序號：${serialNumber})`);
+          
+          try {
+            await processEmployeeImport(name, '管理人員', serialNumber, rowNumber, merchant, results, req);
+          } catch (employeeError) {
+            console.error(`❌ 處理管理人員 ${name} 時發生錯誤:`, employeeError);
+            const errorMsg = `第 ${rowNumber} 行：處理管理人員 ${name} (${serialNumber}) 時發生錯誤 - ${employeeError.message}`;
+            results.errors.push(errorMsg);
+          }
+        }
+        
+        // 處理工作人員
+        if (staffIndex >= 0 && row[staffIndex] && String(row[staffIndex]).trim() !== '') {
+          const name = String(row[staffIndex]).trim();
+          const serialNumber = serialNumberIndex >= 0 ? row[serialNumberIndex] : null;
+          console.log(`解析到工作人員：${name} (序號：${serialNumber})`);
+          
+          try {
+            await processEmployeeImport(name, '工作人員', serialNumber, rowNumber, merchant, results, req);
+          } catch (employeeError) {
+            console.error(`❌ 處理工作人員 ${name} 時發生錯誤:`, employeeError);
+            const errorMsg = `第 ${rowNumber} 行：處理工作人員 ${name} (${serialNumber}) 時發生錯誤 - ${employeeError.message}`;
+            results.errors.push(errorMsg);
+          }
+        }
+        
+      } catch (error) {
+        console.error(`❌ 處理第 ${rowNumber} 行時發生錯誤:`, error);
+        const errorMsg = `第 ${rowNumber} 行：${error.message || '未知錯誤'}`;
+        results.errors.push(errorMsg);
+      }
+    }
+
+    // 清理上傳的檔案
+    if (req.file && req.file.path) {
+      try {
+        fs.unlinkSync(req.file.path);
+      } catch (error) {
+        console.error('清理上傳檔案時發生錯誤:', error);
+      }
+    }
+
+    // 回傳結果
+    console.log('\n=== 員工匯入完成總結 ===');
+    console.log(`📊 [SERVER] 匯入統計:`);
+    console.log(`  - 新增員工: ${results.createdCount} 人`);
+    console.log(`  - 更新員工: ${results.updatedCount} 人`);
+    console.log(`  - 失敗筆數: ${results.errors.length} 人`);
+    console.log(`  - 總處理筆數: ${results.createdCount + results.updatedCount + results.errors.length} 人`);
+    console.log('✅ [SERVER] 成功訊息:', results.success);
+    if (results.errors.length > 0) {
+      console.log('❌ [SERVER] 錯誤訊息:', results.errors);
+    }
+    
+    console.log('📤 [SERVER] 發送響應給前端...')
+    res.status(200).json({
+      status: 'success',
+      message: `匯入完成，新增 ${results.createdCount} 人，更新 ${results.updatedCount} 人，失敗 ${results.errors.length} 人`,
+      data: {
+        createdCount: results.createdCount,
+        updatedCount: results.updatedCount,
+        success: results.success,
+        errors: results.errors
+      }
+    });
+    console.log('✅ [SERVER] 響應發送完成')
+
+  } catch (error) {
+    console.error('❌ [SERVER] 匯入員工 Excel 檔案時發生錯誤:', error);
+    console.error('📋 [SERVER] 錯誤詳情:', {
+      message: error.message,
+      stack: error.stack,
+      name: error.name
+    })
+    
+    // 清理上傳的檔案
+    if (req.file && req.file.path) {
+      try {
+        console.log('🧹 [SERVER] 清理上傳檔案...')
+        fs.unlinkSync(req.file.path);
+        console.log('✅ [SERVER] 檔案清理完成')
+      } catch (cleanupError) {
+        console.error('❌ [SERVER] 清理上傳檔案時發生錯誤:', cleanupError);
+      }
+    }
+    
+    console.error('❌ [SERVER] 錯誤堆疊:', error.stack);
+    return next(new AppError('處理 Excel 檔案時發生錯誤', 500));
+  }
+});
+
+// 處理單個員工匯入的輔助函數
+const processEmployeeImport = async (name, roleType, serialNumber, rowNumber, merchant, results, req) => {
+  console.log(`🔧 [SERVER] 處理員工匯入: ${name} (${roleType})`)
+  console.log(`📋 [SERVER] 員工信息:`, {
+    name,
+    roleType,
+    serialNumber,
+    rowNumber,
+    merchantId: merchant._id
+  })
+  
+  // 查找或創建角色
+  let role = await Role.findOne({ 
+    merchant: merchant._id, 
+    name: roleType 
+  });
+  
+  console.log(`🔍 [SERVER] 查找角色結果:`, role ? `找到角色 ${role.name}` : '未找到角色，需要創建')
+  
+  if (!role) {
+    console.log(`🆕 [SERVER] 需要創建新角色: ${roleType}`)
+    // 創建新角色
+    const permissions = roleType === '管理人員' ? [
+      '菜單:查看','庫存:查看','訂單:查看','訂單:更新狀態','桌位:查看','桌位:管理','報表:查看','員工:查看','員工:編輯'
+    ] : [
+      '訂單:查看','訂單:更新狀態','訂單:結帳','桌位:查看'
+    ];
+    
+    console.log(`🔑 [SERVER] 角色權限:`, permissions)
+    
+    role = await Role.create({
+      merchant: merchant._id,
+      name: roleType,
+      permissions,
+      isSystem: true
+    });
+    console.log(`✅ [SERVER] 創建新角色成功：${roleType} (ID: ${role._id})`);
+  }
+  
+  // 查找或創建員工
+  console.log(`🔍 [SERVER] 查找員工: ${name}`)
+  let employee = await Employee.findOne({
+    merchant: merchant._id,
+    name: name
+  });
+  
+  console.log(`👤 [SERVER] 員工查找結果:`, employee ? `找到員工 ${employee.name} (ID: ${employee._id})` : '未找到員工，需要創建')
+  
+  if (employee) {
+    console.log(`🔄 [SERVER] 更新現有員工角色: ${name} -> ${roleType}`)
+    
+    // 檢查是否為老闆（通過比較員工編號和商家的 ownerEmployeeCode）
+    const isOwner = merchant.ownerEmployeeCode && employee.employeeNumber === merchant.ownerEmployeeCode;
+    console.log(`👑 [SERVER] 老闆檢查:`, {
+      employeeNumber: employee.employeeNumber,
+      ownerEmployeeCode: merchant.ownerEmployeeCode,
+      isOwner
+    })
+    
+    // 更新現有員工的角色和老闆標識
+    employee.role = role._id;
+    employee.isOwner = isOwner;
+    await employee.save();
+    console.log(`✅ [SERVER] 更新員工 ${name} 的角色為 ${roleType}，老闆標識為 ${isOwner}`);
+    results.updatedCount++;
+    results.success.push(`第 ${rowNumber} 行：更新員工 ${name} (${serialNumber}) 的角色為 ${roleType}`);
+  } else {
+    console.log(`🆕 [SERVER] 需要創建新員工: ${name}`)
+    // 生成員工編號和帳號
+    const generateEmployeeCode = () => {
+      const letters = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+      const digits = '23456789';
+      let code = '';
+      for (let i = 0; i < 3; i++) {
+        code += letters[Math.floor(Math.random() * letters.length)];
+        code += digits[Math.floor(Math.random() * digits.length)];
+      }
+      return code;
+    };
+    
+    const employeeNumber = generateEmployeeCode();
+    console.log(`🔢 [SERVER] 生成員工編號: ${employeeNumber}`)
+    
+    // 創建新員工
+    console.log(`📝 [SERVER] 創建員工數據:`, {
+      merchant: merchant._id,
+      name,
+      employeeNumber,
+      account: employeeNumber,
+      role: role._id,
+      serialNumber
+    })
+    
+    // 檢查是否為老闆（通過比較員工編號和商家的 ownerEmployeeCode）
+    const isOwner = merchant.ownerEmployeeCode && employeeNumber === merchant.ownerEmployeeCode;
+    console.log(`👑 [SERVER] 老闆檢查:`, {
+      employeeNumber,
+      ownerEmployeeCode: merchant.ownerEmployeeCode,
+      isOwner
+    })
+    
+    employee = await Employee.create({
+      merchant: merchant._id,
+      name: name,
+      employeeNumber: employeeNumber,
+      account: employeeNumber,
+      password: employeeNumber, // 預設密碼為員工編號
+      role: role._id,
+      isActive: true,
+      isOwner: isOwner, // 設置是否為老闆
+      ...(serialNumber && { serialNumber })
+    });
+    console.log(`✅ [SERVER] 創建新員工成功：${name} (${roleType}) (ID: ${employee._id})`);
+    results.createdCount++;
+    results.success.push(`第 ${rowNumber} 行：創建新員工 ${name} (${serialNumber}) 角色為 ${roleType}`);
+  }
+  
+  console.log(`✅ [SERVER] 員工 ${name} 處理完成`)
+};

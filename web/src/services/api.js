@@ -33,6 +33,35 @@ const resolveActiveMerchantId = () => {
   return null
 }
 
+// 判斷當前用戶是否為管理員
+const isAdminUser = () => {
+  try {
+    const adminRaw = localStorage.getItem('admin_user')
+    if (adminRaw) {
+      const admin = JSON.parse(adminRaw)
+      return admin.role === 'admin' || admin.role === 'superadmin'
+    }
+    return false
+  } catch (e) {
+    return false
+  }
+}
+
+// 判斷當前用戶是否為商家
+const isMerchantUser = () => {
+  try {
+    const merchantRaw = localStorage.getItem('merchant_user')
+    if (merchantRaw) {
+      const merchant = JSON.parse(merchantRaw)
+      // 商家用戶包括：merchant 角色和 employee 角色
+      return merchant.role === 'merchant' || merchant.role === 'employee'
+    }
+    return false
+  } catch (e) {
+    return false
+  }
+}
+
 // 請求攔截器：根據情境添加對應 token（分離 admin 與 merchant），並關閉後台請求的 cookie 傳遞
 api.interceptors.request.use(
   (config) => {
@@ -404,15 +433,70 @@ export const roleAPI = {
   },
   
   // 匯入員工權限（Excel）
-  importPermissions: (formData) => {
+  importPermissions: async (formData) => {
+    console.log('🔍 [API] 開始匯入權限/員工...')
+    
     const merchantId = resolveActiveMerchantId()
     const params = merchantId ? { merchantId } : {}
-    return api.post('/admin/permissions/import', formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data'
-      },
-      params
+    
+    console.log('🏪 [API] 當前商家ID:', merchantId)
+    console.log('📋 [API] 請求參數:', params)
+    
+    // 判斷用戶身份
+    const isAdmin = isAdminUser()
+    const isMerchant = isMerchantUser()
+    
+    console.log('👤 [API] 用戶身份檢查:', { isAdmin, isMerchant })
+    
+    // 根據用戶身份選擇正確的端點
+    let endpoint = '/admin/permissions/import' // 預設管理員端點
+    
+    if (isMerchant) {
+      // 商家用戶使用員工端點
+      endpoint = '/employees/import'
+      console.log('🏪 [API] 商家用戶，使用員工端點:', endpoint)
+    } else if (isAdmin) {
+      console.log('🔧 [API] 管理員用戶，使用管理員端點:', endpoint)
+    } else {
+      console.warn('⚠️ [API] 未知用戶身份，使用預設管理員端點:', endpoint)
+    }
+    
+    console.log('📤 [API] 準備發送請求到端點:', endpoint)
+    console.log('📋 [API] FormData 內容檢查:', {
+      hasFile: formData.has('file'),
+      fileName: formData.get('file')?.name || '未知',
+      fileSize: formData.get('file')?.size || '未知',
+      fileType: formData.get('file')?.type || '未知'
     })
+    
+    try {
+      console.log('🚀 [API] 發送請求...')
+      const response = await api.post(endpoint, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data'
+        },
+        params
+      })
+      
+      console.log('✅ [API] 請求成功:', {
+        status: response.status,
+        statusText: response.statusText,
+        data: response.data
+      })
+      
+      return response
+    } catch (error) {
+      console.error('❌ [API] 請求失敗:', {
+        message: error.message,
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        data: error.response?.data,
+        endpoint,
+        isAdmin,
+        isMerchant
+      })
+      throw error
+    }
   }
 };
 

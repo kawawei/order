@@ -302,6 +302,8 @@ exports.requirePermissions = (...requiredPermissions) => {
       const ok = requiredPermissions.every(p => employeePerms.includes(p));
       if (ok) return next();
     }
+    // 特殊情況：員工如果是老闆（isOwner=true），也允許所有操作
+    if (req.employee && req.employee.isOwner) return next();
     return next(new AppError('您沒有權限執行此操作', 403));
   };
 };
