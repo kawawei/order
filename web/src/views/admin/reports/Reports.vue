@@ -220,14 +220,6 @@
               <div class="stat-number">{{ formatNumber(restaurantDetails.avgOrderValue) }}</div>
               <div class="stat-label">平均訂單金額</div>
             </div>
-            <div class="order-stat">
-              <div class="stat-number">{{ formatNumber(restaurantDetails.completedOrders) }}</div>
-              <div class="stat-label">已完成訂單</div>
-            </div>
-            <div class="order-stat">
-              <div class="stat-number">{{ formatNumber(restaurantDetails.cancelledOrders) }}</div>
-              <div class="stat-label">取消訂單</div>
-            </div>
           </div>
         </div>
       </div>
