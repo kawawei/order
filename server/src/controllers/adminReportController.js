@@ -96,7 +96,7 @@ exports.getPlatformStats = catchAsync(async (req, res, next) => {
   ] = await Promise.all([
     // 當前期間統計
     Order.aggregate([
-      { $match: { status: 'completed', ...dateQuery } },
+      { $match: { ...dateQuery } },
       {
         $lookup: {
           from: 'merchants',
@@ -144,14 +144,14 @@ exports.getPlatformStats = catchAsync(async (req, res, next) => {
               }
             }
           }
-        }
-      },
-      {
-        $group: {
-          _id: { tableId: '$tableId', customerGroup: '$customerGroup' },
-          totalRevenue: { $sum: '$totalAmount' },
-          totalCost: { $sum: '$totalCost' },
-          orderCount: { $sum: 1 }
+          } 
+        },
+        {
+          $group: {
+            _id: { tableId: '$tableId', customerGroup: '$customerGroup' },
+            totalRevenue: { $sum: { $cond: [{ $eq: ['$status', 'completed'] }, '$totalAmount', 0] } },
+            totalCost: { $sum: { $cond: [{ $eq: ['$status', 'completed'] }, '$totalCost', 0] } },
+            orderCount: { $sum: 1 }
           }
         },
         {
@@ -166,7 +166,7 @@ exports.getPlatformStats = catchAsync(async (req, res, next) => {
     
     // 前一期間統計（用於計算變化率）
     Order.aggregate([
-      { $match: { status: 'completed', ...previousDateQuery } },
+      { $match: { ...previousDateQuery } },
       {
         $lookup: {
           from: 'merchants',
@@ -219,8 +219,8 @@ exports.getPlatformStats = catchAsync(async (req, res, next) => {
       {
         $group: {
           _id: { tableId: '$tableId', customerGroup: '$customerGroup' },
-          totalRevenue: { $sum: '$totalAmount' },
-          totalCost: { $sum: '$totalCost' },
+          totalRevenue: { $sum: { $cond: [{ $eq: ['$status', 'completed'] }, '$totalAmount', 0] } },
+          totalCost: { $sum: { $cond: [{ $eq: ['$status', 'completed'] }, '$totalCost', 0] } },
           orderCount: { $sum: 1 }
         }
       },
@@ -236,7 +236,7 @@ exports.getPlatformStats = catchAsync(async (req, res, next) => {
     
     // 當前期間活躍商家數
     Order.aggregate([
-      { $match: { status: 'completed', ...dateQuery } },
+      { $match: { ...dateQuery } },
       {
         $lookup: {
           from: 'merchants',
@@ -256,7 +256,7 @@ exports.getPlatformStats = catchAsync(async (req, res, next) => {
     
     // 前一期間活躍商家數
     Order.aggregate([
-      { $match: { status: 'completed', ...previousDateQuery } },
+      { $match: { ...previousDateQuery } },
       {
         $lookup: {
           from: 'merchants',
@@ -276,7 +276,7 @@ exports.getPlatformStats = catchAsync(async (req, res, next) => {
     
     // 熱門商家排行（僅在查看所有餐廳時）
     restaurantId === 'all' ? Order.aggregate([
-      { $match: { status: 'completed', ...dateQuery } },
+      { $match: { ...dateQuery } },
       {
         $lookup: {
           from: 'merchants',
@@ -285,8 +285,8 @@ exports.getPlatformStats = catchAsync(async (req, res, next) => {
           as: 'merchant'
         }
       },
-      {
-        $match: {
+        { 
+          $match: { 
           merchant: { $ne: [] }
         }
       },
@@ -446,6 +446,19 @@ exports.getPlatformStats = catchAsync(async (req, res, next) => {
   const debugCustomerGroups = await Order.aggregate([
     { $match: { status: 'completed', ...dateQuery } },
     {
+      $lookup: {
+        from: 'merchants',
+        localField: 'merchantId',
+        foreignField: '_id',
+        as: 'merchant'
+      }
+    },
+    {
+      $match: {
+        merchant: { $ne: [] }
+      }
+    },
+    {
       $addFields: {
         // 從訂單號解析客人組別（與商家報表邏輯一致）
         customerGroup: {
@@ -566,16 +579,31 @@ async function getChartData(period, dateQuery, restaurantId) {
   let groupBy, dateFormat;
   
   if (period === 'day') {
-    // 按小時分組
-    groupBy = { $hour: '$createdAt' };
+    // 按小時分組 - 使用本地時間
+    groupBy = { 
+      $hour: { 
+        date: '$createdAt', 
+        timezone: 'Asia/Taipei' 
+      } 
+    };
     dateFormat = 'hour';
   } else if (period === 'month') {
-    // 按天分組
-    groupBy = { $dayOfMonth: '$createdAt' };
+    // 按天分組 - 使用本地時間
+    groupBy = { 
+      $dayOfMonth: { 
+        date: '$createdAt', 
+        timezone: 'Asia/Taipei' 
+      } 
+    };
     dateFormat = 'day';
   } else {
-    // 按月分組
-    groupBy = { $month: '$createdAt' };
+    // 按月分組 - 使用本地時間
+    groupBy = { 
+      $month: { 
+        date: '$createdAt', 
+        timezone: 'Asia/Taipei' 
+      } 
+    };
     dateFormat = 'month';
   }
 
@@ -671,7 +699,9 @@ async function getChartData(period, dateQuery, restaurantId) {
   // 格式化標籤
   const formatLabel = (id, format) => {
     if (format === 'hour') {
-      return `${id}:00`;
+      // 將小時轉換為本地時間格式
+      const hour = id.toString().padStart(2, '0');
+      return `${hour}:00`;
     } else if (format === 'day') {
       return `${id}日`;
     } else if (format === 'month') {
@@ -697,10 +727,16 @@ async function getChartData(period, dateQuery, restaurantId) {
  * 獲取餐廳詳細資訊
  */
 async function getRestaurantDetails(restaurantId, dateQuery) {
+  console.log('=== 調試：getRestaurantDetails 開始 ===');
+  console.log('restaurantId:', restaurantId);
+  console.log('dateQuery:', JSON.stringify(dateQuery, null, 2));
+  
   // 確保 restaurantId 是 ObjectId
   const merchantId = mongoose.Types.ObjectId.isValid(restaurantId) 
     ? new mongoose.Types.ObjectId(restaurantId) 
     : restaurantId;
+    
+  console.log('merchantId:', merchantId);
     
   const [popularItems, peakHours, orderStats] = await Promise.all([
     // 熱門餐點
@@ -720,18 +756,68 @@ async function getRestaurantDetails(restaurantId, dateQuery) {
         { $limit: 10 }
     ]),
     
-    // 熱門時段
+    // 熱門時段 - 按桌次和客人組別計算（與商家後台一致）
     Order.aggregate([
       { $match: { merchantId: merchantId, status: 'completed', ...dateQuery } },
-        {
-          $group: {
-          _id: { hour: { $hour: '$createdAt' }, tableId: '$tableId', customerGroup: '$customerGroup' }
+      {
+        $addFields: {
+          // 從訂單號解析客人組別（與商家後台邏輯一致）
+          customerGroup: {
+            $let: {
+              vars: {
+                orderParts: { $split: ['$orderNumber', '-'] }
+              },
+              in: {
+                $cond: {
+                  if: { $gte: [{ $size: '$$orderParts' }, 2] },
+                  then: {
+                    $let: {
+                      vars: {
+                        dateGroupBatch: { $arrayElemAt: ['$$orderParts', 1] }
+                      },
+                      in: {
+                        $cond: {
+                          if: { $gte: [{ $strLenBytes: '$$dateGroupBatch' }, 12] },
+                          then: {
+                            $toString: {
+                              $toInt: { $substr: ['$$dateGroupBatch', 8, 4] }
+                            }
+                          },
+                          else: '1'
+                        }
+                      }
+                    }
+                  },
+                  else: '1'
+                }
+              }
+            }
+          },
+          // 轉換為台灣時區 (UTC+8)
+          localHour: {
+            $cond: {
+              if: { $gte: [{ $add: [{ $hour: '$createdAt' }, 8] }, 24] },
+              then: { $subtract: [{ $add: [{ $hour: '$createdAt' }, 8] }, 24] },
+              else: { $add: [{ $hour: '$createdAt' }, 8] }
+            }
+          }
+        }
+      },
+      {
+        $group: {
+          _id: {
+            hour: '$localHour',
+            tableId: '$tableId',
+            customerGroup: '$customerGroup'
+          },
+          totalRevenue: { $sum: '$totalAmount' }
         }
       },
       {
         $group: {
           _id: '$_id.hour',
-          orderCount: { $sum: 1 }
+          orderCount: { $sum: 1 },
+          totalRevenue: { $sum: '$totalRevenue' }
         }
       },
       { $sort: { _id: 1 } }
@@ -756,14 +842,20 @@ async function getRestaurantDetails(restaurantId, dateQuery) {
         ])
       ]);
 
+  // 調試：熱門時段聚合結果
+  console.log('=== 調試：熱門時段聚合結果 ===');
+  console.log('peakHours 原始數據:', JSON.stringify(peakHours, null, 2));
+  
   // 處理熱門時段數據
   const maxOrders = Math.max(...peakHours.map(h => h.orderCount), 1);
   const formattedPeakHours = Array.from({ length: 24 }, (_, hour) => {
     const hourData = peakHours.find(h => h._id === hour);
     const orderCount = hourData ? hourData.orderCount : 0;
+    const totalRevenue = hourData ? hourData.totalRevenue : 0;
     return {
       hour: `${hour.toString().padStart(2, '0')}:00`,
       orderCount,
+      totalRevenue,
       percentage: (orderCount / maxOrders * 100).toFixed(1)
     };
   });
@@ -771,7 +863,8 @@ async function getRestaurantDetails(restaurantId, dateQuery) {
   // 處理訂單統計
   const completedOrders = orderStats.find(s => s._id === 'completed')?.count || 0;
   const cancelledOrders = orderStats.find(s => s._id === 'cancelled')?.count || 0;
-  const totalOrders = completedOrders + cancelledOrders; // 只計算已完成和已取消的客人組數
+  const pendingOrders = orderStats.find(s => s._id === 'pending')?.count || 0;
+  const totalOrders = completedOrders + cancelledOrders + pendingOrders; // 計算所有狀態的客人組數
   const totalRevenue = orderStats.find(s => s._id === 'completed')?.totalAmount || 0;
   const avgOrderValue = completedOrders > 0 ? (totalRevenue / completedOrders).toFixed(2) : 0;
 
@@ -874,10 +967,10 @@ exports.exportPlatformReport = catchAsync(async (req, res, next) => {
         as: 'merchant'
       }
     },
-    {
-      $match: {
+    { 
+      $match: { 
         merchant: { $ne: [] }
-      }
+      } 
     },
     {
       $group: {
