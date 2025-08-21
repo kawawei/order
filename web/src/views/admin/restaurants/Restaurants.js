@@ -62,6 +62,27 @@ export const useUsers = () => {
       
       const response = await merchantAPI.getAllMerchants(params)
       
+      console.log('=== 餐廳管理 API 調試 ===')
+      console.log('餐廳列表 API 回應:', response)
+      console.log('返回的餐廳數量:', response.data.merchants.length)
+      console.log('總餐廳數量:', response.data.total)
+      console.log('當前頁面:', response.data.page)
+      console.log('總頁數:', response.data.pages)
+      
+      // 詳細的餐廳信息
+      if (response.data.merchants && response.data.merchants.length > 0) {
+        console.log('=== 餐廳詳細列表 ===')
+        response.data.merchants.forEach((merchant, index) => {
+          console.log(`${index + 1}. ${merchant.businessName} (ID: ${merchant._id})`)
+          console.log(`   狀態: ${merchant.status}`)
+          console.log(`   桌次數量: ${merchant.tableCount || '未設定'}`)
+        })
+        console.log('=== 餐廳列表結束 ===')
+      }
+      
+      console.log('完整響應結構:', JSON.stringify(response, null, 2))
+      console.log('=== 餐廳管理 API 調試結束 ===')
+      
       if (response.status === 'success') {
         users.value = response.data.merchants.map(merchant => {
           const businessPhone = sanitizePhoneForDisplay(merchant.phone || merchant.businessPhone)

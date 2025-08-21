@@ -86,7 +86,8 @@ import {
   faSync,
   faCloudUploadAlt,
   faArrowUp,
-  faArrowDown
+  faArrowDown,
+  faCalendar
 } from '@fortawesome/free-solid-svg-icons'
 
 /* Import Base Components */
@@ -165,12 +166,12 @@ library.add(
   faEdit,
   faPlusMinus,
   faTags,
-  faFileExcel,
   faTimes,
   faSync,
   faCloudUploadAlt,
   faArrowUp,
-  faArrowDown
+  faArrowDown,
+  faCalendar
 )
 
 const app = createApp(App)

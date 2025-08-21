@@ -456,6 +456,12 @@ export const merchantAPI = {
   }
 };
 
+// 超級管理員儀表板 API
+export const adminDashboardAPI = {
+  // 獲取儀表板統計數據
+  getDashboardStats: () => api.get('/admin/dashboard/stats')
+};
+
 export const menuService = {
   // 分類相關方法
   getCategories: menuAPI.getCategories,

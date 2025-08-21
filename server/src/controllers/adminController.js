@@ -559,6 +559,364 @@ exports.getMerchantOrderStats = catchAsync(async (req, res, next) => {
   });
 });
 
+// 獲取超級管理員儀表板統計數據
+exports.getDashboardStats = catchAsync(async (req, res, next) => {
+  const mongoose = require('mongoose');
+  const Order = require('../models/order');
+  const Table = require('../models/table');
+  
+  // 獲取當前日期和時間範圍
+  const now = new Date();
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  
+  // 1. 餐廳統計
+  const restaurantStats = await Merchant.aggregate([
+    {
+      $group: {
+        _id: null,
+        totalRestaurants: { $sum: 1 },
+        activeRestaurants: {
+          $sum: { $cond: [{ $eq: ['$status', 'active'] }, 1, 0] }
+        }
+      }
+    }
+  ]);
+  
+  // 2. 訂單統計（只包含活躍餐廳，使用客人組數）
+  const orderStats = await Order.aggregate([
+    {
+      $lookup: {
+        from: 'merchants',
+        localField: 'merchantId',
+        foreignField: '_id',
+        as: 'merchant'
+      }
+    },
+    {
+      $unwind: '$merchant'
+    },
+    {
+      $match: { 'merchant.status': 'active' }
+    },
+    {
+      $lookup: {
+        from: 'tables',
+        localField: 'tableId',
+        foreignField: '_id',
+        as: 'tableInfo'
+      }
+    },
+    {
+      $unwind: '$tableInfo'
+    },
+    {
+      $addFields: {
+        // 從訂單號解析客人組別
+        customerGroup: {
+          $let: {
+            vars: {
+              orderParts: { $split: ['$orderNumber', '-'] }
+            },
+            in: {
+              $cond: {
+                if: { $gte: [{ $size: '$$orderParts' }, 2] },
+                then: {
+                  $let: {
+                    vars: {
+                      dateGroupBatch: { $arrayElemAt: ['$$orderParts', 1] }
+                    },
+                    in: {
+                      $cond: {
+                        if: { $gte: [{ $strLenBytes: '$$dateGroupBatch' }, 12] },
+                        then: {
+                          $toString: {
+                            $toInt: { $substr: ['$$dateGroupBatch', 8, 4] }
+                          }
+                        },
+                        else: '1'
+                      }
+                    }
+                  }
+                },
+                else: '1'
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      $group: {
+        _id: { 
+          merchantId: '$merchantId',
+          tableId: '$tableId',
+          customerGroup: '$customerGroup'
+        },
+        tableCapacity: { $first: '$tableInfo.capacity' },
+        orderCount: { $sum: 1 },
+        totalAmount: { $sum: '$totalAmount' },
+        isToday: {
+          $max: { 
+            $cond: [
+              { 
+                $and: [
+                  { $gte: ['$completedAt', startOfToday] },
+                  { $eq: ['$status', 'completed'] }
+                ]
+              }, 
+              1, 
+              0
+            ] 
+          }
+        },
+        todayAmount: {
+          $sum: { 
+            $cond: [
+              { 
+                $and: [
+                  { $gte: ['$completedAt', startOfToday] },
+                  { $eq: ['$status', 'completed'] }
+                ]
+              }, 
+              '$totalAmount', 
+              0
+            ] 
+          }
+        }
+      }
+    },
+    {
+      $group: {
+        _id: null,
+        totalCustomerGroups: { $sum: 1 }, // 總客人組數
+        todayCustomerGroups: { $sum: '$isToday' }, // 今日客人組數
+        totalRevenue: { $sum: '$totalAmount' },
+        todayRevenue: { $sum: '$todayAmount' }
+      }
+    }
+  ]);
+  
+  // 3. 熱門餐廳（按客人組數排序，只包含活躍餐廳）
+  const popularRestaurants = await Order.aggregate([
+    {
+      $match: { status: 'completed' }
+    },
+    {
+      $lookup: {
+        from: 'tables',
+        localField: 'tableId',
+        foreignField: '_id',
+        as: 'tableInfo'
+      }
+    },
+    {
+      $unwind: '$tableInfo'
+    },
+    {
+      $addFields: {
+        // 從訂單號解析客人組別
+        customerGroup: {
+          $let: {
+            vars: {
+              orderParts: { $split: ['$orderNumber', '-'] }
+            },
+            in: {
+              $cond: {
+                if: { $gte: [{ $size: '$$orderParts' }, 2] },
+                then: {
+                  $let: {
+                    vars: {
+                      dateGroupBatch: { $arrayElemAt: ['$$orderParts', 1] }
+                    },
+                    in: {
+                      $cond: {
+                        if: { $gte: [{ $strLenBytes: '$$dateGroupBatch' }, 12] },
+                        then: {
+                          $toString: {
+                            $toInt: { $substr: ['$$dateGroupBatch', 8, 4] }
+                          }
+                        },
+                        else: '1'
+                      }
+                    }
+                  }
+                },
+                else: '1'
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      $group: {
+        _id: { 
+          merchantId: '$merchantId',
+          tableId: '$tableId',
+          customerGroup: '$customerGroup'
+        },
+        tableCapacity: { $first: '$tableInfo.capacity' },
+        orderCount: { $sum: 1 }
+      }
+    },
+    {
+      $group: {
+        _id: '$_id.merchantId',
+        customerGroupCount: { $sum: 1 }, // 計算客人組數
+        totalOrders: { $sum: '$orderCount' } // 總訂單數
+      }
+    },
+    {
+      $lookup: {
+        from: 'merchants',
+        localField: '_id',
+        foreignField: '_id',
+        as: 'merchant'
+      }
+    },
+    {
+      $unwind: '$merchant'
+    },
+    {
+      $match: { 'merchant.status': 'active' }
+    },
+    {
+      $sort: { customerGroupCount: -1 }
+    },
+    {
+      $limit: 5
+    },
+    {
+      $project: {
+        id: '$_id',
+        name: '$merchant.businessName',
+        orderCount: '$customerGroupCount' // 使用客人組數作為顯示的訂單數
+      }
+    }
+  ]);
+  
+  // 4. 餐廳營收排行（只包含活躍餐廳）
+  const restaurantRevenue = await Order.aggregate([
+    {
+      $match: { status: 'completed' }
+    },
+    {
+      $group: {
+        _id: '$merchantId',
+        revenue: { $sum: '$totalAmount' }
+      }
+    },
+    {
+      $lookup: {
+        from: 'merchants',
+        localField: '_id',
+        foreignField: '_id',
+        as: 'merchant'
+      }
+    },
+    {
+      $unwind: '$merchant'
+    },
+    {
+      $match: { 'merchant.status': 'active' }
+    },
+    {
+      $sort: { revenue: -1 }
+    },
+    {
+      $limit: 5
+    },
+    {
+      $project: {
+        id: '$_id',
+        name: '$merchant.businessName',
+        revenue: 1
+      }
+    }
+  ]);
+  
+  // 計算總營收用於百分比計算
+  const totalRevenue = orderStats[0]?.totalRevenue || 0;
+  
+  // 添加百分比到營收數據
+  const restaurantRevenueWithPercentage = restaurantRevenue.map(restaurant => ({
+    ...restaurant,
+    percentage: totalRevenue > 0 ? Math.round((restaurant.revenue / totalRevenue) * 100) : 0
+  }));
+  
+  // 5. 活躍桌位統計（包含所有活躍餐廳）
+  // 首先獲取所有活躍餐廳
+  const allActiveMerchants = await Merchant.find({ status: 'active' }).select('_id businessName tableCount');
+  
+  // 獲取桌次統計
+  const tableStats = await Table.aggregate([
+    {
+      $group: {
+        _id: '$merchant',
+        totalTables: { $sum: 1 },
+        activeTables: {
+          $sum: { $cond: [{ $eq: ['$status', 'occupied'] }, 1, 0] }
+        }
+      }
+    }
+  ]);
+  
+  // 創建桌次統計的映射
+  const tableStatsMap = {};
+  tableStats.forEach(stat => {
+    tableStatsMap[stat._id.toString()] = {
+      totalTables: stat.totalTables,
+      activeTables: stat.activeTables
+    };
+  });
+  
+  // 合併餐廳信息和桌次統計
+  const activeTables = allActiveMerchants.map(merchant => {
+    const tableStat = tableStatsMap[merchant._id.toString()] || { totalTables: 0, activeTables: 0 };
+    return {
+      id: merchant._id,
+      name: merchant.businessName,
+      totalTables: tableStat.totalTables,
+      activeTables: tableStat.activeTables
+    };
+  }).sort((a, b) => b.activeTables - a.activeTables);
+  
+  // 6. 利潤率計算（假設成本為營收的 30%）
+  const profitMargin = totalRevenue > 0 ? Math.round(((totalRevenue - (totalRevenue * 0.3)) / totalRevenue) * 100) : 0;
+  
+  const result = {
+    restaurants: {
+      totalRestaurants: restaurantStats[0]?.totalRestaurants || 0,
+      activeRestaurants: restaurantStats[0]?.activeRestaurants || 0,
+      popularRestaurants,
+      restaurantRevenue: restaurantRevenueWithPercentage,
+      activeTables
+    },
+    orders: orderStats[0] || {
+      totalOrders: 0,
+      todayOrders: 0,
+      totalRevenue: 0,
+      todayRevenue: 0
+    },
+    analytics: {
+      profitMargin
+    }
+  };
+
+  // 將客人組數映射為訂單數以保持向後兼容
+  if (result.orders) {
+    result.orders.totalOrders = result.orders.totalCustomerGroups || 0;
+    result.orders.todayOrders = result.orders.todayCustomerGroups || 0;
+  }
+  
+  res.status(200).json({
+    status: 'success',
+    data: result
+  });
+});
+
+
+
 // 匯入餐廳（Excel）
 exports.importMerchants = catchAsync(async (req, res, next) => {
   if (!req.file) {

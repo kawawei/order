@@ -80,4 +80,10 @@ router.route('/merchants/:id')
 router.get('/merchants/:id/tables/stats', adminController.getMerchantTableStats);
 router.get('/merchants/:id/orders/stats', adminController.getMerchantOrderStats);
 
+// 超級管理員儀表板統計
+router.get('/dashboard/stats', adminController.getDashboardStats);
+
+// 超級管理員儀表板每小時營收統計
+
+
 module.exports = router;
