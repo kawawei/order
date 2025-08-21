@@ -337,6 +337,18 @@ export function useReports() {
       
       const response = await adminReportAPI.exportPlatformReport(params)
       
+      // 從標頭獲取檔案名稱
+      let fileName = response.headers?.['x-file-name'] || response.headers?.['X-File-Name']
+      console.log('從標頭獲取的檔案名稱:', fileName)
+      if (fileName) {
+        fileName = decodeURIComponent(fileName)
+        console.log('解碼後的檔案名稱:', fileName)
+      } else {
+        // 如果沒有從標頭獲取到檔案名稱，使用預設名稱
+        fileName = `平台報表_${new Date().toISOString().split('T')[0]}`
+        console.log('使用預設檔案名稱:', fileName)
+      }
+      
       // 下載檔案
       const blob = new Blob([response.data], { 
         type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' 
@@ -344,7 +356,9 @@ export function useReports() {
       const url = window.URL.createObjectURL(blob)
       const link = document.createElement('a')
       link.href = url
-      link.download = `平台報表_${new Date().toISOString().split('T')[0]}.xlsx`
+      fileName = `${fileName}.xlsx`
+      console.log('最終檔案名稱:', fileName)
+      link.download = fileName
       link.click()
       window.URL.revokeObjectURL(url)
     } catch (error) {

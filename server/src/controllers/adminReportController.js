@@ -960,7 +960,11 @@ exports.exportPlatformReport = catchAsync(async (req, res, next) => {
 
   // 如果指定了餐廳，添加餐廳篩選條件
   if (restaurantId && restaurantId !== 'all') {
-    dateQuery.merchantId = restaurantId;
+    // 確保 restaurantId 是 ObjectId
+    const merchantId = mongoose.Types.ObjectId.isValid(restaurantId) 
+      ? new mongoose.Types.ObjectId(restaurantId) 
+      : restaurantId;
+    dateQuery.merchantId = merchantId;
   }
 
   // 獲取詳細的訂單數據
@@ -1113,15 +1117,66 @@ exports.exportPlatformReport = catchAsync(async (req, res, next) => {
   // 生成 Excel 檔案
   const buffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
 
-  // 設定檔案名稱
-  const now = new Date();
-  const dateStr = now.toISOString().split('T')[0];
-  const periodLabel = period === 'day' ? '日報' : period === 'month' ? '月報' : '年報';
-  const restaurantLabel = restaurantId && restaurantId !== 'all' ? '_單店' : '_平台';
-  const filename = `${periodLabel}${restaurantLabel}_${dateStr}.xlsx`;
+  // 設定檔案名稱 - 根據開發日誌的命名規則
+  let fileName;
+  
+  // 獲取餐廳名稱的輔助函數
+  const getRestaurantName = async (restaurantId) => {
+    try {
+      const merchant = await Merchant.findById(restaurantId).select('businessName');
+      return merchant ? merchant.businessName : '未知餐廳';
+    } catch (error) {
+      console.error('獲取餐廳名稱失敗:', error);
+      return '未知餐廳';
+    }
+  };
+  
+  if (period === 'day' && date) {
+    // 日報：年月日-餐廳範圍-管理員統計報表
+    const dateStr = date.replace(/-/g, '');
+    if (restaurantId && restaurantId !== 'all') {
+      // 特定餐廳
+      const restaurantName = await getRestaurantName(restaurantId);
+      fileName = `${dateStr}-${restaurantName}-管理員統計報表`;
+    } else {
+      // 所有餐廳
+      fileName = `${dateStr}-所有餐廳-管理員統計報表`;
+    }
+  } else if (period === 'month' && startDate) {
+    // 月報：年月-餐廳範圍-管理員統計報表
+    const year = startDate.split('-')[0];
+    const month = parseInt(startDate.split('-')[1]);
+    if (restaurantId && restaurantId !== 'all') {
+      // 特定餐廳
+      const restaurantName = await getRestaurantName(restaurantId);
+      fileName = `${year}-${month}-${restaurantName}-管理員統計報表`;
+    } else {
+      // 所有餐廳
+      fileName = `${year}-${month}-所有餐廳-管理員統計報表`;
+    }
+  } else if (period === 'year' && startDate) {
+    // 年報：年份-餐廳範圍-管理員統計報表
+    const year = startDate.split('-')[0];
+    if (restaurantId && restaurantId !== 'all') {
+      // 特定餐廳
+      const restaurantName = await getRestaurantName(restaurantId);
+      fileName = `${year}-${restaurantName}-管理員統計報表`;
+    } else {
+      // 所有餐廳
+      fileName = `${year}-所有餐廳-管理員統計報表`;
+    }
+  } else {
+    // 預設使用當前日期
+    const now = new Date();
+    const dateStr = `${now.getFullYear()}${(now.getMonth() + 1).toString().padStart(2, '0')}${now.getDate().toString().padStart(2, '0')}`;
+    fileName = `${dateStr}-所有餐廳-管理員統計報表`;
+  }
+  
+  const filename = `${fileName}.xlsx`;
 
   // 設定回應標頭
   res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.setHeader('X-File-Name', encodeURIComponent(fileName)); // 添加檔案名稱標頭供前端使用
   res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(filename)}`);
   res.setHeader('Content-Length', buffer.length);
 
