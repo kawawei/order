@@ -1,5 +1,6 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { orderService } from '@/services/api'
+import { orderService, receiptAPI } from '@/services/api'
+import { generateReceiptFromStoredData } from '@/utils/receiptUtils'
 
 export function useOrders(restaurantId = null) {
   // 響應式數據
@@ -750,17 +751,107 @@ export function useOrders(restaurantId = null) {
     showOrderDetails.value = true
   }
 
-  const printReceipt = (order) => {
-    if (order.tableOrderNumber) {
-      // 桌次訂單
-      console.log(`列印桌次訂單 ${order.tableOrderNumber} 的收據`)
-      alert(`正在列印桌次訂單 ${order.tableOrderNumber} 的收據...\n桌號：${order.tableNumber}\n批次數：${order.batchCount}\n總金額：NT$ ${order.totalAmount}`)
-    } else {
-      // 單個批次訂單
-      console.log(`列印訂單 ${order.orderNumber} 的收據`)
-      alert(`正在列印訂單 ${order.orderNumber} 的收據...`)
+  const printReceipt = async (order) => {
+    try {
+      let receipt = null;
+      
+      if (order.tableOrderNumber) {
+        // 桌次訂單 - 查找第一個批次的收據
+        if (order.orders && order.orders.length > 0) {
+          const firstOrder = order.orders[0];
+          const response = await receiptAPI.getReceiptByOrderId(firstOrder._id);
+          if (response.status === 'success') {
+            receipt = response.data.receipt;
+          }
+        }
+      } else {
+        // 單個批次訂單
+        const response = await receiptAPI.getReceiptByOrderId(order._id);
+        if (response.status === 'success') {
+          receipt = response.data.receipt;
+        }
+      }
+      
+      if (receipt) {
+        // 使用儲存的收據數據生成收據
+        const receiptData = generateReceiptFromStoredData(receipt);
+        console.log('列印收據:', receiptData);
+        
+        // 這裡可以實現真實的列印邏輯
+        // 例如：打開新視窗顯示收據，或調用列印 API
+        const printWindow = window.open('', '_blank');
+        printWindow.document.write(`
+          <html>
+            <head>
+              <title>收據 - ${receiptData.billNumber}</title>
+              <style>
+                body { font-family: 'Courier New', monospace; margin: 0; padding: 20px; }
+                .receipt { max-width: 300px; margin: 0 auto; }
+                .header { text-align: center; margin-bottom: 20px; }
+                .info { margin-bottom: 15px; }
+                .info-row { display: flex; justify-content: space-between; margin-bottom: 5px; }
+                .items { margin-bottom: 15px; }
+                .item { display: flex; justify-content: space-between; margin-bottom: 5px; }
+                .total { border-top: 1px solid #000; padding-top: 10px; font-weight: bold; }
+                .footer { text-align: center; margin-top: 20px; font-size: 12px; }
+              </style>
+            </head>
+            <body>
+              <div class="receipt">
+                <div class="header">
+                  <h2>收據</h2>
+                </div>
+                <div class="info">
+                  <div class="info-row">
+                    <span>桌次:</span>
+                    <span>${receiptData.tableNumber}</span>
+                  </div>
+                  <div class="info-row">
+                    <span>帳單號碼:</span>
+                    <span>${receiptData.billNumber}</span>
+                  </div>
+                  <div class="info-row">
+                    <span>結帳時間:</span>
+                    <span>${receiptData.checkoutTime}</span>
+                  </div>
+                </div>
+                <div class="items">
+                  ${receiptData.items.map(item => `
+                    <div class="item">
+                      <span>${item.name} x${item.quantity}</span>
+                      <span>NT$ ${item.totalPrice}</span>
+                    </div>
+                  `).join('')}
+                </div>
+                <div class="total">
+                  <div class="info-row">
+                    <span>總計:</span>
+                    <span>NT$ ${receiptData.total}</span>
+                  </div>
+                </div>
+                <div class="footer">
+                  <p>感謝您的惠顧</p>
+                  <p>${receiptData.storeName}</p>
+                </div>
+              </div>
+            </body>
+          </html>
+        `);
+        printWindow.document.close();
+        printWindow.print();
+      } else {
+        console.log('找不到收據數據，使用即時生成');
+        // 如果找不到儲存的收據，使用即時生成的方式
+        if (order.tableOrderNumber) {
+          alert(`正在列印桌次訂單 ${order.tableOrderNumber} 的收據...\n桌號：${order.tableNumber}\n批次數：${order.batchCount}\n總金額：NT$ ${order.totalAmount}`)
+        } else {
+          alert(`正在列印訂單 ${order.orderNumber} 的收據...`)
+        }
+      }
+    } catch (error) {
+      console.error('列印收據失敗:', error);
+      alert('列印收據失敗，請重試');
     }
-    // 這裡可以實現真實的列印邏輯
   }
 
   const formatTime = (date) => {

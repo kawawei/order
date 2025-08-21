@@ -73,7 +73,8 @@
             <strong>總計：NT$ {{ currentOrder.totalAmount }}</strong>
           </div>
           <div class="order-actions">
-            <!-- 收據按鈕 -->
+            <!-- 收據按鈕暫時隱藏 -->
+            <!-- 
             <BaseButton
               variant="secondary"
               size="medium"
@@ -83,6 +84,7 @@
               <font-awesome-icon icon="receipt" />
               查看收據
             </BaseButton>
+            -->
             
             <!-- 結帳按鈕已隱藏，但功能保留以便之後調用 -->
             <!-- 
