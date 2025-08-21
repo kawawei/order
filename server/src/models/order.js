@@ -108,7 +108,11 @@ const orderSchema = new mongoose.Schema({
   readyAt: Date,
   deliveredAt: Date,
   servedAt: Date,
-  completedAt: Date
+  completedAt: Date,
+  receiptOrderNumber: {
+    type: String,
+    default: null
+  }
 }, {
   timestamps: true
 });

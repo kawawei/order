@@ -738,6 +738,11 @@ exports.getTableBatches = catchAsync(async (req, res, next) => {
   });
 });
 
+// 生成10位隨機數字收據號碼
+function generateReceiptNumber() {
+  return Math.floor(1000000000 + Math.random() * 9000000000).toString();
+}
+
 // 桌次結帳功能 - 合併所有批次進行結帳
 exports.checkoutTable = catchAsync(async (req, res, next) => {
   const { tableId } = req.params;
@@ -761,6 +766,31 @@ exports.checkoutTable = catchAsync(async (req, res, next) => {
     itemsCount: mergedData.allItems.length
   });
   
+  // 生成收據號碼
+  const receiptNumber = generateReceiptNumber();
+  console.log('生成的收據號碼:', receiptNumber);
+  
+  // 更新所有相關訂單的收據號碼和狀態
+  const orderIds = mergedData.batches.map(batch => batch._id || batch.id);
+  console.log('需要更新的訂單ID:', orderIds);
+  
+  // 批量更新所有訂單
+  const updateResult = await Order.updateMany(
+    { _id: { $in: orderIds } },
+    { 
+      $set: { 
+        receiptOrderNumber: receiptNumber,
+        status: 'completed',
+        completedAt: new Date()
+      }
+    }
+  );
+  
+  console.log('訂單更新結果:', {
+    matchedCount: updateResult.matchedCount,
+    modifiedCount: updateResult.modifiedCount
+  });
+  
   // 構建訂單數據，包含必要的ID信息
   const orderData = {
     tableId: mergedData.tableId,
@@ -772,7 +802,9 @@ exports.checkoutTable = catchAsync(async (req, res, next) => {
     batchCount: mergedData.batchCount,
     // 添加主要訂單的ID信息（使用第一個批次）
     orderId: mergedData.batches[0]._id || mergedData.batches[0].id,
-    orderNumber: mergedData.batches[0].orderNumber
+    orderNumber: mergedData.batches[0].orderNumber,
+    // 添加收據號碼
+    receiptOrderNumber: receiptNumber
   };
   
   // 添加調試日誌來檢查批次數據結構
@@ -786,6 +818,7 @@ exports.checkoutTable = catchAsync(async (req, res, next) => {
   console.log('返回的訂單數據包含ID信息:', {
     orderId: orderData.orderId,
     orderNumber: orderData.orderNumber,
+    receiptOrderNumber: orderData.receiptOrderNumber,
     tableNumber: orderData.tableNumber,
     totalAmount: orderData.totalAmount
   });

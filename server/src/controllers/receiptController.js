@@ -2,6 +2,7 @@ const catchAsync = require('../utils/catchAsync');
 const AppError = require('../utils/appError');
 const Receipt = require('../models/receipt');
 const Order = require('../models/order');
+const Merchant = require('../models/merchant');
 const mongoose = require('mongoose');
 
 // 輔助函數：獲取商家ID（支持超級管理員訪問特定商家）
@@ -367,7 +368,8 @@ exports.getReceiptByOrderId = catchAsync(async (req, res, next) => {
     tableNumber: order.tableNumber,
     merchantId: order.merchantId,
     totalAmount: order.totalAmount,
-    status: order.status
+    status: order.status,
+    receiptOrderNumber: order.receiptOrderNumber
   });
 
   if (order.merchantId.toString() !== merchantId) {
@@ -385,7 +387,54 @@ exports.getReceiptByOrderId = catchAsync(async (req, res, next) => {
     ]);
 
   if (!receipt) {
-    console.log('找不到此訂單的收據，嘗試查找該桌子的其他收據');
+    console.log('找不到此訂單的收據，嘗試使用訂單中的收據號碼生成新收據');
+    
+    // 檢查訂單是否有收據號碼
+    if (order.receiptOrderNumber) {
+      console.log('訂單有收據號碼，使用該號碼生成收據:', order.receiptOrderNumber);
+      
+      // 獲取商家信息
+      const merchant = await Merchant.findById(order.merchantId);
+      if (!merchant) {
+        console.log('找不到商家信息');
+        return next(new AppError('找不到商家信息', 404));
+      }
+      
+      // 使用訂單中的收據號碼生成新收據
+      const newReceipt = await Receipt.createFromOrderWithBillNumber(
+        order,
+        'admin', // 預設員工ID
+        '管理員', // 預設員工姓名
+        order.receiptOrderNumber // 使用訂單中儲存的收據號碼
+      );
+      
+      console.log('成功生成新收據:', {
+        receiptId: newReceipt._id,
+        billNumber: newReceipt.billNumber,
+        orderId: newReceipt.orderId,
+        checkoutTime: newReceipt.checkoutTime,
+        total: newReceipt.total
+      });
+      
+      // 重新查詢收據以獲取完整的關聯數據
+      const populatedReceipt = await Receipt.findById(newReceipt._id)
+        .populate([
+          { path: 'orderId', select: 'orderNumber' },
+          { path: 'tableId', select: 'tableNumber' },
+          { path: 'merchantId', select: 'businessName' },
+          { path: 'items.dishId', select: 'name' }
+        ]);
+      
+      res.status(200).json({
+        status: 'success',
+        data: {
+          receipt: populatedReceipt
+        }
+      });
+      return;
+    }
+    
+    console.log('訂單沒有收據號碼，嘗試查找該桌子的其他收據');
     
     // 備用方案：查找該桌子的所有收據
     const tableReceipts = await Receipt.find({ 
