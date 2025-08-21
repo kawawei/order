@@ -967,7 +967,116 @@ exports.exportPlatformReport = catchAsync(async (req, res, next) => {
     dateQuery.merchantId = merchantId;
   }
 
-  // 獲取詳細的訂單數據
+  // 獲取按客人組數分組的訂單數據
+  const customerGroups = await Order.aggregate([
+    { $match: { status: 'completed', ...dateQuery } },
+    {
+      $lookup: {
+        from: 'merchants',
+        localField: 'merchantId',
+        foreignField: '_id',
+        as: 'merchant'
+      }
+    },
+    { $unwind: '$merchant' },
+    {
+      $lookup: {
+        from: 'tables',
+        localField: 'tableId',
+        foreignField: '_id',
+        as: 'table'
+      }
+    },
+    { $unwind: '$table' },
+    {
+      $addFields: {
+        // 從訂單號解析客人組別
+        customerGroup: {
+          $let: {
+            vars: {
+              orderParts: { $split: ['$orderNumber', '-'] }
+            },
+            in: {
+              $cond: {
+                if: { $gte: [{ $size: '$$orderParts' }, 2] },
+                then: {
+                  $let: {
+                    vars: {
+                      dateGroupBatch: { $arrayElemAt: ['$$orderParts', 1] }
+                    },
+                    in: {
+                      $cond: {
+                        if: { $gte: [{ $strLenBytes: '$$dateGroupBatch' }, 12] },
+                        then: {
+                          $toString: {
+                            $toInt: { $substr: ['$$dateGroupBatch', 8, 4] }
+                          }
+                        },
+                        else: '1'
+                      }
+                    }
+                  }
+                },
+                else: '1'
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      $group: {
+        _id: { 
+          tableId: '$tableId', 
+          tableNumber: '$table.tableNumber',
+          customerGroup: '$customerGroup',
+          businessName: '$merchant.businessName',
+          merchantCode: '$merchant.merchantCode'
+        },
+        totalRevenue: { $sum: '$totalAmount' },
+        totalCost: { $sum: '$totalCost' },
+        orderCount: { $sum: 1 },
+        orderNumbers: { $push: '$orderNumber' },
+        firstOrderTime: { $min: '$createdAt' },
+        lastOrderTime: { $max: '$createdAt' }
+      }
+    },
+    {
+      $project: {
+        _id: 0,
+        tableId: '$_id.tableId',
+        tableNumber: '$_id.tableNumber',
+        customerGroup: '$_id.customerGroup',
+        businessName: '$_id.businessName',
+        merchantCode: '$_id.merchantCode',
+        totalRevenue: 1,
+        totalCost: 1,
+        orderCount: 1,
+        orderNumbers: 1,
+        firstOrderTime: 1,
+        lastOrderTime: 1,
+        profit: { $subtract: ['$totalRevenue', '$totalCost'] },
+        margin: {
+          $cond: {
+            if: { $gt: ['$totalRevenue', 0] },
+            then: { $multiply: [{ $divide: [{ $subtract: ['$totalRevenue', '$totalCost'] }, '$totalRevenue'] }, 100] },
+            else: 0
+          }
+        }
+      }
+    },
+    { $sort: { tableId: 1, customerGroup: 1 } }
+  ]);
+
+  // 重新編號客人組別，直接按照資料行順序從1開始編號
+  const renumberedGroups = customerGroups.map((group, index) => {
+    return {
+      ...group,
+      newCustomerGroup: index + 1
+    };
+  });
+
+  // 獲取詳細的訂單數據（保留原有功能）
   const orders = await Order.aggregate([
     { $match: { status: 'completed', ...dateQuery } },
     {
@@ -1050,7 +1159,38 @@ exports.exportPlatformReport = catchAsync(async (req, res, next) => {
   // 創建 Excel 工作簿
   const workbook = XLSX.utils.book_new();
 
-  // 訂單詳情工作表
+  // 客人組數統計工作表
+  const customerGroupData = renumberedGroups.map(group => ({
+    '桌號': group.tableNumber || group.tableId,
+    '客人組別': group.newCustomerGroup,
+    '商家名稱': group.businessName,
+    '商家代碼': group.merchantCode,
+    '組別總營收': group.totalRevenue,
+    '組別總成本': group.totalCost,
+    '組別淨利': group.profit,
+    '組別毛利率(%)': group.margin.toFixed(2),
+    '組別訂單數': group.orderCount,
+    '組別訂單編號': group.orderNumbers.join(', '),
+    '首次點餐時間': new Date(group.firstOrderTime).toLocaleString('zh-TW', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit'
+    }),
+    '最後點餐時間': new Date(group.lastOrderTime).toLocaleString('zh-TW', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit'
+    })
+  }));
+
+  const customerGroupWorksheet = XLSX.utils.json_to_sheet(customerGroupData);
+  XLSX.utils.book_append_sheet(workbook, customerGroupWorksheet, '客人組數統計');
+
+  // 訂單詳情工作表（保留原有功能）
   const orderData = orders.map(order => ({
     '訂單編號': order.orderNumber,
     '商家名稱': order.businessName,

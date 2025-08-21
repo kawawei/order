@@ -16,4 +16,7 @@ router.get('/platform-stats', adminReportController.getPlatformStats);
 // 匯出平台報表
 router.get('/export', adminReportController.exportPlatformReport);
 
+// 匯出完整管理員統計報表（暫時移除，因為函數未定義）
+// router.get('/export-complete', adminReportController.exportCompleteAdminReport);
+
 module.exports = router;
