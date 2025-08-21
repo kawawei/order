@@ -66,7 +66,7 @@
                 class="action-btn enter-btn"
                 title="進入桌次"
               >
-                <font-awesome-icon icon="sign-in-alt" />
+                <font-awesome-icon icon="chevron-right" />
                 進入桌次
               </button>
               <button 
@@ -222,6 +222,34 @@
         </form>
       </div>
     </div>
+
+    <!-- 收據模態框 -->
+    <div v-if="showReceiptModal" class="receipt-modal-overlay" @click="closeReceipt">
+      <div class="receipt-modal" @click.stop>
+        <div class="receipt-modal-header">
+          <h3>結帳收據</h3>
+          <button class="close-button" @click="closeReceipt">
+            <font-awesome-icon icon="times" />
+          </button>
+        </div>
+        <div class="receipt-modal-content">
+          <BaseReceipt 
+            v-if="currentReceiptData" 
+            :receipt="currentReceiptData" 
+            ref="receiptComponent"
+          />
+        </div>
+        <div class="receipt-modal-actions">
+          <BaseButton variant="secondary" @click="closeReceipt">
+            關閉
+          </BaseButton>
+          <BaseButton variant="primary" @click="printReceipt">
+            <font-awesome-icon icon="print" />
+            列印收據
+          </BaseButton>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -229,6 +257,9 @@
 import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { tableAPI, orderAPI } from '@/services/api'
+import BaseReceipt from '../../../components/base/BaseReceipt.vue'
+import BaseButton from '../../../components/base/BaseButton.vue'
+import { generateReceiptData } from '../../../utils/receiptUtils'
 import './Tables.css'
 
 const route = useRoute()
@@ -248,6 +279,11 @@ const editingTable = ref({
   tableNumber: '',
   capacity: ''
 })
+
+// 收據相關
+const showReceiptModal = ref(false)
+const currentReceiptData = ref(null)
+const receiptComponent = ref(null)
 
 // 載入桌次數據
 const loadTables = async () => {
@@ -548,6 +584,9 @@ const checkoutTable = async (tableId) => {
         // 重新載入桌次列表
         await loadTables()
         
+        // 生成收據
+        await generateAndShowReceipt(tableId, checkoutData)
+        
         // 顯示結帳成功訊息
         const successMessage = batchCount > 1 
           ? `結帳成功！\n共有 ${batchCount} 批次訂單\n總金額：NT$ ${checkoutData.totalAmount}\n桌次已自動設為可用狀態`
@@ -562,6 +601,92 @@ const checkoutTable = async (tableId) => {
     console.error('結帳失敗:', error)
     alert('結帳失敗：' + (error.message || '請稍後再試'))
   }
+}
+
+// 生成並顯示收據
+const generateAndShowReceipt = async (tableId, checkoutData) => {
+  try {
+    // 獲取桌次資訊
+    const table = tables.value.find(t => (t._id || t.id) === tableId)
+    if (!table) {
+      console.error('找不到桌次資訊')
+      return
+    }
+    
+    console.log('=== 收據調試信息 ===')
+    
+    // 檢查多種用戶身份
+    const merchantUser = JSON.parse(localStorage.getItem('merchant_user') || '{}')
+    const adminUser = JSON.parse(localStorage.getItem('admin_user') || '{}')
+    
+    console.log('merchant_user:', merchantUser)
+    console.log('admin_user:', adminUser)
+    
+    // 檢查是否為超級管理員
+    const isSuperAdmin = adminUser.role === 'superadmin' || adminUser.username === 'superadmin' || 
+                        merchantUser.role === 'superadmin' || merchantUser.username === 'superadmin'
+    console.log('是否為超級管理員:', isSuperAdmin)
+    
+    let employeeId = '001' // 預設員工編號
+    let storeName = '餐廳名稱' // 預設餐廳名稱
+    
+    if (isSuperAdmin) {
+      employeeId = 'admin'
+      console.log('超級管理員，員工編號設為: admin')
+      
+      // 從 URL 獲取餐廳名稱
+      const urlParams = new URLSearchParams(window.location.search)
+      const restaurantName = urlParams.get('restaurantName')
+      if (restaurantName) {
+        storeName = restaurantName
+        console.log('從 URL 獲取餐廳名稱:', storeName)
+      }
+    } else {
+      // 普通員工或商家
+      employeeId = merchantUser.employeeNumber || merchantUser.employeeId || '001'
+      storeName = merchantUser.businessName || merchantUser.name || '餐廳名稱'
+      console.log('普通員工，員工編號:', employeeId)
+    }
+    
+    console.log('最終餐廳名稱:', storeName)
+    
+    // 處理結帳數據格式，確保有 items 屬性
+    const orderData = {
+      ...checkoutData,
+      items: checkoutData.allItems || checkoutData.items || []
+    }
+    
+    console.log('=== 收據數據 ===')
+    console.log('員工編號:', employeeId)
+    console.log('餐廳名稱:', storeName)
+    console.log('桌號:', `桌號 ${table.tableNumber}`)
+    
+    // 生成收據數據
+    const receiptData = generateReceiptData(orderData, employeeId, `桌號 ${table.tableNumber}`, storeName)
+    
+    console.log('生成的收據數據:', receiptData)
+    
+    // 顯示收據模態框
+    showReceiptModal.value = true
+    currentReceiptData.value = receiptData
+  } catch (error) {
+    console.error('生成收據失敗:', error)
+    alert('生成收據失敗，請稍後再試')
+  }
+}
+
+// 列印收據
+const printReceipt = () => {
+  if (currentReceiptData.value && receiptComponent.value) {
+    // 調用收據組件的列印方法
+    receiptComponent.value.printReceipt()
+  }
+}
+
+// 關閉收據模態框
+const closeReceipt = () => {
+  showReceiptModal.value = false
+  currentReceiptData.value = null
 }
 
 // 組件掛載時載入數據

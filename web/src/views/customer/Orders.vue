@@ -73,6 +73,19 @@
             <strong>總計：NT$ {{ currentOrder.totalAmount }}</strong>
           </div>
           <div class="order-actions">
+            <!-- 收據按鈕 -->
+            <BaseButton
+              variant="secondary"
+              size="medium"
+              @click.stop="showReceipt"
+              class="receipt-button"
+            >
+              <font-awesome-icon icon="receipt" />
+              查看收據
+            </BaseButton>
+            
+            <!-- 結帳按鈕已隱藏，但功能保留以便之後調用 -->
+            <!-- 
             <BaseButton
               variant="primary"
               size="large"
@@ -82,6 +95,7 @@
               <font-awesome-icon icon="credit-card" />
               結帳 (NT$ {{ currentOrder.totalAmount }})
             </BaseButton>
+            -->
           </div>
         </div>
       </BaseCard>
@@ -100,6 +114,34 @@
         </div>
       </BaseCard>
     </div>
+
+    <!-- 收據模態框 -->
+    <div v-if="showReceiptModal" class="receipt-modal-overlay" @click="closeReceipt">
+      <div class="receipt-modal" @click.stop>
+        <div class="receipt-modal-header">
+          <h3>收據預覽</h3>
+          <button class="close-button" @click="closeReceipt">
+            <font-awesome-icon icon="times" />
+          </button>
+        </div>
+        <div class="receipt-modal-content">
+          <BaseReceipt 
+            v-if="receiptData" 
+            :receipt="receiptData" 
+            ref="receiptComponent"
+          />
+        </div>
+        <div class="receipt-modal-actions">
+          <BaseButton variant="secondary" @click="closeReceipt">
+            關閉
+          </BaseButton>
+          <BaseButton variant="primary" @click="printReceipt">
+            <font-awesome-icon icon="print" />
+            列印收據
+          </BaseButton>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -110,6 +152,8 @@ import { orderService, orderAPI } from '@/services/api'
 import BaseCard from '../../components/base/BaseCard.vue'
 import BaseButton from '../../components/base/BaseButton.vue'
 import BaseTag from '../../components/base/BaseTag.vue'
+import BaseReceipt from '../../components/base/BaseReceipt.vue'
+import { generateReceiptData } from '../../utils/receiptUtils'
 
 const router = useRouter()
 
@@ -118,6 +162,11 @@ const currentOrder = ref(null)
 const orders = ref([])
 const loading = ref(false)
 const error = ref(null)
+
+// 收據相關
+const showReceiptModal = ref(false)
+const receiptData = ref(null)
+const receiptComponent = ref(null)
 
 // 狀態標籤映射
 const statusMap = {
@@ -377,6 +426,47 @@ const proceedToCheckout = async () => {
 
 const goToMenu = () => {
   router.push('/menu')
+}
+
+// 顯示收據
+const showReceipt = () => {
+  try {
+    // 獲取桌子資訊
+    const storedTableInfo = sessionStorage.getItem('currentTable')
+    if (!storedTableInfo) {
+      alert('找不到桌子資訊，請重新掃描QR碼')
+      return
+    }
+
+    const tableData = JSON.parse(storedTableInfo)
+    
+    // 獲取員工資訊（從localStorage或sessionStorage）
+    const employeeInfo = JSON.parse(localStorage.getItem('employeeInfo') || sessionStorage.getItem('employeeInfo') || '{}')
+    const employeeId = employeeInfo.employeeId || '001' // 預設員工編號
+    
+    // 生成收據數據
+    receiptData.value = generateReceiptData(currentOrder.value, employeeId, tableData.name)
+    
+    // 顯示收據模態框
+    showReceiptModal.value = true
+  } catch (error) {
+    console.error('生成收據失敗:', error)
+    alert('生成收據失敗，請稍後再試')
+  }
+}
+
+// 列印收據
+const printReceipt = () => {
+  if (receiptData.value && receiptComponent.value) {
+    // 調用收據組件的列印方法
+    receiptComponent.value.printReceipt()
+  }
+}
+
+// 關閉收據模態框
+const closeReceipt = () => {
+  showReceiptModal.value = false
+  receiptData.value = null
 }
 
 // 格式化選項文字顯示
