@@ -285,6 +285,9 @@ const showReceiptModal = ref(false)
 const currentReceiptData = ref(null)
 const receiptComponent = ref(null)
 
+// 結帳狀態管理
+const isCheckingOut = ref(false)
+
 // 載入桌次數據
 const loadTables = async () => {
   try {
@@ -558,7 +561,16 @@ const regenerateQRCode = async (tableId) => {
 
 // 結帳功能
 const checkoutTable = async (tableId) => {
+  // 防重複調用檢查
+  if (isCheckingOut.value) {
+    console.log('正在結帳中，忽略重複調用')
+    return
+  }
+  
   try {
+    isCheckingOut.value = true
+    console.log('開始結帳流程，設置 isCheckingOut 為 true')
+    
     // 先獲取桌子的總金額
     const totalResponse = await orderAPI.getTableTotal(tableId)
     
@@ -600,6 +612,12 @@ const checkoutTable = async (tableId) => {
   } catch (error) {
     console.error('結帳失敗:', error)
     alert('結帳失敗：' + (error.message || '請稍後再試'))
+  } finally {
+    // 延遲重置標誌，防止快速重複點擊
+    setTimeout(() => {
+      isCheckingOut.value = false
+      console.log('延遲重置 isCheckingOut 為 false')
+    }, 1000) // 1秒延遲
   }
 }
 
@@ -650,11 +668,24 @@ const generateAndShowReceipt = async (tableId, checkoutData) => {
     
     console.log('最終餐廳名稱:', storeName)
     
-    // 處理結帳數據格式，確保有 items 屬性
+    // 處理結帳數據格式，確保有 items 屬性和ID信息
     const orderData = {
       ...checkoutData,
-      items: checkoutData.allItems || checkoutData.items || []
+      items: checkoutData.allItems || checkoutData.items || [],
+      // 確保包含訂單ID和編號信息（同時設置 _id 和 id 字段以兼容不同函數）
+      _id: checkoutData.orderId,
+      id: checkoutData.orderId,
+      orderId: checkoutData.orderId,
+      orderNumber: checkoutData.orderNumber
     }
+    
+    console.log('處理後的訂單數據:', {
+      orderId: orderData.orderId,
+      orderNumber: orderData.orderNumber,
+      tableNumber: orderData.tableNumber,
+      totalAmount: orderData.totalAmount,
+      itemsCount: orderData.items.length
+    })
     
     console.log('=== 收據數據 ===')
     console.log('員工編號:', employeeId)

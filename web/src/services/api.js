@@ -374,8 +374,8 @@ export const orderAPI = {
   },
   
   // 新的桌子結帳功能 - 合併所有批次（顧客使用，不需要商家ID）
-  checkoutTable: (tableId) => {
-    return api.post(`/orders/table/${tableId}/checkout`)
+  checkoutTable: (tableId, data = {}) => {
+    return api.post(`/orders/table/${tableId}/checkout`, data)
   },
   
   // 獲取桌子的所有批次訂單（顧客使用，不需要商家ID）
@@ -496,6 +496,84 @@ export const orderService = {
   cancelOrder: orderAPI.cancelOrder,
   getOrderStats: orderAPI.getOrderStats,
   exportHistoryOrders: orderAPI.exportHistoryOrders,
+};
+
+// 收據 API
+export const receiptAPI = {
+  // 創建收據
+  createReceipt: (data) => {
+    const merchantId = resolveActiveMerchantId()
+    const params = merchantId ? { merchantId } : {}
+    return api.post('/receipts', data, { params })
+  },
+  
+  // 獲取收據列表
+  getReceipts: (params = {}) => {
+    const merchantId = resolveActiveMerchantId()
+    const finalParams = merchantId ? { ...params, merchantId } : params
+    return api.get('/receipts', { params: finalParams })
+  },
+  
+  // 獲取單個收據
+  getReceipt: (receiptId) => {
+    const merchantId = resolveActiveMerchantId()
+    const params = merchantId ? { merchantId } : {}
+    return api.get(`/receipts/${receiptId}`, { params })
+  },
+  
+  // 根據帳單號碼獲取收據
+  getReceiptByBillNumber: (billNumber) => {
+    const merchantId = resolveActiveMerchantId()
+    const params = merchantId ? { merchantId } : {}
+    return api.get(`/receipts/bill/${billNumber}`, { params })
+  },
+  
+  // 根據訂單ID獲取收據
+  getReceiptByOrderId: (orderId) => {
+    const merchantId = resolveActiveMerchantId()
+    const params = merchantId ? { merchantId } : {}
+    return api.get(`/receipts/order/${orderId}`, { params })
+  },
+  
+  // 更新收據列印次數
+  updatePrintCount: (receiptId) => {
+    const merchantId = resolveActiveMerchantId()
+    const params = merchantId ? { merchantId } : {}
+    return api.patch(`/receipts/${receiptId}/print`, {}, { params })
+  },
+  
+  // 重新列印收據
+  reprintReceipt: (receiptId) => {
+    const merchantId = resolveActiveMerchantId()
+    const params = merchantId ? { merchantId } : {}
+    return api.post(`/receipts/${receiptId}/reprint`, {}, { params })
+  },
+  
+  // 作廢收據
+  voidReceipt: (receiptId, reason) => {
+    const merchantId = resolveActiveMerchantId()
+    const params = merchantId ? { merchantId } : {}
+    return api.patch(`/receipts/${receiptId}/void`, { reason }, { params })
+  },
+  
+  // 獲取收據統計
+  getReceiptStats: (params = {}) => {
+    const merchantId = resolveActiveMerchantId()
+    const finalParams = merchantId ? { ...params, merchantId } : params
+    return api.get('/receipts/stats', { params: finalParams })
+  }
+};
+
+// 收據服務
+export const receiptService = {
+  createReceipt: receiptAPI.createReceipt,
+  getReceipts: receiptAPI.getReceipts,
+  getReceipt: receiptAPI.getReceipt,
+  getReceiptByBillNumber: receiptAPI.getReceiptByBillNumber,
+  updatePrintCount: receiptAPI.updatePrintCount,
+  reprintReceipt: receiptAPI.reprintReceipt,
+  voidReceipt: receiptAPI.voidReceipt,
+  getReceiptStats: receiptAPI.getReceiptStats
 };
 
 // 報表 API

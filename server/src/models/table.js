@@ -71,7 +71,7 @@ const tableSchema = new mongoose.Schema({
   // 桌次狀態 - Table status
   status: {
     type: String,
-    enum: ['available', 'occupied', 'reserved'],
+    enum: ['available', 'occupied', 'reserved', 'maintenance', 'inactive'],
     default: 'available'
   }
 }, {

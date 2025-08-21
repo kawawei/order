@@ -952,3 +952,201 @@
 - 控制台日誌有助於調試和監控問題
 
 *時間：2025-08-20 22:15*
+
+## 2025-08-21
+### 收據系統架構分析與數據流程
+
+#### 1. 收據數據生成流程
+
+**前端收據生成 (receiptUtils.js)**
+- **觸發時機**: 結帳時或列印收據時
+- **數據來源**: 
+  - 訂單對象 (包含 items, totalAmount, orderNumber 等)
+  - 員工信息 (employeeId)
+  - 桌次信息 (tableNumber)
+  - 餐廳信息 (storeName)
+- **生成過程**:
+  1. 調用 `generateReceiptData()` 函數
+  2. 使用 `mergeItems()` 合併相同菜品
+  3. 生成隨機10位帳單號碼 (`generateBillNumber()`)
+  4. 格式化結帳時間 (`formatDateTime()`)
+  5. 構建收據數據結構
+
+**收據數據結構**:
+```javascript
+{
+  billNumber: '4155315174',           // 10位隨機帳單號
+  tableNumber: '桌號 2',              // 桌次編號
+  employeeId: 'admin',                // 員工編號
+  checkoutTime: '2025/08/21 21:49',  // 結帳時間
+  orderId: '68a723c24c8aa3d1b22593c0', // 關聯訂單ID
+  orderNumber: 'T2-202508210023001',  // 訂單編號
+  items: [...],                       // 合併後的菜品列表
+  subtotal: 65,                       // 小計
+  total: 65,                          // 總計
+  storeName: 'test11'                 // 餐廳名稱
+}
+```
+
+#### 2. 收據數據儲存機制
+
+**前端儲存**:
+- **臨時儲存**: 收據數據僅在前端記憶體中生成和顯示
+- **不持久化**: 前端不將收據數據保存到 localStorage 或 sessionStorage
+- **即時生成**: 每次需要顯示收據時重新生成
+
+**後端儲存**:
+- **數據庫模型**: `Receipt` 模型 (server/src/models/receipt.js)
+- **儲存時機**: 結帳完成時自動創建收據記錄
+- **儲存方式**: 通過 `Receipt.createFromOrder()` 靜態方法
+
+**收據數據庫結構**:
+```javascript
+{
+  billNumber: String,        // 帳單號碼 (唯一)
+  orderId: ObjectId,         // 關聯訂單ID
+  tableId: ObjectId,         // 關聯桌次ID
+  tableNumber: String,       // 桌次編號
+  merchantId: ObjectId,      // 關聯商家ID
+  items: [receiptItemSchema], // 收據項目
+  subtotal: Number,          // 小計
+  total: Number,             // 總計
+  employeeId: String,        // 員工編號
+  employeeName: String,      // 員工姓名
+  checkoutTime: Date,        // 結帳時間
+  storeName: String,         // 餐廳名稱
+  status: String,            // 收據狀態 (active/void/refunded)
+  printCount: Number,        // 列印次數
+  lastPrintedAt: Date        // 最後列印時間
+}
+```
+
+#### 3. 收據與訂單關聯機制
+
+**關聯關係**:
+- **一對一關係**: 每個訂單對應一個收據
+- **主鍵關聯**: 收據的 `orderId` 字段關聯到訂單的 `_id`
+- **業務邏輯**: 結帳時自動創建收據，確保數據一致性
+
+**關聯驗證**:
+```javascript
+// 收據創建時的關聯驗證
+console.log('收據與訂單關聯信息:', {
+  receiptBillNumber: receiptData.billNumber,
+  associatedOrderId: receiptData.orderId,
+  associatedOrderNumber: receiptData.orderNumber,
+  tableNumber: tableNumber
+});
+```
+
+#### 4. 收據生成觸發點
+
+**結帳時收據生成**:
+1. 用戶點擊結帳按鈕
+2. 調用 `checkoutTable` API
+3. 後端合併訂單批次
+4. 自動創建收據記錄
+5. 前端生成收據顯示數據
+
+**歷史訂單收據列印**:
+1. 商家在後台查看歷史訂單
+2. 點擊列印收據按鈕
+3. 前端調用 `generateReceiptData()` 重新生成收據
+4. 使用原始訂單數據和員工信息
+
+#### 5. 數據流程圖
+
+```
+用戶結帳
+    ↓
+checkoutTable API
+    ↓
+後端合併訂單批次
+    ↓
+Receipt.createFromOrder()
+    ↓
+保存收據到數據庫
+    ↓
+返回結帳數據
+    ↓
+前端生成收據顯示
+    ↓
+顯示收據模態框
+```
+
+#### 6. 關鍵技術實現
+
+**帳單號碼生成**:
+```javascript
+// 前端生成 (receiptUtils.js)
+export function generateBillNumber() {
+  return Math.floor(1000000000 + Math.random() * 9000000000).toString()
+}
+
+// 後端生成 (receipt.js)
+receiptSchema.statics.generateBillNumber = function() {
+  return Math.floor(1000000000 + Math.random() * 9000000000).toString();
+};
+```
+
+**菜品合併邏輯**:
+```javascript
+export function mergeItems(items) {
+  const merged = {}
+  items.forEach(item => {
+    const key = String(item.dishId || item.id)
+    if (merged[key]) {
+      merged[key].quantity += item.quantity
+      merged[key].totalPrice = merged[key].quantity * merged[key].unitPrice
+    } else {
+      merged[key] = { ...item, totalPrice: item.quantity * item.unitPrice }
+    }
+  })
+  return Object.values(merged)
+}
+```
+
+#### 7. 安全性與數據完整性
+
+**數據驗證**:
+- 收據創建前驗證訂單存在性
+- 檢查訂單是否屬於當前商家
+- 防止重複收據創建
+- 帳單號碼唯一性保證
+
+**關聯完整性**:
+- 收據必須關聯有效的訂單
+- 收據必須關聯有效的桌次
+- 收據必須關聯有效的商家
+- 收據項目必須關聯有效的菜品
+
+#### 8. 性能考量
+
+**前端優化**:
+- 收據數據即時生成，不佔用持久化存儲
+- 菜品合併算法優化，減少重複計算
+- 模態框組件按需加載
+
+**後端優化**:
+- 收據數據庫索引優化
+- 批量查詢收據統計數據
+- 收據創建事務性保證
+
+#### 9. 擴展性設計
+
+**收據狀態管理**:
+- 支持收據作廢 (void)
+- 支持收據退款 (refunded)
+- 支持收據重新列印
+
+**多語言支持**:
+- 收據模板支持多語言
+- 時間格式本地化
+- 貨幣格式本地化
+
+**列印功能**:
+- 記錄列印次數
+- 記錄最後列印時間
+- 支持多種列印格式
+
+*時間：2025-08-21 21:49*

@@ -216,8 +216,10 @@ exports.checkoutOrder = catchAsync(async (req, res, next) => {
   // 購物車資料存儲在前端 sessionStorage 中，不需要後端清空
   // 前端會在結帳成功後自動清空購物車
 
-  // 可以選擇是否重置桌子狀態為可用
-  // 這裡暫時不重置，讓服務員手動重置桌子狀態
+  // 結帳完成後，自動將桌次狀態重置為可用
+  await table.updateStatus('available');
+  
+  console.log(`桌次 ${table.tableNumber} 結帳完成，狀態已重置為可用`);
   
   res.status(200).json({
     status: 'success',
@@ -736,39 +738,70 @@ exports.getTableBatches = catchAsync(async (req, res, next) => {
   });
 });
 
-// 結帳功能 - 合併所有批次
+// 桌次結帳功能 - 合併所有批次進行結帳
 exports.checkoutTable = catchAsync(async (req, res, next) => {
   const { tableId } = req.params;
-
-  // 獲取合併後的訂單數據
-  const checkoutData = await Order.mergeBatchesForCheckout(tableId);
   
-  if (!checkoutData) {
-    return next(new AppError('沒有找到未結帳的訂單', 404));
+  console.log('=== checkoutTable 調用調試信息 ===');
+  console.log('桌次ID:', tableId);
+  console.log('調用時間:', new Date().toISOString());
+  
+  // 使用 Order 模型的靜態方法合併桌次數據
+  const mergedData = await Order.mergeBatchesForCheckout(tableId);
+  
+  if (!mergedData) {
+    return next(new AppError('此桌次目前沒有任何訂單可以結帳', 404));
   }
-
-  // 更新所有批次狀態為 completed
-  await Order.updateMany(
-    { 
-      tableId, 
-      status: { $nin: ['completed', 'cancelled'] } 
-    },
-    { 
-      status: 'completed',
-      completedAt: new Date()
-    }
-  );
-
-  // 更新桌子狀態為可用
+  
+  console.log('合併的桌次數據:', {
+    tableId: mergedData.tableId,
+    tableNumber: mergedData.tableNumber,
+    batchCount: mergedData.batchCount,
+    totalAmount: mergedData.totalAmount,
+    itemsCount: mergedData.allItems.length
+  });
+  
+  // 構建訂單數據，包含必要的ID信息
+  const orderData = {
+    tableId: mergedData.tableId,
+    tableNumber: mergedData.tableNumber,
+    merchantId: mergedData.merchantId,
+    batches: mergedData.batches,
+    allItems: mergedData.allItems,
+    totalAmount: mergedData.totalAmount,
+    batchCount: mergedData.batchCount,
+    // 添加主要訂單的ID信息（使用第一個批次）
+    orderId: mergedData.batches[0]._id || mergedData.batches[0].id,
+    orderNumber: mergedData.batches[0].orderNumber
+  };
+  
+  // 添加調試日誌來檢查批次數據結構
+  console.log('第一個批次數據:', {
+    _id: mergedData.batches[0]._id,
+    id: mergedData.batches[0].id,
+    orderNumber: mergedData.batches[0].orderNumber,
+    tableNumber: mergedData.batches[0].tableNumber
+  });
+  
+  console.log('返回的訂單數據包含ID信息:', {
+    orderId: orderData.orderId,
+    orderNumber: orderData.orderNumber,
+    tableNumber: orderData.tableNumber,
+    totalAmount: orderData.totalAmount
+  });
+  
+  // 結帳完成後，自動將桌次狀態重置為可用
   const table = await Table.findById(tableId);
   if (table) {
     await table.updateStatus('available');
+    console.log(`桌次 ${table.tableNumber} 結帳完成，狀態已重置為可用`);
+  } else {
+    console.log(`找不到桌次 ${tableId}，無法更新狀態`);
   }
-
+  
   res.status(200).json({
     status: 'success',
-    message: '結帳成功',
-    data: checkoutData
+    data: orderData
   });
 });
 

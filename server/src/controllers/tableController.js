@@ -151,8 +151,12 @@ exports.startOrdering = catchAsync(async (req, res, next) => {
     return next(new AppError('此桌次目前未開放使用', 400));
   }
   
+  // 添加調試信息
+  console.log(`開始點餐 - 桌次 ${table.tableNumber} 狀態: ${table.status}, 是否啟用: ${table.isActive}`);
+  
   // 檢查桌次狀態，只有 available 或 reserved 狀態才能開始點餐
   if (!['available', 'reserved'].includes(table.status)) {
+    console.log(`桌次狀態檢查失敗 - 當前狀態: ${table.status}, 允許的狀態: available, reserved`);
     return next(new AppError('此桌次目前無法開始點餐', 400));
   }
   

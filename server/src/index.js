@@ -16,6 +16,7 @@ const roleRoutes = require('./routes/roleRoutes');
 const employeeRoutes = require('./routes/employeeRoutes');
 const inventoryRoutes = require('./routes/inventoryRoutes');
 const inventoryCategoryRoutes = require('./routes/inventoryCategoryRoutes');
+const receiptRoutes = require('./routes/receiptRoutes');
 
 // 配置 CORS 選項
 const allowedOriginsEnv = process.env.CORS_ORIGIN || 'http://localhost:5173,http://127.0.0.1:5173'
@@ -68,6 +69,7 @@ app.use('/api/v1/inventory', inventoryRoutes);
 app.use('/api/v1/inventory-categories', inventoryCategoryRoutes);
 app.use('/api/v1/roles', roleRoutes);
 app.use('/api/v1/employees', employeeRoutes);
+app.use('/api/v1/receipts', receiptRoutes);
 
 // 處理未找到的路由
 app.all('*', (req, res, next) => {
