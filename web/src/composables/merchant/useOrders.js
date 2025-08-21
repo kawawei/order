@@ -11,6 +11,11 @@ export function useOrders(restaurantId = null) {
   const showOrderDetails = ref(false)
   const selectedOrder = ref(null)
 
+  // 收據預覽相關
+  const showReceiptPreview = ref(false)
+  const receiptData = ref(null)
+  const receiptComponent = ref(null)
+
   // 當前日期
   const currentDate = computed(() => {
     return new Date().toLocaleDateString('zh-TW', {
@@ -856,87 +861,24 @@ export function useOrders(restaurantId = null) {
         });
         
         // 使用儲存的收據數據生成收據
-        const receiptData = generateReceiptFromStoredData(receipt);
-        console.log('生成的收據數據:', receiptData);
+        const generatedReceiptData = generateReceiptFromStoredData(receipt);
+        console.log('生成的收據數據:', generatedReceiptData);
         
-                 // 使用更友好的方式顯示收據
-         console.log('準備顯示收據...');
-         
-                   // 創建收據顯示的 HTML
-          const receiptHTML = `
-            <div style="font-family: 'Courier New', monospace; max-width: 300px; margin: 0 auto; border: 1px solid #ccc; padding: 15px; background-color: white;">
-              <div style="text-align: center; margin-bottom: 20px; border-bottom: 2px solid #000; padding-bottom: 10px;">
-                <h2>收據</h2>
-                <p>${receiptData.storeName}</p>
-              </div>
-              <div style="margin-bottom: 15px;">
-                <div style="display: flex; justify-content: space-between; margin-bottom: 5px; font-size: 14px;">
-                  <span>桌次:</span>
-                  <span>${receiptData.tableNumber}</span>
-                </div>
-                <div style="display: flex; justify-content: space-between; margin-bottom: 5px; font-size: 14px;">
-                  <span>訂單編號:</span>
-                  <span>${receiptData.orderNumber}</span>
-                </div>
-                <div style="display: flex; justify-content: space-between; margin-bottom: 5px; font-size: 14px;">
-                  <span>結帳時間:</span>
-                  <span>${receiptData.checkoutTime}</span>
-                </div>
-                <div style="display: flex; justify-content: space-between; margin-bottom: 5px; font-size: 14px;">
-                  <span>服務員:</span>
-                  <span>${receiptData.employeeName || receiptData.employeeId}</span>
-                </div>
-              </div>
-              <div style="margin-bottom: 15px;">
-                ${receiptData.items.map(item => `
-                  <div style="display: flex; justify-content: space-between; margin-bottom: 5px; font-size: 14px;">
-                    <span>${item.name} x${item.quantity}</span>
-                    <span>NT$ ${item.totalPrice}</span>
-                  </div>
-                `).join('')}
-              </div>
-              <div style="border-top: 1px solid #000; padding-top: 10px; font-weight: bold; font-size: 16px;">
-                <div style="display: flex; justify-content: space-between;">
-                  <span>總計:</span>
-                  <span>NT$ ${receiptData.total}</span>
-                </div>
-              </div>
-              <div style="text-align: center; margin-top: 20px; font-size: 12px; border-top: 1px solid #ccc; padding-top: 10px;">
-                <p>感謝您的惠顧</p>
-                <p>歡迎再次光臨</p>
-              </div>
-            </div>
-          `;
-         
-                   // 使用 SweetAlert2 或其他彈窗庫顯示收據
-          // 如果沒有 SweetAlert2，使用原生 alert 顯示基本信息
-          const receiptInfo = `
- 收據信息：
- 桌次: ${receiptData.tableNumber}
- 訂單編號: ${receiptData.orderNumber}
- 結帳時間: ${receiptData.checkoutTime}
- 服務員: ${receiptData.employeeName || receiptData.employeeId}
- 總計: NT$ ${receiptData.total}
-
- 項目:
- ${receiptData.items.map(item => `  ${item.name} x${item.quantity} - NT$ ${item.totalPrice}`).join('\n')}
-
- 收據已準備好，請手動列印或截圖保存。
-          `;
-         
-         console.log('顯示收據信息...');
-         alert(receiptInfo);
-         
-         console.log('收據信息已顯示');
+        // 顯示收據預覽
+        console.log('準備顯示收據預覽...');
+        receiptData.value = generatedReceiptData;
+        showReceiptPreview.value = true;
+        
+        console.log('收據預覽已顯示');
       } else {
-        console.log('找不到收據數據，使用即時生成');
-        // 如果找不到儲存的收據，使用即時生成的方式
+        console.log('找不到收據數據，顯示錯誤訊息');
+        // 如果找不到儲存的收據，顯示錯誤訊息
         if (order.tableOrderNumber) {
-          console.log('顯示桌次訂單列印訊息');
-          alert(`正在列印桌次訂單 ${order.tableOrderNumber} 的收據...\n桌號：${order.tableNumber}\n批次數：${order.batchCount}\n總金額：NT$ ${order.totalAmount}`)
+          console.log('顯示桌次訂單錯誤訊息');
+          alert(`無法找到桌次訂單 ${order.tableOrderNumber} 的收據資料，請聯繫系統管理員。`)
         } else {
-          console.log('顯示單個訂單列印訊息');
-          alert(`正在列印訂單 ${order.orderNumber} 的收據...`)
+          console.log('顯示單個訂單錯誤訊息');
+          alert(`無法找到訂單 ${order.orderNumber} 的收據資料，請聯繫系統管理員。`)
         }
       }
       
@@ -945,6 +887,19 @@ export function useOrders(restaurantId = null) {
       console.error('列印收據失敗:', error);
       console.log('=== 前端收據列印調試失敗 ===');
       alert('列印收據失敗，請重試');
+    }
+  }
+
+  // 關閉收據預覽
+  const closeReceiptPreview = () => {
+    showReceiptPreview.value = false;
+    receiptData.value = null;
+  }
+
+  // 從收據預覽列印
+  const printReceiptFromPreview = () => {
+    if (receiptComponent.value) {
+      receiptComponent.value.printReceipt();
     }
   }
 
@@ -1179,6 +1134,11 @@ export function useOrders(restaurantId = null) {
     showOrderDetails,
     selectedOrder,
     
+    // 收據預覽狀態
+    showReceiptPreview,
+    receiptData,
+    receiptComponent,
+    
     // 配置數據
     orderTabs,
     historyOrdersColumns,
@@ -1191,6 +1151,8 @@ export function useOrders(restaurantId = null) {
     markAsDelivered,
     viewOrderDetails,
     printReceipt,
+    closeReceiptPreview,
+    printReceiptFromPreview,
     exportHistoryOrders,
     formatTime,
     formatDateTime,

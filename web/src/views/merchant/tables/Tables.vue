@@ -692,8 +692,14 @@ const generateAndShowReceipt = async (tableId, checkoutData) => {
     console.log('餐廳名稱:', storeName)
     console.log('桌號:', `桌號 ${table.tableNumber}`)
     
-    // 生成收據數據
-    const receiptData = generateReceiptData(orderData, employeeId, `桌號 ${table.tableNumber}`, storeName)
+    // 生成收據數據，使用後端返回的收據號碼
+    const receiptData = generateReceiptData(
+      orderData, 
+      employeeId, 
+      `桌號 ${table.tableNumber}`, 
+      storeName,
+      checkoutData.receiptOrderNumber // 使用後端生成的收據號碼
+    )
     
     console.log('生成的收據數據:', receiptData)
     

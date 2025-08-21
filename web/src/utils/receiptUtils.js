@@ -129,6 +129,14 @@ export function generateReceiptData(order, employeeId, tableNumber, storeName = 
     storeName: storeName
   };
   
+  // 如果有傳入的收據號碼，優先使用
+  if (existingBillNumber) {
+    receiptData.billNumber = existingBillNumber;
+    console.log('使用傳入的收據號碼:', existingBillNumber);
+  } else {
+    console.log('生成新的收據號碼:', receiptData.billNumber);
+  }
+  
   console.log('生成的收據數據:', {
     billNumber: receiptData.billNumber,
     tableNumber: receiptData.tableNumber,

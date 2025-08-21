@@ -460,12 +460,35 @@
         </BaseButton>
       </template>
     </BaseDialog>
+
+    <!-- 收據預覽對話框 -->
+    <BaseDialog
+      v-model="showReceiptPreview"
+      title="收據預覽"
+      size="large"
+    >
+      <div v-if="receiptData" class="receipt-preview">
+        <BaseReceipt 
+          :receipt="receiptData" 
+          ref="receiptComponent"
+        />
+      </div>
+      
+      <template #footer>
+        <BaseButton variant="secondary" @click="closeReceiptPreview">關閉</BaseButton>
+        <BaseButton v-if="receiptData" variant="primary" @click="printReceiptFromPreview">
+          <font-awesome-icon icon="print" />
+          列印收據
+        </BaseButton>
+      </template>
+    </BaseDialog>
   </div>
 </template>
 
 <script setup>
 import { useRoute } from 'vue-router'
 import { useOrders } from '../../../composables/merchant/useOrders'
+import BaseReceipt from '../../../components/base/BaseReceipt.vue'
 import './Orders.css'
 
 const route = useRoute()
@@ -495,6 +518,11 @@ const {
   showOrderDetails,
   selectedOrder,
   
+  // 收據預覽狀態
+  showReceiptPreview,
+  receiptData,
+  receiptComponent,
+  
   // 配置數據
   orderTabs,
   historyOrdersColumns,
@@ -507,6 +535,8 @@ const {
   markAsDelivered,
   viewOrderDetails,
   printReceipt,
+  closeReceiptPreview,
+  printReceiptFromPreview,
   exportHistoryOrders,
   formatTime,
   formatDateTime,
