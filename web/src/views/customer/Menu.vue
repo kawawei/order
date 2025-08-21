@@ -33,7 +33,7 @@
             <circle cx="20" cy="21" r="1"></circle>
             <path d="m1 1 4 4 2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path>
           </svg>
-          購物車 ({{ cartItems.length }})
+          購物車 ({{ cartTotalItems }})
         </BaseButton>
       </div>
       
@@ -216,8 +216,8 @@
         <BaseButton variant="secondary" @click="showOptionsDialog = false">
           取消
         </BaseButton>
-        <BaseButton variant="primary" @click="addConfiguredItemToCart">
-          確認送出
+        <BaseButton variant="primary" @click.stop="addConfiguredItemToCart" :disabled="isSubmitting">
+          {{ isSubmitting ? '處理中...' : '確認送出' }}
         </BaseButton>
       </template>
     </BaseDialog>

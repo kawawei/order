@@ -66,6 +66,9 @@ export default {
     const showOptionsDialog = ref(false)
     const selectedItem = ref(null)
     const selectedOptions = ref({})
+    
+    // 防止重複提交的標誌
+    const isSubmitting = ref(false)
 
     // 選項組標籤映射 - Option Group Label Mapping
     const optionGroupLabels = {
@@ -116,6 +119,10 @@ export default {
 
     const cartTotal = computed(() => {
       return cartItems.value.reduce((total, item) => total + item.totalPrice, 0)
+    })
+
+    const cartTotalItems = computed(() => {
+      return cartItems.value.reduce((total, item) => total + item.quantity, 0)
     })
 
     // 方法 - Methods
@@ -184,16 +191,36 @@ export default {
 
     // 直接添加到購物車（無選項商品）- Direct add to cart for items without options
     const addToCart = (item) => {
-      const cartItem = {
-        id: item.id,
-        name: item.name,
-        basePrice: item.basePrice,
-        quantity: 1,
-        totalPrice: item.basePrice,
-        selectedOptions: null
+      console.log('加入商品到購物車:', item)
+      
+      // 檢查購物車中是否已存在相同商品（無選項）
+      const existingItemIndex = cartItems.value.findIndex(cartItem => 
+        cartItem.id === item.id && !cartItem.selectedOptions
+      )
+      
+      if (existingItemIndex !== -1) {
+        // 如果已存在，增加數量
+        cartItems.value[existingItemIndex].quantity += 1
+        cartItems.value[existingItemIndex].totalPrice = cartItems.value[existingItemIndex].basePrice * cartItems.value[existingItemIndex].quantity
+        console.log('增加現有商品數量:', cartItems.value[existingItemIndex])
+      } else {
+        // 如果不存在，添加新商品
+        const cartItem = {
+          id: item.id,
+          name: item.name,
+          basePrice: item.basePrice,
+          quantity: 1,
+          totalPrice: item.basePrice,
+          selectedOptions: null
+        }
+        
+        cartItems.value.push(cartItem)
+        console.log('新增購物車商品:', cartItem)
       }
       
-      cartItems.value.push(cartItem)
+      // 保存到 sessionStorage
+      saveCartToStorage()
+      console.log('目前購物車內容:', cartItems.value)
     }
 
     // 新的點餐方法 - New order method
@@ -209,29 +236,87 @@ export default {
     }
 
     const addConfiguredItemToCart = () => {
+      console.log('addConfiguredItemToCart 被調用，isSubmitting:', isSubmitting.value)
+      
+      // 防止重複點擊 - 立即檢查並設置
+      if (isSubmitting.value) {
+        console.warn('正在處理中，請勿重複點擊')
+        return
+      }
+      
+      // 立即設置為處理中狀態，防止重複調用
+      isSubmitting.value = true
+      console.log('設置 isSubmitting 為 true')
+      
+      if (!selectedItem.value) {
+        console.warn('沒有選中的商品')
+        isSubmitting.value = false
+        return
+      }
+      
+      // 檢查選項是否為空
+      if (Object.keys(selectedOptions.value).length === 0) {
+        console.warn('沒有選擇任何選項，使用默認選項')
+        // 為每個選項類型設置默認選項
+        if (selectedItem.value.options && selectedItem.value.customOptionsData) {
+          selectedItem.value.options.forEach(optionType => {
+            const options = getOptions(optionType)
+            if (options && options.length > 0) {
+              // 選擇第一個選項作為默認
+              selectedOptions.value[optionType] = options[0]
+            }
+          })
+        }
+      }
+      
       console.log('加入配置好的商品到購物車')
       console.log('選中的商品:', selectedItem.value)
       console.log('選中的選項:', selectedOptions.value)
       
-      // 直接創建新的購物車商品 - Create new cart item directly
-      const cartItem = {
-        id: selectedItem.value.id,
-        name: selectedItem.value.name,
-        basePrice: selectedItem.value.basePrice,
-        quantity: 1,
-        totalPrice: calculateItemPrice(),
-        selectedOptions: { ...selectedOptions.value }
+      // 檢查購物車中是否已存在相同配置的商品
+      const selectedOptionsString = JSON.stringify(selectedOptions.value)
+      const existingItemIndex = cartItems.value.findIndex(cartItem => {
+        if (cartItem.id !== selectedItem.value.id) return false
+        
+        // 比較選項配置
+        const cartItemOptionsString = JSON.stringify(cartItem.selectedOptions || {})
+        return cartItemOptionsString === selectedOptionsString
+      })
+      
+      if (existingItemIndex !== -1) {
+        // 如果已存在相同配置的商品，增加數量
+        const existingItem = cartItems.value[existingItemIndex]
+        existingItem.quantity += 1
+        existingItem.totalPrice = calculateItemPrice() * existingItem.quantity
+        console.log('增加現有商品數量:', existingItem)
+      } else {
+        // 如果不存在，添加新商品
+        const cartItem = {
+          id: selectedItem.value.id,
+          name: selectedItem.value.name,
+          basePrice: selectedItem.value.basePrice,
+          quantity: 1,
+          totalPrice: calculateItemPrice(),
+          selectedOptions: { ...selectedOptions.value }
+        }
+        
+        cartItems.value.push(cartItem)
+        console.log('新增購物車商品:', cartItem)
       }
       
-      // 加入購物車 - Add to cart
-      cartItems.value.push(cartItem)
-      saveCartToStorage() // 保存到 sessionStorage
-      console.log('新增購物車商品:', cartItem)
+      // 保存到 sessionStorage
+      saveCartToStorage()
       console.log('目前購物車內容:', cartItems.value)
       
       // 重置選項和關閉對話框 - Reset options and close dialog
       selectedOptions.value = {}
       showOptionsDialog.value = false
+      
+      // 延遲重置提交標誌，防止快速重複調用
+      setTimeout(() => {
+        isSubmitting.value = false
+        console.log('延遲重置 isSubmitting 為 false')
+      }, 500)
     }
 
     const updateQuantity = (index, newQuantity) => {
@@ -613,12 +698,14 @@ export default {
       showOptionsDialog,
       selectedItem,
       selectedOptions,
+      isSubmitting,
       loading,
       error,
       
       // Computed - 計算屬性
       filteredMenuItems,
       cartTotal,
+      cartTotalItems,
       
       // Methods - 方法
       selectCategory,
