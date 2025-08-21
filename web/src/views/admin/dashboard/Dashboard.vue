@@ -7,10 +7,22 @@
           <h1>歡迎回來，{{ userInfo.name || '管理員' }}</h1>
           <p>今天是 {{ currentDate }}，讓我們來看看今天的營運狀況</p>
         </div>
-        <div class="banner-stats">
-          <div class="quick-stat">
-            <font-awesome-icon icon="clock" />
-            <span>上次登入：{{ lastLoginTime }}</span>
+        <div class="banner-actions">
+          <div class="quick-actions">
+            <button class="action-btn primary" @click="handleViewReports">
+              <font-awesome-icon icon="chart-bar" />
+              <span>查看報表</span>
+            </button>
+            <button class="action-btn secondary" @click="handleManageUsers">
+              <font-awesome-icon icon="users" />
+              <span>餐廳管理</span>
+            </button>
+          </div>
+          <div class="banner-stats">
+            <div class="quick-stat">
+              <font-awesome-icon icon="clock" />
+              <span>上次登入：{{ lastLoginTime }}</span>
+            </div>
           </div>
         </div>
       </div>
@@ -117,7 +129,7 @@
           </BaseCard>
         </div>
 
-        <!-- 右側：營運狀況和快速操作 -->
+        <!-- 右側：營運狀況 -->
         <div class="right-panel">
           <!-- 餐廳營收比較 -->
           <BaseCard elevation="medium" class="revenue-card">
@@ -168,31 +180,6 @@
                   </div>
                 </div>
               </div>
-            </div>
-          </BaseCard>
-
-          <!-- 快速操作 -->
-          <BaseCard elevation="medium" class="actions-card">
-            <template #header>
-              <h3>快速操作</h3>
-            </template>
-            <div class="quick-actions">
-              <button class="action-btn primary">
-                <font-awesome-icon icon="plus" />
-                <span>新增餐廳</span>
-              </button>
-              <button class="action-btn secondary">
-                <font-awesome-icon icon="chart-bar" />
-                <span>查看報表</span>
-              </button>
-              <button class="action-btn secondary">
-                <font-awesome-icon icon="users" />
-                <span>管理用戶</span>
-              </button>
-              <button class="action-btn secondary">
-                <font-awesome-icon icon="cog" />
-                <span>系統設定</span>
-              </button>
             </div>
           </BaseCard>
         </div>

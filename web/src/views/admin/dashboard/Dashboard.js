@@ -206,6 +206,15 @@ export default {
       }
     }
 
+    // 快速操作按鈕處理函數
+    const handleViewReports = () => {
+      router.push('/admin/reports')
+    }
+
+    const handleManageUsers = () => {
+      router.push('/admin/restaurants')
+    }
+
     // 初始化
     onMounted(() => {
       // 設置當前日期
@@ -231,7 +240,9 @@ export default {
       totalTables,
       getRestaurantRevenue,
       getMaxTables,
-      fetchDashboardStats
+      fetchDashboardStats,
+      handleViewReports,
+      handleManageUsers
     }
   }
 }

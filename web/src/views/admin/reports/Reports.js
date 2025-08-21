@@ -743,7 +743,7 @@ export function useReports() {
   // 組件卸載時清理圖表
   onUnmounted(() => {
     // 使用統一的清理函數
-    destroyAllCharts()
+    destroyCharts()
   })
 
   return {
