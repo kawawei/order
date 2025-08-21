@@ -170,10 +170,10 @@
             <BaseButton
               variant="primary"
               size="large"
-              @click="proceedToCheckout"
-              :disabled="cartItems.length === 0"
+              @click.stop="proceedToCheckout"
+              :disabled="cartItems.length === 0 || isOrderSubmitting"
             >
-              送出
+              {{ isOrderSubmitting ? '處理中...' : '送出' }}
             </BaseButton>
           </div>
         </template>

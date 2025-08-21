@@ -332,13 +332,29 @@ export default {
       saveCartToStorage() // 保存到 sessionStorage
     }
 
+    // 訂單提交狀態管理
+    const isOrderSubmitting = ref(false)
+
     const proceedToCheckout = async () => {
+      console.log('proceedToCheckout 被調用，isOrderSubmitting:', isOrderSubmitting.value)
+      
+      // 防重複提交檢查
+      if (isOrderSubmitting.value) {
+        console.log('訂單正在提交中，忽略重複調用')
+        return
+      }
+
       if (cartItems.value.length === 0) {
         alert('購物車是空的')
         return
       }
 
+      // 立即設置為提交中狀態，防止重複調用
+      isOrderSubmitting.value = true
+      console.log('設置 isOrderSubmitting 為 true')
+
       try {
+
         // 獲取桌子資訊
         const storedTableInfo = sessionStorage.getItem('currentTable')
         if (!storedTableInfo) {
@@ -387,6 +403,12 @@ export default {
       } catch (error) {
         console.error('提交訂單失敗:', error)
         alert(`訂單提交失敗：${error.message || '請重試'}`)
+      } finally {
+        // 延遲重置提交狀態，防止快速重複調用
+        setTimeout(() => {
+          isOrderSubmitting.value = false
+          console.log('延遲重置 isOrderSubmitting 為 false')
+        }, 1000)
       }
     }
 
@@ -699,6 +721,7 @@ export default {
       selectedItem,
       selectedOptions,
       isSubmitting,
+      isOrderSubmitting,
       loading,
       error,
       

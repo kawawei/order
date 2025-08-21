@@ -869,3 +869,86 @@
 - 測試時需要檢查瀏覽器開發者工具的詳細日誌
 
 *時間：2025-08-20 21:30*
+
+## 2025-08-20 22:15
+### 購物車重複添加問題修復｜Fix duplicate item addition in shopping cart
+1. 問題描述｜Problem description
+   - 客戶端點擊"確認送出"按鈕時，商品被重複添加到購物車
+   - 同一商品可能被添加多次，導致購物車數量異常
+   - 用戶快速點擊按鈕時問題更加明顯
+   - 影響用戶體驗和購物車數據準確性
+
+2. 問題分析｜Problem analysis
+   - `addConfiguredItemToCart` 函數缺少防重複調用機制
+   - 用戶快速點擊時，函數可能被多次調用
+   - 沒有適當的狀態管理來防止重複提交
+   - 函數執行時間較長，增加了重複調用的機會
+
+3. 解決方案｜Solution
+   - **添加提交狀態管理**：
+     * 在 `web/src/views/customer/Menu.js` 中新增 `isSubmitting` 響應式變數
+     * 在函數開始時立即設置為 `true`，防止重複調用
+     * 在函數結束時延遲重置為 `false`
+   - **防重複調用機制**：
+     * 在函數入口處檢查 `isSubmitting` 狀態
+     * 如果正在提交中，直接返回，不執行後續邏輯
+     * 使用 `setTimeout` 延遲重置標誌，給足夠時間防止重複調用
+   - **錯誤處理優化**：
+     * 在各種錯誤情況下都會重置 `isSubmitting` 標誌
+     * 確保函數異常結束時不會卡住提交狀態
+
+4. 技術細節｜Technical details
+   - **狀態管理**：
+     ```javascript
+     const isSubmitting = ref(false)
+     ```
+   - **防重複調用檢查**：
+     ```javascript
+     if (isSubmitting.value) {
+       console.log('正在提交中，忽略重複調用')
+       return
+     }
+     isSubmitting.value = true
+     ```
+   - **延遲重置機制**：
+     ```javascript
+     setTimeout(() => {
+       isSubmitting.value = false
+       console.log('延遲重置 isSubmitting 為 false')
+     }, 500)
+     ```
+   - **錯誤處理**：
+     ```javascript
+     } catch (error) {
+       console.error('添加商品到購物車失敗:', error)
+       isSubmitting.value = false
+       // 錯誤處理邏輯...
+     }
+     ```
+
+5. 修正結果｜Results
+   - ✅ 防止重複添加商品到購物車
+   - ✅ 提升用戶體驗，避免購物車數據異常
+   - ✅ 支援快速點擊而不會產生重複提交
+   - ✅ 完整的錯誤處理和狀態重置機制
+   - ✅ 控制台日誌便於調試和監控
+
+6. 影響範圍｜Impact
+   - 客戶端購物車功能更加穩定可靠
+   - 提升用戶體驗，避免購物車混亂
+   - 減少後端不必要的重複請求
+   - 提高系統整體穩定性
+
+7. 相關檔案｜Related files
+   - 客戶端菜單邏輯：`web/src/views/customer/Menu.js`
+   - 購物車組件：`web/src/views/customer/Menu.vue`
+   - 購物車服務：`web/src/composables/customer/useCart.js`
+
+### 經驗總結｜Lessons learned
+- 用戶交互函數必須考慮重複調用的可能性
+- 狀態管理是防止重複提交的有效方法
+- 延遲重置機制可以進一步防止快速重複調用
+- 完整的錯誤處理確保狀態不會卡住
+- 控制台日誌有助於調試和監控問題
+
+*時間：2025-08-20 22:15*
