@@ -76,7 +76,7 @@
             <BaseButton
               variant="primary"
               size="large"
-              @click="proceedToCheckout"
+              @click.stop="proceedToCheckout"
               class="checkout-button"
             >
               <font-awesome-icon icon="credit-card" />
@@ -252,21 +252,47 @@ const formatDate = (date) => {
   }).format(dateObj)
 }
 
+// 添加防重複調用狀態
+const isCheckingOut = ref(false)
+
 const proceedToCheckout = async () => {
+  console.log('=== 結帳函數被調用 ===')
+  console.log('調用時間:', new Date().toISOString())
+  console.log('當前結帳狀態:', isCheckingOut.value)
+  
+  // 防重複調用檢查
+  if (isCheckingOut.value) {
+    console.log('正在結帳中，忽略重複調用')
+    return
+  }
+  
   try {
+    // 立即設置為結帳中狀態，防止重複調用
+    isCheckingOut.value = true
+    console.log('設置結帳狀態為 true')
+    
     // 獲取桌子資訊
+    console.log('=== 獲取桌子資訊 ===')
     const storedTableInfo = sessionStorage.getItem('currentTable')
+    console.log('儲存的桌子資訊:', storedTableInfo)
+    
     if (!storedTableInfo) {
+      console.log('找不到桌子資訊')
       alert('找不到桌子資訊，請重新掃描QR碼')
       return
     }
 
     const tableData = JSON.parse(storedTableInfo)
+    console.log('解析後的桌子資料:', tableData)
     
     // 獲取桌子的所有批次總金額
+    console.log('=== 獲取桌子總金額 ===')
+    console.log('調用 getTableTotal API，桌次 ID:', tableData.id)
     const totalResponse = await orderAPI.getTableTotal(tableData.id)
+    console.log('API 回應:', totalResponse)
     
     if (!totalResponse.data || totalResponse.data.totalAmount === 0) {
+      console.log('沒有餐點可以結帳')
       alert('目前沒有任何餐點可以結帳')
       return
     }
@@ -274,16 +300,42 @@ const proceedToCheckout = async () => {
     const totalAmount = totalResponse.data.totalAmount
     const batchCount = totalResponse.data.batchCount
     
+    // 添加詳細的調試訊息
+    console.log('=== 結帳調試訊息 ===')
+    console.log('桌次 ID:', tableData.id)
+    console.log('桌次名稱:', tableData.name)
+    console.log('批次數量:', batchCount)
+    console.log('總金額:', totalAmount)
+    console.log('當前時間:', new Date().toISOString())
+    console.log('調用次數:', (window.checkoutCallCount || 0) + 1)
+    console.log('==================')
+    
+    // 記錄調用次數
+    window.checkoutCallCount = (window.checkoutCallCount || 0) + 1
+    
     const confirmMessage = batchCount > 1 
       ? `確定要結帳嗎？\n共有 ${batchCount} 批次訂單\n總金額：NT$ ${totalAmount}`
       : `確定要結帳嗎？\n總金額：NT$ ${totalAmount}`
     
     if (confirm(confirmMessage)) {
+      console.log('用戶確認結帳，調用結帳 API')
+      console.log('=== 開始結帳流程 ===')
+      console.log('結帳時間:', new Date().toISOString())
+      console.log('調用 checkoutTable API，桌次 ID:', tableData.id)
+      
       // 調用新的桌子結帳 API - 合併所有批次
       const response = await orderAPI.checkoutTable(tableData.id)
+      console.log('結帳 API 回應:', response)
       
       if (response.status === 'success') {
         const checkoutData = response.data
+        console.log('=== 結帳成功詳細資訊 ===')
+        console.log('結帳資料:', checkoutData)
+        console.log('結帳金額:', checkoutData.totalAmount)
+        console.log('批次數量:', checkoutData.batchCount)
+        console.log('結帳時間:', new Date().toISOString())
+        console.log('調用次數:', window.checkoutCallCount)
+        console.log('========================')
         
         // 結帳完成後清空所有本地資料
         currentOrder.value = null
@@ -304,10 +356,22 @@ const proceedToCheckout = async () => {
       } else {
         alert('結帳失敗，請稍後再試')
       }
+    } else {
+      console.log('=== 用戶取消結帳 ===')
+      console.log('取消時間:', new Date().toISOString())
     }
   } catch (error) {
-    console.error('結帳失敗:', error)
+    console.log('=== 結帳發生錯誤 ===')
+    console.error('錯誤詳情:', error)
+    console.log('錯誤時間:', new Date().toISOString())
     alert('結帳失敗，請稍後再試')
+  } finally {
+    // 重置結帳狀態
+    isCheckingOut.value = false
+    console.log('=== 結帳流程結束 ===')
+    console.log('重置結帳狀態:', isCheckingOut.value)
+    console.log('最終調用次數:', window.checkoutCallCount)
+    console.log('==================')
   }
 }
 
