@@ -320,20 +320,57 @@ export default {
     }
 
     const updateQuantity = (index, newQuantity) => {
-      if (newQuantity <= 0) {
-        cartItems.value.splice(index, 1)
-      } else {
-        const item = cartItems.value[index]
-        item.quantity = newQuantity
-        item.totalPrice = (item.basePrice + 
-          Object.values(item.selectedOptions || {}).reduce((sum, opt) => sum + (opt.price || 0), 0)
-        ) * newQuantity
+      console.log(`updateQuantity 被調用 - index: ${index}, newQuantity: ${newQuantity}`)
+      console.log('當前購物車項目:', cartItems.value)
+      
+      // 防重複調用檢查
+      if (isUpdatingQuantity.value) {
+        console.log('正在更新數量中，忽略重複調用')
+        return
       }
-      saveCartToStorage() // 保存到 sessionStorage
+      
+      // 立即設置為更新中狀態，防止重複調用
+      isUpdatingQuantity.value = true
+      console.log('設置 isUpdatingQuantity 為 true')
+      
+      try {
+        // 確保 index 在有效範圍內
+        if (index < 0 || index >= cartItems.value.length) {
+          console.warn(`無效的 index: ${index}, 購物車長度: ${cartItems.value.length}`)
+          return
+        }
+        
+        if (newQuantity <= 0) {
+          console.log(`移除購物車項目 index ${index}:`, cartItems.value[index])
+          cartItems.value.splice(index, 1)
+        } else {
+          const item = cartItems.value[index]
+          console.log(`更新購物車項目 index ${index}:`, item.name, `數量從 ${item.quantity} 改為 ${newQuantity}`)
+          item.quantity = newQuantity
+          item.totalPrice = (item.basePrice + 
+            Object.values(item.selectedOptions || {}).reduce((sum, opt) => sum + (opt.price || 0), 0)
+          ) * newQuantity
+        }
+        
+        saveCartToStorage() // 保存到 sessionStorage
+        console.log('更新後的購物車:', cartItems.value)
+        
+      } catch (error) {
+        console.error('更新購物車數量失敗:', error)
+      } finally {
+        // 延遲重置更新狀態，防止快速重複調用
+        setTimeout(() => {
+          isUpdatingQuantity.value = false
+          console.log('延遲重置 isUpdatingQuantity 為 false')
+        }, 300)
+      }
     }
 
     // 訂單提交狀態管理
     const isOrderSubmitting = ref(false)
+    
+    // 數量更新狀態管理
+    const isUpdatingQuantity = ref(false)
 
     const proceedToCheckout = async () => {
       console.log('proceedToCheckout 被調用，isOrderSubmitting:', isOrderSubmitting.value)

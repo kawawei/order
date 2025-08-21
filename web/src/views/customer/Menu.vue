@@ -146,14 +146,14 @@
                 <BaseButton
                   variant="secondary"
                   size="small"
-                  @click="updateQuantity(index, cartItem.quantity - 1)"
+                  @click.stop="updateQuantity(index, cartItem.quantity - 1)"
                   icon="minus"
                 />
                 <span class="quantity">{{ cartItem.quantity }}</span>
                 <BaseButton
                   variant="secondary"
                   size="small"
-                  @click="updateQuantity(index, cartItem.quantity + 1)"
+                  @click.stop="updateQuantity(index, cartItem.quantity + 1)"
                   icon="plus"
                 />
               </div>
