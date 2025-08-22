@@ -1,6 +1,479 @@
 # 開發日誌
 
 ## 2025-02-09
+
+### 日期選擇器左右箭頭修復與優化
+1. 問題描述
+   - 日期選擇器的左右箭頭按鈕按下沒有反應
+   - 無法切換月份和年份
+   - 影響用戶選擇日期的體驗
+
+2. 根本原因分析
+   - Vue 3 的響應式系統問題
+   - 直接修改 Date 對象的屬性不會觸發響應式更新
+   - `selectedDate.value.setMonth()` 和 `selectedDate.value.setFullYear()` 方法不會觸發重新渲染
+
+3. 解決方案
+   - 創建新的 Date 對象而不是直接修改現有對象
+   - 確保每次修改都觸發響應式更新
+   - 修復所有日期操作函數
+
+4. 技術實現
+   ```javascript
+   // 修復前（不會觸發響應式更新）
+   const previousMonth = () => {
+     selectedDate.value.setMonth(selectedDate.value.getMonth() - 1)
+   }
+
+   // 修復後（會觸發響應式更新）
+   const previousMonth = () => {
+     const newDate = new Date(selectedDate.value)
+     newDate.setMonth(newDate.getMonth() - 1)
+     selectedDate.value = newDate
+   }
+   ```
+
+5. 修復的函數
+   - `previousMonth()` - 上個月
+   - `nextMonth()` - 下個月
+   - `previousYear()` - 上一年
+   - `nextYear()` - 下一年
+   - `selectYear()` - 選擇年份
+   - `selectMonth()` - 選擇月份
+
+6. 影響範圍
+   - BaseDatePicker 組件
+   - 訂單管理頁面的日期選擇功能
+   - 所有使用日期選擇器的頁面
+
+7. 測試驗證
+   - 左右箭頭按鈕現在可以正常切換月份
+   - 年份切換功能正常
+   - 日期選擇器響應式更新正常
+
+### 日期導航功能優化
+1. 需求描述
+   - 將左右箭頭按鈕移到日期選擇器的左右兩邊
+   - 提供更直觀的日期導航體驗
+   - 簡化日期選擇器的內部結構
+
+2. 實現方案
+   - 在 Orders.vue 中添加日期導航容器
+   - 將左右箭頭按鈕放在日期選擇器外部
+   - 添加相應的點擊事件處理函數
+
+3. 技術實現
+   ```vue
+   <div class="date-navigation">
+     <button class="nav-arrow" @click="previousDate">
+       <font-awesome-icon icon="chevron-left" />
+     </button>
+     <BaseDatePicker v-model="selectedDate" />
+     <button class="nav-arrow" @click="nextDate">
+       <font-awesome-icon icon="chevron-right" />
+     </button>
+   </div>
+   ```
+
+4. 新增功能
+   - `previousDate()` - 切換到前一天
+   - `nextDate()` - 切換到後一天
+   - 日期導航樣式設計
+
+5. 樣式設計
+   - 32x32px 的圓角按鈕
+   - 懸停和點擊效果
+   - 與日期選擇器風格一致
+
+6. 影響範圍
+   - 訂單管理頁面的日期導航
+   - 提升用戶體驗
+   - 更直觀的日期切換方式
+
+### 移除時間範圍選擇器
+1. 需求描述
+   - 移除「今日」、「本週」、「本月」的選單
+   - 只保留日期選擇器進行篩選
+   - 簡化用戶界面和邏輯
+
+2. 實現方案
+   - 移除 HTML 中的時間範圍選擇器
+   - 簡化 useOrders.js 中的時間範圍邏輯
+   - 統一使用日期選擇器進行篩選
+
+3. 技術實現
+   ```javascript
+   // 移除 selectedTimeRange 相關邏輯
+   // 統一使用 selectedDate 進行日期篩選
+   const loadHistoryOrders = async () => {
+     const selectedDay = new Date(selectedDate.value)
+     const startOfDay = new Date(selectedDay.getFullYear(), selectedDay.getMonth(), selectedDay.getDate())
+     const endOfDay = new Date(selectedDay.getFullYear(), selectedDay.getMonth(), selectedDay.getDate(), 23, 59, 59, 999)
+     
+     const response = await orderService.getOrdersByMerchant(merchantId, {
+       startDate: startOfDay.toISOString(),
+       endDate: endOfDay.toISOString()
+     })
+   }
+   ```
+
+4. 移除的功能
+   - `selectedTimeRange` 響應式變數
+   - `timeRangeTitle` 計算屬性
+   - `selectedTimeRangeOrdersCount` 計算屬性
+   - 時間範圍過濾邏輯
+
+5. 新增的功能
+   - `dateTitle` 計算屬性
+   - `selectedDateOrdersCount` 計算屬性
+   - 簡化的日期篩選邏輯
+
+6. 影響範圍
+   - 訂單管理頁面的時間篩選功能
+   - 簡化用戶界面
+   - 提升代碼可維護性
+
+### 修復 selectedTimeRange 引用錯誤
+1. 問題描述
+   - 移除時間範圍選擇器後，`getStatVariant` 函數仍引用 `selectedTimeRange`
+   - 匯出功能中的日期設定邏輯仍使用 `selectedTimeRange`
+   - 導致 JavaScript 運行時錯誤
+
+2. 修復方案
+   - 修改 `getStatVariant` 函數，基於 `selectedDate` 判斷變體
+   - 簡化匯出功能的日期設定邏輯
+   - 統一使用 `selectedDate` 進行日期相關操作
+
+3. 技術實現
+   ```javascript
+   // 修復 getStatVariant 函數
+   const getStatVariant = () => {
+     const today = new Date()
+     const selectedDay = new Date(selectedDate.value)
+     
+     if (today.toDateString() === selectedDay.toDateString()) {
+       return 'primary'  // 今天
+     } else if (selectedDay < today) {
+       return 'info'     // 過去日期
+     } else {
+       return 'warning'  // 未來日期
+     }
+   }
+   
+   // 簡化匯出日期設定
+   const selectedDay = new Date(selectedDate.value)
+   params.startDate = `${year}-${month}-${day}`
+   params.endDate = `${year}-${month}-${day}`
+   ```
+
+4. 修復內容
+   - 移除所有 `selectedTimeRange` 引用
+   - 移除所有 `timeRangeTitle` 引用
+   - 移除所有 `selectedTimeRangeOrdersCount` 引用
+   - 統一使用 `selectedDate` 進行日期操作
+
+5. 測試結果
+   - 修復了 JavaScript 運行時錯誤
+   - 統計卡片變體正確顯示
+   - 匯出功能正常工作
+   - 日期導航功能正常運作
+
+### 修復 Orders.vue 中的 selectedTimeRange 引用
+1. 問題描述
+   - Orders.vue 第 295 行仍在使用 `selectedTimeRange` 來顯示統計卡片標籤
+   - 導致 Vue 警告：Property "selectedTimeRange" was accessed during render but is not defined on instance
+
+2. 修復方案
+   - 創建新的 `getDateDisplayText()` 函數來替代 `selectedTimeRange` 的邏輯
+   - 在 `useOrders.js` 中實現該函數並導出
+   - 修改 Orders.vue 中的模板引用
+
+3. 技術實現
+   ```javascript
+   // 新增 getDateDisplayText 函數
+   const getDateDisplayText = () => {
+     const today = new Date()
+     const selectedDay = new Date(selectedDate.value)
+     
+     if (today.toDateString() === selectedDay.toDateString()) {
+       return '今日'
+     } else {
+       return selectedDay.toLocaleDateString('zh-TW', { 
+         month: 'long', 
+         day: 'numeric' 
+       })
+     }
+   }
+   ```
+
+4. 修復內容
+   - 在 `useOrders.js` 中添加 `getDateDisplayText` 函數
+   - 在 return 語句中導出該函數
+   - 修改 Orders.vue 中的模板，使用 `getDateDisplayText()` 替代 `selectedTimeRange` 邏輯
+
+5. 測試結果
+   - 消除了 Vue 警告
+   - 統計卡片標籤正確顯示
+   - 日期導航功能正常運作
+
+### 修復 getDateDisplayText 函數引用錯誤
+1. 問題描述
+   - 雖然在 `useOrders.js` 中正確導出了 `getDateDisplayText` 函數
+   - 但在 `Orders.vue` 的解構中遺漏了該函數
+   - 導致 Vue 錯誤：`Property "getDateDisplayText" was accessed during render but is not defined on instance`
+
+2. 修復方案
+   - 在 `Orders.vue` 的解構語句中添加 `getDateDisplayText` 函數
+
+3. 技術實現
+   ```javascript
+   // 在 Orders.vue 的解構中添加
+   const {
+     // ... 其他解構項目
+     getDateDisplayText,
+     // ... 其他解構項目
+   } = useOrders(route.query.restaurantId)
+   ```
+
+4. 修復內容
+   - 在 `Orders.vue` 第 540 行左右的解構語句中添加 `getDateDisplayText`
+   - 確保函數能夠正確從 composable 中導入
+
+5. 測試結果
+   - 消除了 Vue 錯誤
+   - 統計卡片標籤正確顯示
+   - 日期導航功能正常運作
+
+### 增強日期導航功能 - 支持月/年視圖切換
+1. 需求描述
+   - 用戶反映當選擇「月」視圖時，左右箭頭還是切換日期而不是月份
+   - 需要根據當前視圖模式（日/月/年）來調整導航行為
+
+2. 技術實現
+   - 在 `useOrders.js` 中添加 `dateViewMode` 狀態來追蹤當前視圖模式
+   - 修改 `previousDate` 和 `nextDate` 函數，根據視圖模式進行不同的導航：
+     - 年視圖：切換年份
+     - 月視圖：切換月份
+     - 日視圖：切換日期
+   - 在 `BaseDatePicker` 組件中添加 `modeChange` 事件
+   - 在 `Orders.vue` 中監聽模式變化並同步狀態
+
+3. 修改內容
+   ```javascript
+   // useOrders.js - 添加視圖模式狀態
+   const dateViewMode = ref('day')
+   
+   // 修改導航函數
+   const previousDate = () => {
+     const newDate = new Date(selectedDate.value)
+     switch (dateViewMode.value) {
+       case 'year': newDate.setFullYear(newDate.getFullYear() - 1); break
+       case 'month': newDate.setMonth(newDate.getMonth() - 1); break
+       case 'day': default: newDate.setDate(newDate.getDate() - 1); break
+     }
+     selectedDate.value = newDate
+   }
+   ```
+
+4. 功能特點
+   - 支持日/月/年三種視圖模式
+   - 導航箭頭根據當前模式智能切換
+   - 視圖模式狀態與日期選擇器同步
+   - 保持向後兼容性
+
+5. 測試結果
+   - 日視圖：左右箭頭切換日期
+   - 月視圖：左右箭頭切換月份
+   - 年視圖：左右箭頭切換年份
+   - 模式切換正常，狀態同步正確
+
+### 修正月視圖訂單篩選邏輯
+1. 問題描述
+   - 用戶反映當選擇「月」視圖時，系統只顯示該月某一天的訂單
+   - 例如：選擇8月22日，月視圖應該顯示整個8月的訂單，而不是只顯示8月22日的訂單
+
+2. 技術實現
+   - 修改 `loadHistoryOrders` 函數，根據視圖模式決定查詢時間範圍：
+     - 年視圖：查詢整年訂單（1月1日到12月31日）
+     - 月視圖：查詢整月訂單（當月1日到月底）
+     - 日視圖：查詢單日訂單（當天00:00到23:59）
+   - 更新 `dateTitle` 計算屬性，根據視圖模式顯示不同格式的標題
+   - 修改監聽器，同時監聽日期和視圖模式的變化
+
+3. 修改內容
+   ```javascript
+   // 根據視圖模式決定查詢時間範圍
+   switch (dateViewMode.value) {
+     case 'year':
+       // 查詢整年的訂單
+       const startOfYear = new Date(selectedDay.getFullYear(), 0, 1)
+       const endOfYear = new Date(selectedDay.getFullYear(), 11, 31, 23, 59, 59, 999)
+       break
+     case 'month':
+       // 查詢整月的訂單
+       const startOfMonth = new Date(selectedDay.getFullYear(), selectedDay.getMonth(), 1)
+       const endOfMonth = new Date(selectedDay.getFullYear(), selectedDay.getMonth() + 1, 0, 23, 59, 59, 999)
+       break
+     case 'day':
+       // 查詢單日的訂單
+       const startOfDay = new Date(selectedDay.getFullYear(), selectedDay.getMonth(), selectedDay.getDate())
+       const endOfDay = new Date(selectedDay.getFullYear(), selectedDay.getMonth(), selectedDay.getDate(), 23, 59, 59, 999)
+       break
+   }
+   ```
+
+4. 功能特點
+   - 智能時間範圍查詢：根據視圖模式自動調整查詢範圍
+   - 動態標題顯示：年視圖顯示「2024年」，月視圖顯示「2024年8月」
+   - 即時數據更新：切換視圖模式時自動重新載入對應時間範圍的訂單
+   - 保持數據一致性：確保顯示的訂單與當前視圖模式匹配
+
+5. 測試結果
+   - 日視圖：顯示選中日期的訂單
+   - 月視圖：顯示整個月份的訂單
+   - 年視圖：顯示整個年份的訂單
+   - 標題格式正確對應視圖模式
+   - 切換視圖時數據即時更新
+
+### 移除日期選擇器向下箭頭
+1. 需求描述
+   - 用戶希望移除日期導航組件中的向下箭頭
+   - 只顯示日期文字，保持簡潔的界面
+
+2. 技術實現
+   - 修改 `BaseDatePicker.vue` 組件
+   - 移除觸發按鈕中的向下箭頭圖標
+   - 清理相關的CSS樣式
+
+3. 修改內容
+   ```vue
+   <!-- 移除前 -->
+   <div class="trigger-content">
+     <font-awesome-icon icon="calendar" class="trigger-icon" />
+     <span class="trigger-text">{{ displayText }}</span>
+     <font-awesome-icon icon="chevron-down" class="trigger-arrow" :class="{ 'rotated': isOpen }" />
+   </div>
+   
+   <!-- 移除後 -->
+   <div class="trigger-content">
+     <font-awesome-icon icon="calendar" class="trigger-icon" />
+     <span class="trigger-text">{{ displayText }}</span>
+   </div>
+   ```
+
+4. 功能特點
+   - 界面更簡潔：移除視覺干擾元素
+   - 保持功能完整：點擊日期文字仍可打開選擇器
+   - 視覺一致性：與整體設計風格更協調
+
+5. 測試結果
+   - 日期顯示正常：顯示格式為「2025年8月20日」
+   - 點擊功能正常：點擊日期文字可打開日期選擇器
+   - 界面更簡潔：沒有向下箭頭，視覺更清爽
+
+### 動態顯示日期標籤文字
+1. 需求描述
+   - 用戶希望「今日」按鈕的文字根據當前選擇的視圖模式動態變化
+   - 日視圖：顯示「今日」
+   - 月視圖：顯示「本月」或「7月」
+   - 年視圖：顯示「今年」或「2025」
+
+2. 技術實現
+   - 修改 `useOrders.js` 中的 `getDateDisplayText` 函數
+   - 根據 `dateViewMode` 返回對應的文字
+   - 智能判斷是否為當前時間段
+
+3. 修改內容
+   ```javascript
+   // 修改前：只顯示「今日」或日期
+   const getDateDisplayText = () => {
+     const today = new Date()
+     const selectedDay = new Date(selectedDate.value)
+     
+     if (today.toDateString() === selectedDay.toDateString()) {
+       return '今日'
+     } else {
+       return selectedDay.toLocaleDateString('zh-TW', { 
+         month: 'long', 
+         day: 'numeric' 
+       })
+     }
+   }
+   
+   // 修改後：根據視圖模式動態顯示
+   const getDateDisplayText = () => {
+     const today = new Date()
+     const selectedDay = new Date(selectedDate.value)
+     
+     switch (dateViewMode.value) {
+       case 'year':
+         if (today.getFullYear() === selectedDay.getFullYear()) {
+           return '今年'
+         } else {
+           return `${selectedDay.getFullYear()}年`
+         }
+       case 'month':
+         if (today.getFullYear() === selectedDay.getFullYear() && 
+             today.getMonth() === selectedDay.getMonth()) {
+           return '本月'
+         } else {
+           return `${selectedDay.getFullYear()}年${selectedDay.getMonth() + 1}月`
+         }
+       case 'day':
+       default:
+         if (today.toDateString() === selectedDay.toDateString()) {
+           return '今日'
+         } else {
+           return selectedDay.toLocaleDateString('zh-TW', { 
+             month: 'long', 
+             day: 'numeric' 
+           })
+         }
+     }
+   }
+   ```
+
+4. 功能特點
+   - 智能判斷：自動檢測是否為當前時間段
+   - 動態顯示：根據視圖模式顯示對應文字
+   - 用戶友好：提供直觀的時間段標識
+
+5. 顯示效果
+   - **日視圖**：
+     - 今天：顯示「今日」
+     - 其他日期：顯示「8月22日」
+   - **月視圖**：
+     - 本月：顯示「本月」
+     - 其他月份：顯示「2025年8月」
+   - **年視圖**：
+     - 今年：顯示「今年」
+     - 其他年份：顯示「2025年」
+
+### 隱藏訂單數統計顯示
+1. 需求描述
+   - 隱藏左上角顯示的本週本月本日訂單數
+   - 保留日期顯示功能
+   - 簡化界面顯示
+
+2. 實現方案
+   - 在 Orders.vue 中註釋掉顯示訂單數的 BaseTag 組件
+   - 保留日期顯示功能
+   - 不影響其他功能
+
+3. 修改內容
+   ```vue
+   <!-- 隱藏本週本月本日訂單數顯示 -->
+   <!-- <BaseTag v-if="activeTab === 'history'" variant="info" size="medium">
+     <font-awesome-icon icon="receipt" class="mr-1" />
+     {{ timeRangeTitle }}: {{ selectedTimeRangeOrdersCount }}
+   </BaseTag> -->
+   ```
+
+4. 影響範圍
+   - 訂單管理頁面的統計顯示
+   - 不影響數據計算和功能邏輯
+
+### 客人組數計算邏輯修正
 ### 客人組數計算邏輯修正
 1. 問題描述
    - 管理員後台顯示的熱門時段統計與商家後台歷史訂單數量不一致

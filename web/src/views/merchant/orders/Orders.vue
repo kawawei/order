@@ -8,10 +8,11 @@
             <font-awesome-icon icon="clock" class="mr-1" />
             {{ currentDate }}
           </BaseTag>
-          <BaseTag v-if="activeTab === 'history'" variant="info" size="medium">
+          <!-- 隱藏本週本月本日訂單數顯示 -->
+          <!-- <BaseTag v-if="activeTab === 'history'" variant="info" size="medium">
             <font-awesome-icon icon="receipt" class="mr-1" />
             {{ timeRangeTitle }}: {{ selectedTimeRangeOrdersCount }}
-          </BaseTag>
+          </BaseTag> -->
         </div>
       </div>
       <div class="header-actions">
@@ -37,11 +38,20 @@
       <BaseTabs v-model="activeTab" :tabs="orderTabs">
         <template #actions>
           <div class="tabs-actions">
-            <select v-model="selectedTimeRange" class="time-filter">
-              <option value="today">今日</option>
-              <option value="week">本週</option>
-              <option value="month">本月</option>
-            </select>
+            <div class="date-navigation">
+              <button class="nav-arrow" @click="previousDate">
+                <font-awesome-icon icon="chevron-left" />
+              </button>
+              <BaseDatePicker 
+                v-model="selectedDate" 
+                :mode="dateViewMode"
+                @change="handleDateChange"
+                @modeChange="handleModeChange"
+              />
+              <button class="nav-arrow" @click="nextDate">
+                <font-awesome-icon icon="chevron-right" />
+              </button>
+            </div>
           </div>
         </template>
       </BaseTabs>
@@ -287,7 +297,7 @@
             <div class="card-header-content">
               <h3>訂單統計</h3>
               <BaseTag :variant="getStatVariant()" size="small">
-                {{ selectedTimeRange === 'today' ? '今日' : selectedTimeRange === 'week' ? '本週' : '本月' }}
+                {{ getDateDisplayText() }}
               </BaseTag>
             </div>
           </template>
@@ -489,21 +499,23 @@
 import { useRoute } from 'vue-router'
 import { useOrders } from '../../../composables/merchant/useOrders'
 import BaseReceipt from '../../../components/base/BaseReceipt.vue'
+import BaseDatePicker from '../../../components/BaseDatePicker.vue'
 import './Orders.css'
 
 const route = useRoute()
 
 const {
-  // 響應式數據
+    // 響應式數據
   activeTab,
-  selectedTimeRange,
+  selectedDate,
   searchTerm,
   loading,
   isExporting,
   currentDate,
-  timeRangeTitle,
-  selectedTimeRangeOrdersCount,
+  dateTitle,
+  selectedDateOrdersCount,
   todayOrdersCount,
+  dateViewMode,
   
   // 即時訂單數據
   liveStats,
@@ -543,9 +555,27 @@ const {
   formatTime,
   formatDateTime,
   getStatVariant,
+  getDateDisplayText,
   getOrderStatusVariant,
   getOrderStatusText,
   getOptionLabel,
-  getOptionValueLabel
-} = useOrders(route.query.restaurantId)
+  getOptionValueLabel,
+  
+  // 日期導航
+  previousDate,
+  nextDate,
+  updateDateViewMode
+  } = useOrders(route.query.restaurantId)
+
+// 處理日期變化事件
+const handleDateChange = (newDate) => {
+  // 這裡可以添加額外的邏輯，比如記錄用戶的日期選擇行為
+  console.log('日期已更改:', newDate)
+}
+
+// 處理模式變化事件
+const handleModeChange = (newMode) => {
+  updateDateViewMode(newMode)
+  console.log('視圖模式已更改:', newMode)
+}
 </script>
