@@ -14,10 +14,16 @@ class InventoryService {
    */
   async calculateDishConsumption(dishId, customOptions = [], sizeOption = null) {
     try {
+      console.log(`\n=== 計算菜品消耗: ${dishId} ===`);
+      console.log('自定義選項:', customOptions);
+      
       const dish = await Dish.findById(dishId).populate('inventoryConfig.baseInventory.inventoryId');
       if (!dish) {
         throw new Error('菜品不存在');
       }
+
+      console.log(`菜品名稱: ${dish.name}`);
+      console.log(`庫存配置:`, dish.inventoryConfig ? '存在' : '不存在');
 
       let totalCost = 0;
       const consumptionDetails = [];
@@ -33,15 +39,50 @@ class InventoryService {
 
       // 計算基礎庫存消耗
       if (dish.inventoryConfig.baseInventory && Array.isArray(dish.inventoryConfig.baseInventory)) {
+        console.log(`基礎庫存項目數量: ${dish.inventoryConfig.baseInventory.length}`);
+        
         for (const item of dish.inventoryConfig.baseInventory) {
-          if (!item || !item.inventoryId || !item.quantity) continue;
+          if (!item || !item.inventoryId || !item.quantity) {
+            console.log('跳過無效的基礎庫存項目:', item);
+            continue;
+          }
+          
+          console.log(`處理基礎庫存項目: ${item.inventoryId}, 數量: ${item.quantity}`);
           
           const inventory = await Inventory.findById(item.inventoryId);
-          if (!inventory || !inventory.cost || typeof inventory.cost.unitPrice !== 'number') continue;
+          if (!inventory) {
+            console.log(`找不到庫存: ${item.inventoryId}`);
+            continue;
+          }
 
-          const itemCost = inventory.cost.unitPrice * item.quantity;
+          let unitCost = 0;
+          let specName = '';
+
+          // 處理多規格庫存
+          if (inventory.type === 'multiSpec' && item.inventoryValueId) {
+            const spec = inventory.multiSpecStock.find(s => s._id.toString() === item.inventoryValueId.toString());
+            if (spec) {
+              unitCost = spec.unitPrice;
+              specName = spec.specName;
+              console.log(`多規格庫存: ${inventory.name} (${specName}), 單價: $${unitCost}`);
+            } else {
+              console.log(`找不到規格: ${item.inventoryValueId} 在庫存 ${inventory.name} 中`);
+            }
+          } else {
+            // 處理單一規格庫存
+            unitCost = inventory.cost.unitPrice;
+            console.log(`單一規格庫存: ${inventory.name}, 單價: $${unitCost}`);
+          }
+
+          if (typeof unitCost !== 'number' || isNaN(unitCost)) {
+            console.log(`無效的單位成本: ${unitCost}`);
+            continue;
+          }
+
+          const itemCost = unitCost * item.quantity;
           if (!isNaN(itemCost)) {
             totalCost += itemCost;
+            console.log(`項目成本: $${unitCost} × ${item.quantity} = $${itemCost}`);
           }
 
           consumptionDetails.push({
@@ -49,22 +90,38 @@ class InventoryService {
             inventoryValueId: item.inventoryValueId || null,
             quantity: item.quantity,
             cost: itemCost,
-            type: 'base'
+            type: 'base',
+            specName: specName
           });
         }
       }
 
       // 計算條件庫存消耗
       if (dish.inventoryConfig.conditionalInventory && Array.isArray(dish.inventoryConfig.conditionalInventory)) {
+        console.log(`條件庫存項目數量: ${dish.inventoryConfig.conditionalInventory.length}`);
+        
         for (const item of dish.inventoryConfig.conditionalInventory) {
-          if (!item || !item.inventoryId || !item.conditions || !Array.isArray(item.conditions)) continue;
+          if (!item || !item.inventoryId || !item.conditions || !Array.isArray(item.conditions)) {
+            console.log('跳過無效的條件庫存項目:', item);
+            continue;
+          }
+          
+          console.log(`處理條件庫存項目: ${item.inventoryId}`);
           
           const inventory = await Inventory.findById(item.inventoryId);
-          if (!inventory || !inventory.cost || typeof inventory.cost.unitPrice !== 'number') continue;
+          if (!inventory) {
+            console.log(`找不到條件庫存: ${item.inventoryId}`);
+            continue;
+          }
 
           // 檢查自定義選項
           for (const condition of item.conditions) {
-            if (!condition || !condition.optionType || !condition.optionValue || !condition.quantity) continue;
+            if (!condition || !condition.optionType || !condition.optionValue || !condition.quantity) {
+              console.log('跳過無效的條件:', condition);
+              continue;
+            }
+            
+            console.log(`檢查條件: ${condition.optionType} = ${condition.optionValue}`);
             
             const hasOption = customOptions.some(option => 
               option.type === condition.optionType && 
@@ -72,9 +129,36 @@ class InventoryService {
             );
 
             if (hasOption) {
-              const itemCost = inventory.cost.unitPrice * condition.quantity;
+              console.log(`條件匹配: ${condition.optionType} = ${condition.optionValue}`);
+              
+              let unitCost = 0;
+              let specName = '';
+
+              // 處理多規格庫存
+              if (inventory.type === 'multiSpec' && condition.inventoryValueId) {
+                const spec = inventory.multiSpecStock.find(s => s._id.toString() === condition.inventoryValueId.toString());
+                if (spec) {
+                  unitCost = spec.unitPrice;
+                  specName = spec.specName;
+                  console.log(`條件多規格庫存: ${inventory.name} (${specName}), 單價: $${unitCost}`);
+                } else {
+                  console.log(`找不到條件規格: ${condition.inventoryValueId} 在庫存 ${inventory.name} 中`);
+                }
+              } else {
+                // 處理單一規格庫存
+                unitCost = inventory.cost.unitPrice;
+                console.log(`條件單一規格庫存: ${inventory.name}, 單價: $${unitCost}`);
+              }
+
+              if (typeof unitCost !== 'number' || isNaN(unitCost)) {
+                console.log(`無效的條件單位成本: ${unitCost}`);
+                continue;
+              }
+
+              const itemCost = unitCost * condition.quantity;
               if (!isNaN(itemCost)) {
                 totalCost += itemCost;
+                console.log(`條件項目成本: $${unitCost} × ${condition.quantity} = $${itemCost}`);
               }
 
               consumptionDetails.push({
@@ -83,13 +167,23 @@ class InventoryService {
                 quantity: condition.quantity,
                 cost: itemCost,
                 type: 'conditional',
-                condition: `${condition.optionType}: ${condition.optionValue}`
+                condition: `${condition.optionType}: ${condition.optionValue}`,
+                specName: specName
               });
+            } else {
+              console.log(`條件不匹配: ${condition.optionType} = ${condition.optionValue}`);
             }
           }
         }
       }
 
+      console.log(`\n=== 菜品消耗計算完成 ===`);
+      console.log(`總成本: $${totalCost}`);
+      console.log(`消耗詳情數量: ${consumptionDetails.length}`);
+      consumptionDetails.forEach((detail, index) => {
+        console.log(`  ${index + 1}. ${detail.type} - 成本: $${detail.cost}${detail.specName ? ` (${detail.specName})` : ''}`);
+      });
+      
       return {
         totalCost,
         consumptionDetails,

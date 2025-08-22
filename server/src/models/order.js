@@ -34,6 +34,45 @@ const orderItemSchema = new mongoose.Schema({
   notes: {
     type: String,
     default: ''
+  },
+  // 新增：記錄下單時的歷史成本信息
+  historicalCost: {
+    totalCost: {
+      type: Number,
+      default: 0,
+      min: 0
+    },
+    consumptionDetails: [{
+      inventoryId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Inventory'
+      },
+      inventoryValueId: {
+        type: mongoose.Schema.Types.ObjectId
+      },
+      inventoryName: String,
+      specName: String,
+      quantity: {
+        type: Number,
+        required: true,
+        min: 0
+      },
+      unitCost: {
+        type: Number,
+        required: true,
+        min: 0
+      },
+      totalCost: {
+        type: Number,
+        required: true,
+        min: 0
+      },
+      type: {
+        type: String,
+        enum: ['base', 'conditional'],
+        default: 'base'
+      }
+    }]
   }
 });
 

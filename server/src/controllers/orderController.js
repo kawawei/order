@@ -3,6 +3,7 @@ const XLSX = require('xlsx');
 const Order = require('../models/order');
 const Table = require('../models/table');
 const Dish = require('../models/dish');
+const Inventory = require('../models/inventory');
 const inventoryService = require('../services/inventoryService');
 const catchAsync = require('../utils/catchAsync');
 const AppError = require('../utils/appError');
@@ -524,15 +525,21 @@ exports.updateOrderStatus = catchAsync(async (req, res, next) => {
   // 如果訂單被確認，執行庫存扣減和成本計算
   if (status === 'confirmed' && order.status === 'pending') {
     try {
+      console.log(`\n=== 開始確認訂單 ${order.orderNumber} ===`);
+      console.log(`訂單項目數量: ${order.items.length}`);
+      
       // 計算庫存消耗和成本
       let totalCost = 0;
       const allConsumptionDetails = [];
       
       for (const item of order.items) {
+        console.log(`\n--- 處理項目: ${item.name} (數量: ${item.quantity}) ---`);
+        
         try {
           // 轉換選項格式為庫存服務需要的格式
           const customOptions = [];
           if (item.selectedOptions) {
+            console.log('選擇的選項:', Array.from(item.selectedOptions.entries()));
             for (const [optionName, optionValue] of item.selectedOptions.entries()) {
               if (typeof optionValue === 'object' && optionValue !== null) {
                 customOptions.push({
@@ -553,9 +560,24 @@ exports.updateOrderStatus = catchAsync(async (req, res, next) => {
             customOptions
           );
           
+          console.log('庫存消耗詳情:');
+          for (const detail of consumption.consumptionDetails) {
+            const inventory = await Inventory.findById(detail.inventoryId);
+            let specInfo = '';
+            if (inventory && inventory.type === 'multiSpec' && detail.inventoryValueId) {
+              const spec = inventory.multiSpecStock.find(s => s._id.toString() === detail.inventoryValueId.toString());
+              if (spec) {
+                specInfo = ` (${spec.specName})`;
+              }
+            }
+            console.log(`  ${inventory ? inventory.name : '未知庫存'}${specInfo}: ${detail.quantity} 單位, 成本: $${detail.cost}`);
+          }
+          
           // 乘以數量
           const itemTotalCost = consumption.totalCost * item.quantity;
           totalCost += itemTotalCost;
+          
+          console.log(`項目總成本: $${consumption.totalCost} × ${item.quantity} = $${itemTotalCost}`);
           
           // 累積消耗詳情
           allConsumptionDetails.push({
@@ -567,7 +589,14 @@ exports.updateOrderStatus = catchAsync(async (req, res, next) => {
           });
         } catch (error) {
           console.error(`計算菜品 ${item.name} 庫存消耗失敗:`, error);
-          // 如果計算失敗，繼續處理其他菜品
+          // 如果計算失敗，設置默認的歷史成本記錄
+          allConsumptionDetails.push({
+            dishId: item.dishId,
+            dishName: item.name,
+            quantity: item.quantity,
+            consumptionDetails: [],
+            totalCost: 0
+          });
         }
       }
 
@@ -596,6 +625,48 @@ exports.updateOrderStatus = catchAsync(async (req, res, next) => {
 
       // 更新訂單的總成本
       order.totalCost = totalCost;
+      
+      // 記錄歷史成本信息到每個訂單項目中
+      for (let i = 0; i < order.items.length; i++) {
+        const orderItem = order.items[i];
+        const consumptionItem = allConsumptionDetails.find(item => item.dishId.toString() === orderItem.dishId.toString());
+        
+        if (consumptionItem) {
+          // 初始化歷史成本記錄
+          orderItem.historicalCost = {
+            totalCost: consumptionItem.totalCost,
+            consumptionDetails: []
+          };
+          
+          // 記錄每個庫存項目的歷史成本
+          for (const consumption of consumptionItem.consumptionDetails) {
+            const inventory = await Inventory.findById(consumption.inventoryId);
+            let specName = '';
+            
+            // 如果是多規格庫存，獲取規格名稱
+            if (inventory && inventory.type === 'multiSpec' && consumption.inventoryValueId) {
+              const specValue = inventory.multiSpecStock.find(spec => 
+                spec._id.toString() === consumption.inventoryValueId.toString()
+              );
+              if (specValue) {
+                specName = specValue.specName;
+              }
+            }
+            
+            orderItem.historicalCost.consumptionDetails.push({
+              inventoryId: consumption.inventoryId,
+              inventoryValueId: consumption.inventoryValueId,
+              inventoryName: inventory ? inventory.name : '未知庫存',
+              specName: specName,
+              quantity: consumption.quantity,
+              unitCost: consumption.cost / consumption.quantity, // 計算單位成本
+              totalCost: consumption.cost,
+              type: consumption.type
+            });
+          }
+        }
+      }
+      
       await order.save();
 
       console.log(`訂單 ${order.orderNumber} 已確認，庫存扣減成功，總成本：${totalCost}`);
@@ -1186,7 +1257,22 @@ exports.exportHistoryOrders = catchAsync(async (req, res, next) => {
   const exportData = [];
   const groupedOrders = new Map(); // 用於分組的 Map
   
-  orders.forEach(order => {
+  console.log(`\n=== 開始處理 ${orders.length} 個訂單的歷史成本 ===`);
+  
+  // 統計總計
+  let totalRevenue = 0;
+  let totalHistoricalCost = 0;
+  let totalProfit = 0;
+  
+  orders.forEach((order, orderIndex) => {
+    console.log(`\n--- 處理訂單 ${orderIndex + 1}: ${order.orderNumber} ---`);
+    console.log(`訂單狀態: ${order.status}, 總成本: $${order.totalCost || 0}`);
+    
+    // 累計統計
+    totalRevenue += order.totalAmount || 0;
+    totalHistoricalCost += order.totalCost || 0;
+    totalProfit += (order.totalAmount || 0) - (order.totalCost || 0);
+    
     // 轉換為台灣本地時間 (UTC+8)
     const orderTime = order.completedAt ? 
       new Date(order.completedAt).toLocaleString('zh-TW', {
@@ -1216,7 +1302,24 @@ exports.exportHistoryOrders = catchAsync(async (req, res, next) => {
     
     // 處理訂單項目 - 合併相同菜品
     if (order.items && order.items.length > 0) {
-      order.items.forEach(item => {
+      console.log(`訂單項目數量: ${order.items.length}`);
+      
+      order.items.forEach((item, itemIndex) => {
+        console.log(`  項目 ${itemIndex + 1}: ${item.name} (數量: ${item.quantity})`);
+        
+        // 顯示歷史成本信息
+        if (item.historicalCost) {
+          console.log(`    歷史成本: $${item.historicalCost.totalCost}`);
+          if (item.historicalCost.consumptionDetails && item.historicalCost.consumptionDetails.length > 0) {
+            console.log(`    庫存消耗詳情:`);
+            item.historicalCost.consumptionDetails.forEach((detail, detailIndex) => {
+              console.log(`      ${detailIndex + 1}. ${detail.inventoryName}${detail.specName ? ` (${detail.specName})` : ''}: ${detail.quantity} 單位 × $${detail.unitCost} = $${detail.totalCost}`);
+            });
+          }
+        } else {
+          console.log(`    無歷史成本記錄`);
+        }
+        
         // 處理選項顯示
         let optionsText = '';
         if (item.selectedOptions) {
@@ -1250,6 +1353,11 @@ exports.exportHistoryOrders = catchAsync(async (req, res, next) => {
           const existingItem = group.items.get(itemKey);
           existingItem['數量'] += item.quantity;
           existingItem['小計'] += (item.totalPrice || (item.unitPrice * item.quantity));
+          
+          // 合併歷史成本
+          if (item.historicalCost && item.historicalCost.totalCost) {
+            existingItem['歷史成本'] = (existingItem['歷史成本'] || 0) + item.historicalCost.totalCost;
+          }
         } else {
           // 新增菜品
           group.items.set(itemKey, {
@@ -1257,6 +1365,7 @@ exports.exportHistoryOrders = catchAsync(async (req, res, next) => {
             '數量': item.quantity,
             '單價': item.unitPrice,
             '小計': item.totalPrice || (item.unitPrice * item.quantity),
+            '歷史成本': item.historicalCost ? item.historicalCost.totalCost : 0,
             '選項': optionsText,
             '備註': item.notes || ''
           });
@@ -1264,6 +1373,14 @@ exports.exportHistoryOrders = catchAsync(async (req, res, next) => {
       });
     }
   });
+  
+  // 顯示總結統計
+  console.log(`\n=== 統計報表總結 ===`);
+  console.log(`總訂單數: ${orders.length}`);
+  console.log(`總營收: $${totalRevenue}`);
+  console.log(`總歷史成本: $${totalHistoricalCost}`);
+  console.log(`總毛利: $${totalProfit}`);
+  console.log(`毛利率: ${totalRevenue > 0 ? ((totalProfit / totalRevenue) * 100).toFixed(2) : 0}%`);
   
   // 將分組後的數據轉換為匯出格式
   const mergedRanges = []; // 記錄需要合併的儲存格範圍
@@ -1287,6 +1404,8 @@ exports.exportHistoryOrders = catchAsync(async (req, res, next) => {
           '數量': item['數量'],
           '單價': item['單價'],
           '小計': item['小計'],
+          '歷史成本': item['歷史成本'] || 0,
+          '毛利': (item['小計'] || 0) - (item['歷史成本'] || 0),
           '選項': item['選項'],
           '備註': item['備註']
         });
@@ -1378,6 +1497,8 @@ exports.exportHistoryOrders = catchAsync(async (req, res, next) => {
       { wch: 8 },  // 數量
       { wch: 10 }, // 單價
       { wch: 12 }, // 小計
+      { wch: 12 }, // 歷史成本
+      { wch: 12 }, // 毛利
       { wch: 30 }, // 選項
       { wch: 20 }  // 備註
     ];
