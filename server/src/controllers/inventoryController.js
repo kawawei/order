@@ -370,28 +370,36 @@ exports.getInventoryStats = catchAsync(async (req, res, next) => {
         outOfStockItems: {
           $sum: {
             $cond: [
+              { $eq: ['$type', 'single'] },
+              // 單一庫存：如果缺貨，計算為1
+              { $cond: [{ $eq: ['$singleStock.quantity', 0] }, 1, 0] },
+              // 多規格庫存：計算實際缺貨的規格數量
               {
-                $or: [
-                  { $eq: ['$singleStock.quantity', 0] },
-                  { $eq: ['$multiSpecStock.quantity', 0] }
-                ]
-              },
-              1,
-              0
+                $size: {
+                  $filter: {
+                    input: '$multiSpecStock',
+                    cond: { $eq: ['$$this.quantity', 0] }
+                  }
+                }
+              }
             ]
           }
         },
         lowStockItems: {
           $sum: {
             $cond: [
+              { $eq: ['$type', 'single'] },
+              // 單一庫存：如果庫存不足，計算為1
+              { $cond: [{ $lte: ['$singleStock.quantity', '$singleStock.minStock'] }, 1, 0] },
+              // 多規格庫存：計算實際庫存不足的規格數量
               {
-                $or: [
-                  { $lte: ['$singleStock.quantity', '$singleStock.minStock'] },
-                  { $lte: ['$multiSpecStock.quantity', '$multiSpecStock.minStock'] }
-                ]
-              },
-              1,
-              0
+                $size: {
+                  $filter: {
+                    input: '$multiSpecStock',
+                    cond: { $lte: ['$$this.quantity', '$$this.minStock'] }
+                  }
+                }
+              }
             ]
           }
         }
@@ -408,20 +416,15 @@ exports.getInventoryStats = catchAsync(async (req, res, next) => {
         count: { $sum: 1 },
         totalValue: {
           $sum: {
-            $multiply: [
-              { $ifNull: ['$cost.unitPrice', 0] },
+            $cond: [
+              { $eq: ['$type', 'single'] },
+              { $multiply: [{ $ifNull: ['$cost.unitPrice', 0] }, '$singleStock.quantity'] },
               {
-                $cond: [
-                  { $eq: ['$type', 'single'] },
-                  '$singleStock.quantity',
-                  {
-                    $reduce: {
-                      input: '$multiSpecStock',
-                      initialValue: 0,
-                      in: { $add: ['$$value', '$$this.quantity'] }
-                    }
-                  }
-                ]
+                $reduce: {
+                  input: '$multiSpecStock',
+                  initialValue: 0,
+                  in: { $add: ['$$value', { $multiply: ['$$this.unitPrice', '$$this.quantity'] }] }
+                }
               }
             ]
           }

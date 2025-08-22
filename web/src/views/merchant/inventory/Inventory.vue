@@ -23,7 +23,7 @@
         </div>
         <div class="stat-content">
           <h3 class="stat-number">{{ totalItems }}</h3>
-          <p class="stat-label">總原料數</p>
+          <p class="stat-label">原料種類</p>
         </div>
       </div>
       <div class="stat-card">
@@ -127,7 +127,7 @@
                 <div class="variant-summary">{{ getVariantCostRangeText(item) }}</div>
               </div>
               <div v-else>
-                ${{ item.cost.unitPrice.toFixed(2) }}
+                ${{ item.cost.unitPrice.toFixed(2) }} × {{ item.singleStock.quantity }} {{ item.singleStock.unit }} = ${{ (item.cost.unitPrice * item.singleStock.quantity).toFixed(2) }}
               </div>
             </td>
             <td>
@@ -156,9 +156,12 @@
                 <span
                   v-for="(v, idx) in item.multiSpecStock"
                   :key="idx"
-                  class="variant-chip"
+                  :class="['variant-chip', { 
+                    'out-of-stock-variant': v.quantity === 0,
+                    'low-stock-variant': v.quantity > 0 && v.quantity <= v.minStock 
+                  }]"
                 >
-                  {{ v.specName }} ${{ Number(v.quantity * v.unitPrice).toFixed(2) }} × {{ v.quantity }} {{ v.unit }}
+                  {{ v.specName }} ${{ Number(v.unitPrice).toFixed(2) }} × {{ v.quantity }} {{ v.unit }} = ${{ (Number(v.unitPrice) * v.quantity).toFixed(2) }}
                 </span>
               </div>
             </td>

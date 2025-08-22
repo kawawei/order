@@ -130,6 +130,19 @@ const loadInventory = async () => {
     inventoryItems.value = inventoryResponse.data.inventory || []
     stats.value = statsResponse.data.overview || {}
     
+    // 調試：打印所有商品的庫存狀態
+    console.log(`[DEBUG] 總共有 ${inventoryItems.value.length} 個商品`)
+    inventoryItems.value.forEach((item, index) => {
+      console.log(`[DEBUG] 商品 ${index + 1}: ${item.name}, 類型: ${item.type}`)
+      if (item.type === 'single') {
+        console.log(`  - 庫存: ${item.singleStock.quantity}, 最低庫存: ${item.singleStock.minStock}`)
+      } else if (item.type === 'multiSpec') {
+        item.multiSpecStock.forEach(spec => {
+          console.log(`  - 規格 ${spec.specName}: 庫存 ${spec.quantity}, 最低庫存 ${spec.minStock}`)
+        })
+      }
+    })
+    
     // 嘗試載入新的分類管理系統
     try {
       const categoriesResponse = await inventoryCategoryAPI.getAllCategories()
@@ -240,9 +253,9 @@ const getQuantityClass = (item) => {
   const totalQuantity = getTotalQuantity(item)
   if (totalQuantity === 0) return 'out-of-stock'
   if (item.type === 'single') {
-    return totalQuantity <= item.singleStock.minStock ? 'low-stock' : 'normal'
+    return totalQuantity < item.singleStock.minStock ? 'low-stock' : 'normal'
   } else if (item.type === 'multiSpec') {
-    const hasLowStock = item.multiSpecStock.some(spec => spec.quantity <= spec.minStock)
+    const hasLowStock = item.multiSpecStock.some(spec => spec.quantity < spec.minStock)
     return hasLowStock ? 'low-stock' : 'normal'
   }
   return 'normal'
@@ -251,12 +264,83 @@ const getQuantityClass = (item) => {
 const getStatusClass = (item) => {
   if (!item.isActive) return 'inactive'
   if (item.status === 'discontinued') return 'discontinued'
-  return 'active'
+  
+  if (item.type === 'single') {
+    const totalQuantity = getTotalQuantity(item)
+    
+    if (totalQuantity === 0) {
+      return 'danger' // 缺貨時顯示紅色
+    }
+    
+    const minStock = item.singleStock.minStock
+    const isLowStock = totalQuantity <= minStock
+    return isLowStock ? 'warning' : 'success'
+  } else if (item.type === 'multiSpec') {
+    // 先檢查是否有任何規格缺貨
+    const hasOutOfStock = item.multiSpecStock.some(spec => spec.quantity === 0)
+    if (hasOutOfStock) {
+      return 'danger' // 缺貨時顯示紅色
+    }
+    
+    // 再檢查是否有任何規格庫存不足
+    const hasLowStock = item.multiSpecStock.some(spec => spec.quantity <= spec.minStock)
+    return hasLowStock ? 'warning' : 'success'
+  }
+  
+  return 'success'
 }
 
 const getStatusText = (item) => {
-  if (!item.isActive) return '停用'
-  if (item.status === 'discontinued') return '停產'
+  console.log(`[DEBUG] 計算狀態文字 - 商品: ${item.name}, 類型: ${item.type}, 啟用狀態: ${item.isActive}, 商品狀態: ${item.status}`)
+  
+  if (!item.isActive) {
+    console.log(`[DEBUG] 商品未啟用，返回: 停用`)
+    return '停用'
+  }
+  if (item.status === 'discontinued') {
+    console.log(`[DEBUG] 商品已停產，返回: 停產`)
+    return '停產'
+  }
+  
+  if (item.type === 'single') {
+    const totalQuantity = getTotalQuantity(item)
+    console.log(`[DEBUG] 單一規格 - 總庫存量: ${totalQuantity}`)
+    
+    if (totalQuantity === 0) {
+      console.log(`[DEBUG] 單一規格庫存為0，返回: 缺貨`)
+      return '缺貨'
+    }
+    
+    const minStock = item.singleStock.minStock
+    const isLowStock = totalQuantity <= minStock
+    console.log(`[DEBUG] 單一規格 - 最低庫存: ${minStock}, 是否庫存不足: ${isLowStock}`)
+    return isLowStock ? '庫存不足' : '正常'
+  } else if (item.type === 'multiSpec') {
+    console.log(`[DEBUG] 多規格檢查 - 規格數量: ${item.multiSpecStock.length}`)
+    
+    // 先檢查是否有任何規格缺貨
+    const hasOutOfStock = item.multiSpecStock.some(spec => {
+      const isOut = spec.quantity === 0
+      console.log(`[DEBUG] 規格 ${spec.specName}: 庫存 ${spec.quantity}, 是否缺貨: ${isOut}`)
+      return isOut
+    })
+    
+    if (hasOutOfStock) {
+      console.log(`[DEBUG] 多規格有缺貨，返回: 缺貨`)
+      return '缺貨'
+    }
+    
+    // 再檢查是否有任何規格庫存不足
+    const hasLowStock = item.multiSpecStock.some(spec => {
+      const isLow = spec.quantity <= spec.minStock
+      console.log(`[DEBUG] 規格 ${spec.specName}: 庫存 ${spec.quantity}, 最低庫存 ${spec.minStock}, 是否不足: ${isLow}`)
+      return isLow
+    })
+    console.log(`[DEBUG] 多規格是否有庫存不足: ${hasLowStock}`)
+    return hasLowStock ? '庫存不足' : '正常'
+  }
+  
+  console.log(`[DEBUG] 預設返回: 正常`)
   return '正常'
 }
 

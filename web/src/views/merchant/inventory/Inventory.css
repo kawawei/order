@@ -293,6 +293,16 @@ th {
   font-weight: 500;
 }
 
+.variant-chip.low-stock-variant {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.variant-chip.out-of-stock-variant {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
 .action-buttons {
   display: flex;
   gap: 8px;

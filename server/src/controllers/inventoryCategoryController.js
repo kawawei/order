@@ -298,7 +298,7 @@ exports.getCategoryStats = catchAsync(async (req, res, next) => {
                 $reduce: {
                   input: '$multiSpecStock',
                   initialValue: 0,
-                  in: { $add: ['$$value', { $multiply: ['$cost.unitPrice', '$$this.quantity'] }] }
+                  in: { $add: ['$$value', { $multiply: ['$$this.unitPrice', '$$this.quantity'] }] }
                 }
               }
             ]
