@@ -11,6 +11,7 @@ export function useOrders(restaurantId = null) {
   const showOrderDetails = ref(false)
   const selectedOrder = ref(null)
   const dateViewMode = ref('day') // 日期視圖模式：'day', 'month', 'year'
+  const isAutoRefreshing = ref(false) // 自動更新狀態
 
   // 收據預覽相關
   const showReceiptPreview = ref(false)
@@ -119,25 +120,136 @@ export function useOrders(restaurantId = null) {
     { key: 'actions', label: '操作', width: '120px' }
   ]
 
+  // 輔助函數：根據日期視圖模式獲取時間範圍
+  const getDateRange = () => {
+    const selectedDay = new Date(selectedDate.value)
+    let startTime, endTime
+    
+    switch (dateViewMode.value) {
+      case 'year':
+        const startOfYear = new Date(selectedDay.getFullYear(), 0, 1)
+        const endOfYear = new Date(selectedDay.getFullYear(), 11, 31, 23, 59, 59, 999)
+        startTime = startOfYear.toISOString()
+        endTime = endOfYear.toISOString()
+        break
+      case 'month':
+        const startOfMonth = new Date(selectedDay.getFullYear(), selectedDay.getMonth(), 1)
+        const endOfMonth = new Date(selectedDay.getFullYear(), selectedDay.getMonth() + 1, 0, 23, 59, 59, 999)
+        startTime = startOfMonth.toISOString()
+        endTime = endOfMonth.toISOString()
+        break
+      case 'day':
+      default:
+        const startOfDay = new Date(selectedDay.getFullYear(), selectedDay.getMonth(), selectedDay.getDate())
+        const endOfDay = new Date(selectedDay.getFullYear(), selectedDay.getMonth(), selectedDay.getDate(), 23, 59, 59, 999)
+        startTime = startOfDay.toISOString()
+        endTime = endOfDay.toISOString()
+        break
+    }
+    
+    return { startTime, endTime }
+  }
+
+  // 輔助函數：過濾指定日期範圍內的訂單
+  const filterOrdersByDateRange = (statusFilter) => {
+    const { startTime, endTime } = getDateRange()
+    return liveOrders.value.filter(order => {
+      const orderDate = new Date(order.createdAt)
+      return orderDate >= new Date(startTime) && orderDate <= new Date(endTime) && statusFilter(order)
+    })
+  }
+
   // 計算屬性 - 支持批次分組
   const preparingOrders = computed(() => {
-    const orders = liveOrders.value.filter(order => 
+    const orders = filterOrdersByDateRange(order => 
       ['pending', 'confirmed', 'preparing'].includes(order.status)
     )
     return groupOrdersByBatch(orders)
   })
 
   const readyOrders = computed(() => {
-    const orders = liveOrders.value.filter(order => order.status === 'ready')
+    const orders = filterOrdersByDateRange(order => order.status === 'ready')
     return groupOrdersByBatch(orders)
   })
 
   const deliveredOrders = computed(() => {
-    const orders = liveOrders.value.filter(order => 
-      ['served', 'delivered'].includes(order.status)
+    const orders = filterOrdersByDateRange(order => 
+      ['served', 'delivered', 'completed'].includes(order.status)
     )
-    return groupOrdersByBatch(orders)
+    
+    // 分離已結帳和未結帳的訂單
+    const completedOrders = orders.filter(order => order.status === 'completed')
+    const nonCompletedOrders = orders.filter(order => order.status !== 'completed')
+    
+    // 已結帳訂單按收據號分組並合併相同菜品
+    const completedGroups = groupCompletedOrdersByReceipt(completedOrders)
+    
+    // 未結帳訂單按批次分組
+    const nonCompletedGroups = groupOrdersByBatch(nonCompletedOrders)
+    
+    // 合併兩組結果
+    return [...completedGroups, ...nonCompletedGroups].sort((a, b) => 
+      new Date(b.createdAt) - new Date(a.createdAt)
+    )
   })
+
+  // 將已結帳訂單按收據號分組，並合併相同菜品
+  const groupCompletedOrdersByReceipt = (orders) => {
+    const receiptMap = new Map()
+    
+    orders.forEach(order => {
+      const receiptKey = order.receiptOrderNumber || `no-receipt-${order._id}`
+      
+      if (!receiptMap.has(receiptKey)) {
+        receiptMap.set(receiptKey, {
+          _id: receiptKey,
+          receiptOrderNumber: order.receiptOrderNumber,
+          tableNumber: order.tableNumber,
+          createdAt: order.createdAt,
+          completedAt: order.completedAt,
+          items: new Map(), // 使用 Map 來合併相同菜品
+          totalAmount: 0,
+          status: 'completed',
+          itemCount: 0
+        })
+      }
+      
+      const receipt = receiptMap.get(receiptKey)
+      const processedItems = processOrderItems(order.items || [])
+      
+      // 合併相同菜品
+      processedItems.forEach(item => {
+        const itemKey = generateItemKey(item)
+        
+        if (receipt.items.has(itemKey)) {
+          // 如果已存在相同菜品，累加數量
+          const existingItem = receipt.items.get(itemKey)
+          existingItem.quantity += item.quantity
+        } else {
+          // 如果是新菜品，直接添加
+          receipt.items.set(itemKey, { ...item })
+        }
+      })
+      
+      receipt.totalAmount += order.totalAmount || 0
+    })
+    
+    // 將 Map 轉換為陣列並計算總項目數
+    return Array.from(receiptMap.values()).map(receipt => {
+      const itemsArray = Array.from(receipt.items.values())
+      receipt.items = itemsArray
+      receipt.itemCount = itemsArray.reduce((total, item) => total + item.quantity, 0)
+      return receipt
+    })
+  }
+
+  // 生成菜品的唯一鍵值，用於合併相同菜品
+  const generateItemKey = (item) => {
+    const optionsString = item.processedOptions 
+      ? item.processedOptions.map(opt => `${opt.key}:${opt.valueLabel}`).sort().join('|')
+      : ''
+    return `${item.name}|${optionsString}`
+  }
 
   // 將訂單按批次分組，每個批次一張卡片，按時間順序排列
   const groupOrdersByBatch = (orders) => {
@@ -167,7 +279,7 @@ export function useOrders(restaurantId = null) {
     })
     
     return Array.from(batchMap.values()).sort((a, b) => 
-      new Date(b.createdAt) - new Date(a.createdAt)
+      new Date(a.createdAt) - new Date(b.createdAt)
     )
   }
 
@@ -355,7 +467,8 @@ export function useOrders(restaurantId = null) {
   const liveStats = computed(() => ({
     preparing: preparingOrders.value.length,
     ready: readyOrders.value.length,
-    delivered: deliveredOrders.value.length
+    delivered: deliveredOrders.value.filter(batch => batch.status === 'delivered').length,
+    completed: deliveredOrders.value.filter(batch => batch.status === 'completed').length
   }))
 
   const selectedDateOrdersCount = computed(() => {
@@ -376,7 +489,7 @@ export function useOrders(restaurantId = null) {
     // 計算即時訂單中已完成的訂單數量（已送出的訂單）
     const getLiveCompletedOrdersCount = () => {
       const completedLiveOrders = liveOrders.value.filter(order => 
-        ['served', 'delivered'].includes(order.status)
+        ['served', 'delivered', 'completed'].includes(order.status)
       )
       
       const selectedDay = new Date(selectedDate.value)
@@ -530,7 +643,7 @@ export function useOrders(restaurantId = null) {
       }
       
       const response = await orderService.getOrdersByMerchant(merchantId, {
-        status: 'pending,confirmed,preparing,ready,delivered,served',
+        status: 'pending,confirmed,preparing,ready,delivered,served,completed',
         limit: 50,
         sortBy: 'createdAt',
         sortOrder: 'desc'
@@ -1284,12 +1397,17 @@ export function useOrders(restaurantId = null) {
 
   // 啟動自動刷新
   const startAutoRefresh = () => {
-    // 每30秒自動刷新一次即時訂單
-    refreshInterval = setInterval(() => {
+    // 每5秒自動刷新一次即時訂單，提供更即時的更新
+    refreshInterval = setInterval(async () => {
       if (activeTab.value === 'live') {
-        loadLiveOrders()
+        isAutoRefreshing.value = true
+        try {
+          await loadLiveOrders()
+        } finally {
+          isAutoRefreshing.value = false
+        }
       }
-    }, 30000) // 30秒
+    }, 5000) // 5秒
   }
 
   // 停止自動刷新

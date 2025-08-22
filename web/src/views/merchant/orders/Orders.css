@@ -98,7 +98,7 @@
 
 .stat-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: 2rem;
 }
 
@@ -131,6 +131,10 @@
   background-color: #6366f1;
 }
 
+.stat-icon.completed {
+  background-color: #059669;
+}
+
 .stat-info {
   display: flex;
   flex-direction: column;
@@ -150,7 +154,7 @@
 /* 即時訂單網格 */
 .live-orders-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(2, 1fr);
   gap: 2rem;
 }
 
@@ -179,6 +183,10 @@
 
 .column-header.delivered {
   background-color: #6366f1;
+}
+
+.column-header.completed {
+  background-color: #059669;
 }
 
 /* 批次卡片樣式 */
@@ -245,6 +253,10 @@
 
 .batch-card.delivered {
   border-left-color: #6366f1;
+}
+
+.batch-card.completed {
+  border-left-color: #059669;
 }
 
 .batch-header {
@@ -709,12 +721,18 @@
 /* 響應式設計 */
 @media (max-width: 1024px) {
   .live-orders-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, 1fr);
     gap: 1rem;
   }
   
   .stats-grid {
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1rem;
+  }
+  
+  .stat-grid {
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1rem;
   }
 }
 
@@ -734,7 +752,13 @@
   }
   
   .stats-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 0.75rem;
+  }
+  
+  .stat-grid {
+    grid-template-columns: repeat(4, 1fr);
+    gap: 0.75rem;
   }
   
   .order-basic-info {

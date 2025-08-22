@@ -89,6 +89,15 @@
                 <span class="stat-label">已送出</span>
               </div>
             </div>
+            <div class="stat-item completed">
+              <div class="stat-icon">
+                <font-awesome-icon icon="receipt" />
+              </div>
+              <div class="stat-info">
+                <span class="stat-number">{{ liveStats.completed }}</span>
+                <span class="stat-label">已結帳</span>
+              </div>
+            </div>
           </div>
         </BaseCard>
       </div>
@@ -234,23 +243,23 @@
         <BaseCard class="orders-column" elevation="low">
           <template #header>
             <div class="column-header delivered">
-              <font-awesome-icon icon="check-circle" />
-              <span>已送出 ({{ deliveredOrders.length }})</span>
+              <font-awesome-icon icon="truck" />
+              <span>已送出 ({{ deliveredOrders.filter(batch => batch.status === 'delivered').length }})</span>
             </div>
           </template>
           <div class="orders-list">
-            <div v-if="deliveredOrders.length === 0" class="empty-state">
+            <div v-if="deliveredOrders.filter(batch => batch.status === 'delivered').length === 0" class="empty-state">
               <div class="empty-icon">
-                <font-awesome-icon icon="check-circle" />
+                <font-awesome-icon icon="truck" />
               </div>
               <p class="empty-text">目前沒有已送出的訂單</p>
               <p class="empty-subtext">已出餐的訂單會出現在這裡</p>
             </div>
-            <div v-for="batch in deliveredOrders" :key="batch._id" class="batch-card delivered">
+            <div v-for="batch in deliveredOrders.filter(batch => batch.status === 'delivered')" :key="batch._id" class="batch-card delivered">
               <div class="batch-header">
                 <div class="table-info">
                   <span class="table-number">{{ batch.tableNumber }}號桌</span>
-                  <BaseTag variant="success" size="small">
+                  <BaseTag variant="info" size="small">
                     批次 {{ batch.batchNumber }}
                   </BaseTag>
                 </div>
@@ -277,8 +286,67 @@
                 </div>
                 <div class="batch-actions">
                   <BaseButton variant="text" size="small" disabled>
-                    <font-awesome-icon icon="check" />
+                    <font-awesome-icon icon="truck" />
                     已送出
+                  </BaseButton>
+                </div>
+              </div>
+            </div>
+          </div>
+        </BaseCard>
+
+        <!-- 已結帳訂單 -->
+        <BaseCard class="orders-column" elevation="low">
+          <template #header>
+            <div class="column-header completed">
+              <font-awesome-icon icon="check-circle" />
+              <span>已結帳 ({{ deliveredOrders.filter(batch => batch.status === 'completed').length }})</span>
+            </div>
+          </template>
+          <div class="orders-list">
+            <div v-if="deliveredOrders.filter(batch => batch.status === 'completed').length === 0" class="empty-state">
+              <div class="empty-icon">
+                <font-awesome-icon icon="check-circle" />
+              </div>
+              <p class="empty-text">目前沒有已結帳的訂單</p>
+              <p class="empty-subtext">已結帳的訂單會出現在這裡</p>
+            </div>
+            <div v-for="batch in deliveredOrders.filter(batch => batch.status === 'completed')" :key="batch._id" class="batch-card completed">
+              <div class="batch-header">
+                <div class="table-info">
+                  <span class="table-number">{{ batch.tableNumber }}號桌</span>
+                  <BaseTag v-if="batch.receiptOrderNumber" variant="success" size="small">
+                    收據號: {{ batch.receiptOrderNumber }}
+                  </BaseTag>
+                  <BaseTag v-else variant="success" size="small">
+                    已結帳
+                  </BaseTag>
+                </div>
+                <div class="batch-time">{{ formatTime(batch.createdAt) }}</div>
+              </div>
+              <div class="batch-items">
+                <div v-for="item in batch.items" :key="item._id" class="batch-item">
+                  <div class="item-main">
+                    <span class="item-name">{{ item.name }}</span>
+                    <!-- 選項標籤橫排在菜名右邊 -->
+                    <div v-if="item.processedOptions && item.processedOptions.length > 0" class="item-options-inline">
+                      <span v-for="option in item.processedOptions" :key="option.key" class="option-tag">
+                        {{ option.valueLabel }}
+                      </span>
+                    </div>
+                    <span class="item-quantity">x{{ item.quantity }}</span>
+                  </div>
+                </div>
+              </div>
+              <div class="batch-footer">
+                <div class="batch-stats">
+                  <span class="total-items">{{ batch.itemCount }} 項</span>
+                  <span class="total-amount">NT$ {{ batch.totalAmount }}</span>
+                </div>
+                <div class="batch-actions">
+                  <BaseButton variant="primary" size="small" disabled>
+                    <font-awesome-icon icon="check-circle" />
+                    已結帳
                   </BaseButton>
                 </div>
               </div>
