@@ -230,13 +230,19 @@ onMounted(async () => {
         if (response.status === 'success') {
           tableData.value = response.data.table
           
+          // 如果桌次狀態是 available，自動開始點餐（更新狀態為 occupied）
+          if (tableData.value.status === 'available') {
+            console.log('從商家後台進入，桌次狀態為可用，自動開始點餐')
+            await api.post(`/tables/${tableData.value.id}/start-ordering`)
+          }
+          
           // 將桌次和商家資訊保存到 sessionStorage
           sessionStorage.setItem('currentTable', JSON.stringify({
             id: tableData.value.id,
             tableNumber: tableData.value.tableNumber,
             tableName: tableData.value.tableName,
             capacity: tableData.value.capacity,
-            status: tableData.value.status,
+            status: 'occupied', // 從商家後台進入時，狀態應該是 occupied
             merchant: tableData.value.merchant,
             uniqueCode: tableCode.value,
             isAvailable: tableData.value.isAvailable
@@ -259,8 +265,17 @@ onMounted(async () => {
         isLoading.value = false
       }
     } else {
-      // 正常流程，載入桌次資訊並顯示歡迎頁面
-      loadTableInfo()
+      // 檢查是否從菜單頁面跳轉回來（結帳後自動跳轉）
+      const fromMenu = route.query.from === 'menu'
+      
+      if (fromMenu) {
+        // 從菜單頁面跳轉回來，顯示歡迎頁面
+        console.log('從菜單頁面跳轉回來，顯示歡迎頁面')
+        loadTableInfo()
+      } else {
+        // 正常流程，載入桌次資訊並顯示歡迎頁面
+        loadTableInfo()
+      }
     }
   } else {
     error.value = '無效的桌次代碼'

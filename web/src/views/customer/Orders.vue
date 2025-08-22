@@ -86,16 +86,17 @@
             </BaseButton>
             -->
             
-            <!-- 結帳按鈕已隱藏，但功能保留以便之後調用 -->
+            <!-- 結帳按鈕暫時隱藏 -->
             <!-- 
             <BaseButton
               variant="primary"
               size="large"
               @click.stop="proceedToCheckout"
               class="checkout-button"
+              :disabled="isCheckingOut"
             >
               <font-awesome-icon icon="credit-card" />
-              結帳 (NT$ {{ currentOrder.totalAmount }})
+              {{ isCheckingOut ? '結帳中...' : `結帳 (NT$ ${currentOrder.totalAmount})` }}
             </BaseButton>
             -->
           </div>
@@ -350,6 +351,18 @@ const proceedToCheckout = async () => {
 
     const totalAmount = totalResponse.data.totalAmount
     const batchCount = totalResponse.data.batchCount
+    
+    // 檢查是否有未送出的訂單
+    if (totalResponse.data.hasUndeliveredOrders) {
+      console.log('有未送出的訂單，無法結帳')
+      const undeliveredBatches = totalResponse.data.orderStatuses
+        .filter(order => order.status !== 'delivered')
+        .map(order => `批次 ${order.batchNumber}`)
+        .join('、')
+      
+      alert(`無法結帳：以下訂單尚未送出\n${undeliveredBatches}\n\n請等待所有餐點送出後再進行結帳。`)
+      return
+    }
     
     // 添加詳細的調試訊息
     console.log('=== 結帳調試訊息 ===')

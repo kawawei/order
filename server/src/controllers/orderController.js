@@ -199,7 +199,7 @@ exports.checkoutOrder = catchAsync(async (req, res, next) => {
   // 查找該桌子的未結帳訂單
   const order = await Order.findOne({
     tableId: table._id,
-    status: { $in: ['pending', 'confirmed', 'preparing', 'ready'] }
+    status: { $in: ['pending', 'confirmed', 'preparing', 'ready', 'delivered'] }
   }).populate([
     { path: 'tableId', select: 'tableNumber status' },
     { path: 'merchantId', select: 'name' },
@@ -208,6 +208,11 @@ exports.checkoutOrder = catchAsync(async (req, res, next) => {
 
   if (!order) {
     return next(new AppError('找不到待結帳的訂單', 404));
+  }
+
+  // 檢查訂單狀態，只有當訂單狀態為 'delivered'（已送出）時才能結帳
+  if (order.status !== 'delivered') {
+    return next(new AppError('訂單尚未送出，無法結帳。請等待所有餐點送出後再進行結帳。', 400));
   }
 
   // 更新訂單狀態為已完成
@@ -810,6 +815,22 @@ exports.checkoutTable = catchAsync(async (req, res, next) => {
     itemsCount: mergedData.allItems.length
   });
   
+  // 檢查是否有未送出的訂單（狀態不是 'delivered'）
+  const hasUndeliveredOrders = mergedData.batches.some(batch => batch.status !== 'delivered');
+  
+  if (hasUndeliveredOrders) {
+    // 找出未送出的訂單批次
+    const undeliveredBatches = mergedData.batches
+      .filter(batch => batch.status !== 'delivered')
+      .map(batch => `批次 ${batch.batchNumber} (${batch.status})`)
+      .join('\n');
+    
+    console.log('發現未送出的訂單，無法結帳:', undeliveredBatches);
+    return next(new AppError(`無法結帳：以下訂單尚未送出\n${undeliveredBatches}\n\n請等待所有餐點送出後再進行結帳。`, 400));
+  }
+  
+  console.log('所有訂單都已送出，可以進行結帳');
+  
   // 生成收據號碼
   const receiptNumber = generateReceiptNumber();
   console.log('生成的收據號碼:', receiptNumber);
@@ -889,12 +910,23 @@ exports.getTableTotal = catchAsync(async (req, res, next) => {
   const totalAmount = await Order.calculateTableTotal(tableId);
   const batches = await Order.getAllBatchesByTable(tableId);
 
+  // 檢查是否有未送出的訂單（狀態不是 'delivered'）
+  const hasUndeliveredOrders = batches.some(batch => batch.status !== 'delivered');
+  const canCheckout = !hasUndeliveredOrders && batches.length > 0;
+
   res.status(200).json({
     status: 'success',
     data: {
       tableId,
       totalAmount,
-      batchCount: batches.length
+      batchCount: batches.length,
+      hasUndeliveredOrders,
+      canCheckout,
+      orderStatuses: batches.map(batch => ({
+        batchNumber: batch.batchNumber,
+        status: batch.status,
+        orderNumber: batch.orderNumber
+      }))
     }
   });
 });

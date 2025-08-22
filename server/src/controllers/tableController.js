@@ -333,19 +333,10 @@ exports.updateTableStatus = catchAsync(async (req, res, next) => {
   // 如果桌次狀態變更為可用（清理桌次），清空該桌次的所有相關數據
   if (status === 'available' && table.status === 'occupied') {
     try {
-      // 清空該桌次的所有未完成訂單
-      await Order.updateMany(
-        { 
-          tableId: table._id,
-          status: { $in: ['pending', 'confirmed', 'preparing', 'ready'] }
-        },
-        { 
-          status: 'cancelled',
-          updatedAt: new Date()
-        }
-      );
+      // 清空該桌次的所有訂單（無論狀態如何）
+      const deleteResult = await Order.deleteMany({ tableId: table._id });
       
-      console.log(`桌次 ${table.tableNumber} 清理完成，相關訂單已取消`);
+      console.log(`桌次 ${table.tableNumber} 清理完成，已刪除 ${deleteResult.deletedCount} 筆訂單記錄`);
     } catch (error) {
       console.error('清理桌次訂單時發生錯誤:', error);
       // 即使清理訂單失敗，仍然繼續更新桌次狀態
@@ -357,7 +348,7 @@ exports.updateTableStatus = catchAsync(async (req, res, next) => {
   res.status(200).json({
     status: 'success',
     message: status === 'available' && table.status === 'occupied' 
-      ? '桌次已清理，相關訂單和購物車數據已清空' 
+      ? '桌次已清理，所有訂單記錄已完全刪除' 
       : '桌次狀態更新成功',
     data: {
       table

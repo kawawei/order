@@ -2,10 +2,12 @@
   <div class="tables-container">
     <div class="header">
       <h1>桌次管理</h1>
-      <button class="add-table-btn" @click="showAddTableDialog = true">
-        <font-awesome-icon icon="plus" />
-        新增桌次
-      </button>
+      <div class="header-actions">
+        <button class="add-table-btn" @click="showAddTableDialog = true">
+          <font-awesome-icon icon="plus" />
+          新增桌次
+        </button>
+      </div>
     </div>
 
     <div class="tables-grid">
@@ -110,6 +112,7 @@
             v-if="table.status === 'occupied'" 
             @click="setTableAvailable(table._id || table.id)"
             class="status-btn clear-btn"
+            title="清理桌次並刪除所有訂單記錄"
           >
             清理桌次
           </button>
@@ -254,7 +257,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { tableAPI, orderAPI } from '@/services/api'
 import BaseReceipt from '../../../components/base/BaseReceipt.vue'
@@ -287,6 +290,10 @@ const receiptComponent = ref(null)
 
 // 結帳狀態管理
 const isCheckingOut = ref(false)
+
+// 自動刷新相關
+const refreshInterval = ref(null)
+const autoRefreshEnabled = ref(true)
 
 // 載入桌次數據
 const loadTables = async () => {
@@ -415,7 +422,9 @@ const setTableOccupied = async (tableId) => {
 
 // 設置桌次為可用
 const setTableAvailable = async (tableId) => {
-  if (confirm('確定要清理此桌次嗎？')) {
+  const confirmMessage = '確定要清理此桌次嗎？\n\n⚠️ 注意：此操作將刪除該桌次的所有訂單記錄，包括：\n• 未送出的訂單\n• 已送出的訂單\n• 已完成的訂單\n• 已取消的訂單\n\n此操作無法復原！'
+  
+  if (confirm(confirmMessage)) {
     try {
       const statusData = {
         status: 'available'
@@ -469,7 +478,7 @@ const toggleQRCode = (tableId) => {
 }
 
 // 進入桌次
-const enterTable = (tableId, tableNumber) => {
+const enterTable = async (tableId, tableNumber) => {
   // 找到對應的桌次數據
   const table = tables.value.find(t => (t._id || t.id) === tableId)
   
@@ -480,21 +489,32 @@ const enterTable = (tableId, tableNumber) => {
   
   console.log('桌次數據:', table) // 調試信息
   
-  // 使用桌次的 customerUrl 或 uniqueCode 來構建正確的連結
-  if (table.customerUrl) {
-    console.log('使用 customerUrl:', table.customerUrl)
-    // 從商家後台進入，直接跳轉到點餐頁面
-    const directUrl = `${table.customerUrl}?from=merchant`
-    window.open(directUrl, '_blank')
-  } else if (table.uniqueCode) {
-    // 使用 uniqueCode 構建連結
-    const baseUrl = window.location.origin
-    const tableUrl = `${baseUrl}/table/${table.uniqueCode}?from=merchant`
-    console.log('使用 uniqueCode 構建連結:', tableUrl)
-    window.open(tableUrl, '_blank')
-  } else {
-    console.log('桌次缺少 customerUrl 和 uniqueCode')
-    alert('此桌次暫無客戶端連結，請重新生成 QR Code')
+  try {
+    // 如果桌次狀態是 available，自動設為 occupied
+    if (table.status === 'available') {
+      console.log('桌次狀態為可用，自動設為已入座')
+      await setTableOccupied(tableId)
+    }
+    
+    // 使用桌次的 customerUrl 或 uniqueCode 來構建正確的連結
+    if (table.customerUrl) {
+      console.log('使用 customerUrl:', table.customerUrl)
+      // 從商家後台進入，直接跳轉到點餐頁面
+      const directUrl = `${table.customerUrl}?from=merchant`
+      window.open(directUrl, '_blank')
+    } else if (table.uniqueCode) {
+      // 使用 uniqueCode 構建連結
+      const baseUrl = window.location.origin
+      const tableUrl = `${baseUrl}/table/${table.uniqueCode}?from=merchant`
+      console.log('使用 uniqueCode 構建連結:', tableUrl)
+      window.open(tableUrl, '_blank')
+    } else {
+      console.log('桌次缺少 customerUrl 和 uniqueCode')
+      alert('此桌次暫無客戶端連結，請重新生成 QR Code')
+    }
+  } catch (error) {
+    console.error('進入桌次失敗:', error)
+    alert('進入桌次失敗：' + (error.message || '未知錯誤'))
   }
 }
 
@@ -571,7 +591,7 @@ const checkoutTable = async (tableId) => {
     isCheckingOut.value = true
     console.log('開始結帳流程，設置 isCheckingOut 為 true')
     
-    // 先獲取桌子的總金額
+    // 先獲取桌子的總金額和訂單狀態
     const totalResponse = await orderAPI.getTableTotal(tableId)
     
     if (!totalResponse.data || totalResponse.data.totalAmount === 0) {
@@ -581,6 +601,26 @@ const checkoutTable = async (tableId) => {
 
     const totalAmount = totalResponse.data.totalAmount
     const batchCount = totalResponse.data.batchCount
+    const hasUndeliveredOrders = totalResponse.data.hasUndeliveredOrders
+    const canCheckout = totalResponse.data.canCheckout
+    
+    // 檢查是否有未送出的訂單
+    if (hasUndeliveredOrders) {
+      const orderStatuses = totalResponse.data.orderStatuses || []
+      const undeliveredBatches = orderStatuses
+        .filter(order => order.status !== 'delivered')
+        .map(order => `批次 ${order.batchNumber} (${order.status})`)
+        .join('\n')
+      
+      alert(`無法結帳：以下訂單尚未送出\n${undeliveredBatches}\n\n請等待所有餐點送出後再進行結帳。`)
+      return
+    }
+    
+    // 檢查是否可以結帳
+    if (!canCheckout) {
+      alert('此桌次目前無法結帳，請確認所有餐點都已送出')
+      return
+    }
     
     const confirmMessage = batchCount > 1 
       ? `確定要為此桌次結帳嗎？\n共有 ${batchCount} 批次訂單\n總金額：NT$ ${totalAmount}`
@@ -611,7 +651,12 @@ const checkoutTable = async (tableId) => {
     }
   } catch (error) {
     console.error('結帳失敗:', error)
-    alert('結帳失敗：' + (error.message || '請稍後再試'))
+    // 顯示更詳細的錯誤訊息
+    if (error.response?.data?.message) {
+      alert('結帳失敗：' + error.response.data.message)
+    } else {
+      alert('結帳失敗：' + (error.message || '請稍後再試'))
+    }
   } finally {
     // 延遲重置標誌，防止快速重複點擊
     setTimeout(() => {
@@ -701,11 +746,34 @@ const generateAndShowReceipt = async (tableId, checkoutData) => {
       checkoutData.receiptOrderNumber // 使用後端生成的收據號碼
     )
     
+    // 修改收據格式以與歷史訂單保持一致
+    const formattedReceiptData = {
+      ...receiptData,
+      // 確保項目格式與歷史訂單一致
+      items: receiptData.items.map(item => ({
+        id: item.id,
+        name: item.name,
+        quantity: item.quantity,
+        totalPrice: item.totalPrice,
+        // 添加選項信息（如果有）
+        selectedOptions: item.selectedOptions || null
+      })),
+      // 添加員工姓名（如果有）
+      employeeName: merchantUser.name || merchantUser.employeeName || '',
+      // 確保時間格式一致
+      checkoutTime: receiptData.checkoutTime,
+      // 確保收據號碼格式一致
+      billNumber: receiptData.billNumber,
+      // 確保訂單號碼格式一致
+      orderNumber: receiptData.orderNumber
+    }
+    
     console.log('生成的收據數據:', receiptData)
+    console.log('格式化後的收據數據:', formattedReceiptData)
     
     // 顯示收據模態框
     showReceiptModal.value = true
-    currentReceiptData.value = receiptData
+    currentReceiptData.value = formattedReceiptData
   } catch (error) {
     console.error('生成收據失敗:', error)
     alert('生成收據失敗，請稍後再試')
@@ -729,7 +797,34 @@ const closeReceipt = () => {
 // 組件掛載時載入數據
 onMounted(() => {
   loadTables()
+  startAutoRefresh()
 })
+
+// 組件卸載時清理定時器
+onUnmounted(() => {
+  stopAutoRefresh()
+})
+
+// 開始自動刷新
+const startAutoRefresh = () => {
+  if (autoRefreshEnabled.value && !refreshInterval.value) {
+    refreshInterval.value = setInterval(() => {
+      loadTables()
+    }, 3000) // 每3秒刷新一次
+    console.log('桌次管理自動刷新已啟動 (3秒間隔)')
+  }
+}
+
+// 停止自動刷新
+const stopAutoRefresh = () => {
+  if (refreshInterval.value) {
+    clearInterval(refreshInterval.value)
+    refreshInterval.value = null
+    console.log('桌次管理自動刷新已停止')
+  }
+}
+
+
 </script>
 
 

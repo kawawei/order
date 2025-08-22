@@ -688,14 +688,17 @@ export default {
         if (response.status === 'success') {
           const currentTableStatus = response.data.table.status
           
-          // 如果桌次狀態變為可用（已被清理），清空購物車並提示
+          // 如果桌次狀態變為可用（已被清理），清空購物車並自動跳轉到開始點餐頁面
           if (currentTableStatus === 'available' && tableData.status === 'occupied') {
+            console.log('檢測到桌次狀態變為可用，自動跳轉到開始點餐頁面')
             clearCart()
-            alert('桌次已被店家清理，購物車已清空。\n如需繼續點餐，請重新開始。')
             
             // 更新 sessionStorage 中的桌次狀態
             const updatedTableData = { ...tableData, status: 'available' }
             sessionStorage.setItem('currentTable', JSON.stringify(updatedTableData))
+            
+            // 自動跳轉到開始點餐頁面，帶上 from=menu 參數
+            window.location.href = `/table/${tableData.uniqueCode}?from=menu`
           }
         }
       } catch (error) {
@@ -732,8 +735,8 @@ export default {
       loadCartFromStorage() // 載入購物車資料
       await loadMenuData()
       
-      // 定期檢查桌次狀態（每30秒檢查一次）
-      statusCheckInterval = setInterval(checkTableStatus, 30000)
+      // 定期檢查桌次狀態（每10秒檢查一次）
+      statusCheckInterval = setInterval(checkTableStatus, 10000)
     })
 
     // 組件卸載時清除定時器

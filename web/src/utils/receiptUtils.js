@@ -15,7 +15,7 @@ export function formatDateTime(date) {
   return `${year}/${month}/${day} ${hours}:${minutes}`
 }
 
-// 合併相同菜品
+// 合併相同菜品和選項
 export function mergeItems(items) {
   console.log('=== mergeItems 調試信息 ===');
   console.log('輸入項目:', items);
@@ -25,41 +25,56 @@ export function mergeItems(items) {
   
   items.forEach((item, index) => {
     // 正確提取 dishId
-    let key = null;
+    let dishId = null;
     
     if (item.dishId) {
       // 如果 dishId 是對象，提取其 _id
       if (typeof item.dishId === 'object' && item.dishId !== null) {
-        key = item.dishId._id || item.dishId.id || item.dishId;
+        dishId = item.dishId._id || item.dishId.id || item.dishId;
       } else {
-        key = item.dishId;
+        dishId = item.dishId;
       }
     } else if (item.id) {
-      key = item.id;
+      dishId = item.id;
     }
     
-    // 確保 key 是字符串格式
-    const stringKey = String(key);
+    // 創建更精確的項目鍵，包含所有影響價格的選項
+    const optionsKey = item.selectedOptions ? 
+      Object.entries(item.selectedOptions)
+        .sort(([a], [b]) => a.localeCompare(b)) // 排序確保一致性
+        .map(([key, value]) => {
+          // 處理不同的選項值格式
+          let displayValue = value;
+          if (typeof value === 'object' && value !== null) {
+            displayValue = value.label || value.name || value.value || JSON.stringify(value);
+          }
+          return `${key}:${displayValue}`;
+        })
+        .join('|') : '';
+    
+    // 使用 dishId + 選項作為唯一鍵值
+    const itemKey = `${dishId}-${optionsKey}`;
     
     console.log(`項目 ${index}:`, {
       name: item.name,
-      dishId: item.dishId,
+      dishId: dishId,
       id: item.id,
-      key: key,
-      stringKey: stringKey,
+      options: item.selectedOptions,
+      optionsKey: optionsKey,
+      itemKey: itemKey,
       quantity: item.quantity,
       price: item.price,
       unitPrice: item.unitPrice,
       totalPrice: item.totalPrice
     });
     
-    if (merged[stringKey]) {
-      console.log(`合併項目: ${item.name} (key: ${stringKey})`);
-      merged[stringKey].quantity += item.quantity
-      merged[stringKey].totalPrice = merged[stringKey].quantity * (merged[stringKey].price || merged[stringKey].unitPrice)
+    if (merged[itemKey]) {
+      console.log(`合併項目: ${item.name} (key: ${itemKey})`);
+      merged[itemKey].quantity += item.quantity
+      merged[itemKey].totalPrice = merged[itemKey].quantity * (merged[itemKey].price || merged[itemKey].unitPrice)
     } else {
-      console.log(`新增項目: ${item.name} (key: ${stringKey})`);
-      merged[stringKey] = {
+      console.log(`新增項目: ${item.name} (key: ${itemKey})`);
+      merged[itemKey] = {
         ...item,
         totalPrice: item.quantity * (item.price || item.unitPrice)
       }
@@ -122,7 +137,9 @@ export function generateReceiptData(order, employeeId, tableNumber, storeName = 
       id: item.dishId || item.id,
       name: item.name,
       quantity: item.quantity,
-      totalPrice: item.totalPrice
+      totalPrice: item.totalPrice,
+      // 保留選項信息
+      selectedOptions: item.selectedOptions || null
     })),
     subtotal: subtotal,
     total: subtotal, // 如果沒有其他費用，總計等於小計
@@ -181,7 +198,9 @@ export function generateReceiptFromStoredData(receipt) {
       id: item.dishId || item.id,
       name: item.name,
       quantity: item.quantity,
-      totalPrice: item.totalPrice
+      totalPrice: item.totalPrice,
+      // 保留選項信息
+      selectedOptions: item.selectedOptions || null
     })),
     subtotal: receipt.subtotal || 0,
     total: receipt.total || 0,
