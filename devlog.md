@@ -2230,3 +2230,100 @@
 - 模組化的代碼結構便於維護和擴展
 
 *時間：2025-08-22 18:40*
+
+## 2025-01-27 歷史訂單匯出功能修復
+
+### 問題描述｜Problem description
+在歷史訂單匯出功能中，發現以下問題：
+1. **合併邏輯錯誤**：在合併相同菜品時，使用了錯誤的屬性名（`quantity` 和 `subtotal`），應該使用中文屬性名（`數量` 和 `小計`）
+2. **Excel 樣式問題**：框線和文字居中設定可能不正確
+3. **數據格式不一致**：匯出的數據結構與預期不符
+
+### 修復內容｜Fixes applied
+
+#### 1. 修復合併邏輯錯誤
+**問題**：在 `server/src/controllers/orderController.js` 中，合併相同菜品時使用了錯誤的屬性名
+```javascript
+// 錯誤的代碼
+existingItem.quantity += item.quantity;
+existingItem.subtotal += (item.totalPrice || (item.unitPrice * item.quantity));
+```
+
+**修復**：使用正確的中文屬性名
+```javascript
+// 修復後的代碼
+existingItem['數量'] += item.quantity;
+existingItem['小計'] += (item.totalPrice || (item.unitPrice * item.quantity));
+```
+
+#### 2. 改進 Excel 樣式設定
+**問題**：框線樣式設定不完整，可能導致顯示問題
+
+**修復**：添加完整的樣式設定
+```javascript
+// 框線樣式
+border: {
+  top: { style: 'thin', color: { rgb: '000000' } },
+  bottom: { style: 'thin', color: { rgb: '000000' } },
+  left: { style: 'thin', color: { rgb: '000000' } },
+  right: { style: 'thin', color: { rgb: '000000' } }
+},
+// 對齊方式：水平居中，垂直居中
+alignment: {
+  horizontal: 'center',
+  vertical: 'center',
+  wrapText: true
+},
+// 字體樣式
+font: {
+  name: '微軟正黑體',
+  sz: 11
+}
+```
+
+#### 3. 添加行高設定
+**新增**：為 Excel 工作表設定統一的行高
+```javascript
+// 設定工作表樣式
+worksheet['!rows'] = [];
+for (let R = range.s.r; R <= range.e.r; R++) {
+  worksheet['!rows'][R] = { hpt: 25 }; // 設定行高
+}
+```
+
+### 技術細節｜Technical details
+
+#### 合併邏輯流程
+1. **項目鍵生成**：基於菜品ID和選項組合生成唯一鍵
+2. **合併判斷**：檢查是否已存在相同鍵的項目
+3. **數量累加**：合併相同項目的數量和金額
+4. **數據轉換**：將 Map 結構轉換為陣列格式
+
+#### Excel 樣式設定
+- **框線**：所有儲存格添加黑色細框線
+- **對齊**：水平和垂直都居中對齊
+- **字體**：使用微軟正黑體，11號字
+- **行高**：統一設定為25點
+- **自動換行**：啟用文字自動換行
+
+### 影響範圍｜Impact
+- 歷史訂單 Excel 匯出功能
+- 歷史訂單 CSV 匯出功能
+- 訂單數據的合併顯示邏輯
+
+### 相關檔案｜Related files
+- `server/src/controllers/orderController.js` - 歷史訂單匯出控制器
+
+### 測試建議｜Testing suggestions
+1. 匯出包含相同菜品的歷史訂單
+2. 檢查 Excel 檔案中的合併邏輯是否正確
+3. 驗證框線和文字對齊是否正常
+4. 確認 CSV 匯出功能是否正常
+
+### 經驗總結｜Lessons learned
+- 在處理多語言屬性名時，需要特別注意屬性名的一致性
+- Excel 樣式設定需要完整的屬性配置
+- 合併邏輯的錯誤會影響數據的準確性
+- 代碼審查時需要關注數據結構的一致性
+
+*時間：2025-01-27 15:30*

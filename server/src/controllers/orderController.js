@@ -949,7 +949,7 @@ exports.exportHistoryOrders = catchAsync(async (req, res, next) => {
     return next(new AppError(errorMessage, 404));
   }
 
-  // 準備匯出數據 - 按收據號和結帳時間分組
+  // 準備匯出數據 - 按收據號和結帳時間分組，並合併相同菜品
   const exportData = [];
   const groupedOrders = new Map(); // 用於分組的 Map
   
@@ -974,15 +974,14 @@ exports.exportHistoryOrders = catchAsync(async (req, res, next) => {
       groupedOrders.set(groupKey, {
         receiptNumber: receiptNumber,
         orderTime: orderTime,
-        tableOrderNumber: order.tableOrderNumber || order.orderNumber,
         tableNumber: order.tableNumber || (order.tableId ? order.tableId.tableNumber : '未知'),
-        items: []
+        items: new Map() // 使用 Map 來合併相同菜品
       });
     }
     
     const group = groupedOrders.get(groupKey);
     
-    // 處理訂單項目
+    // 處理訂單項目 - 合併相同菜品
     if (order.items && order.items.length > 0) {
       order.items.forEach(item => {
         // 處理選項顯示
@@ -1010,14 +1009,25 @@ exports.exportHistoryOrders = catchAsync(async (req, res, next) => {
           optionsText = options.join(', ');
         }
 
-        group.items.push({
-          '商品名稱': item.name,
-          '數量': item.quantity,
-          '單價': item.unitPrice,
-          '小計': item.totalPrice || (item.unitPrice * item.quantity),
-          '選項': optionsText,
-          '備註': item.notes || ''
-        });
+        // 創建菜品唯一鍵：菜品名稱 + 選項 + 備註
+        const itemKey = `${item.name}_${optionsText}_${item.notes || ''}`;
+        
+        if (group.items.has(itemKey)) {
+          // 合併相同菜品
+          const existingItem = group.items.get(itemKey);
+          existingItem['數量'] += item.quantity;
+          existingItem['小計'] += (item.totalPrice || (item.unitPrice * item.quantity));
+        } else {
+          // 新增菜品
+          group.items.set(itemKey, {
+            '商品名稱': item.name,
+            '數量': item.quantity,
+            '單價': item.unitPrice,
+            '小計': item.totalPrice || (item.unitPrice * item.quantity),
+            '選項': optionsText,
+            '備註': item.notes || ''
+          });
+        }
       });
     }
   });
@@ -1027,24 +1037,28 @@ exports.exportHistoryOrders = catchAsync(async (req, res, next) => {
   let currentRow = 2; // Excel 從第2行開始（第1行是標題）
   
   groupedOrders.forEach(group => {
-    if (group.items.length > 0) {
+    if (group.items.size > 0) {
       const startRow = currentRow;
       
-              group.items.forEach((item, index) => {
-          exportData.push({
-            '收據號': group.receiptNumber, // 每行都填入，但會合併
-            '訂單號': group.tableOrderNumber, // 每行都填入，不合併
-            '桌號': group.tableNumber, // 每行都填入，但會合併
-            '結帳時間': group.orderTime, // 每行都填入，但會合併
-            '商品名稱': item['商品名稱'],
-            '數量': item['數量'],
-            '單價': item['單價'],
-            '小計': item['小計'],
-            '選項': item['選項'],
-            '備註': item['備註']
-          });
-          currentRow++;
+      // 將 Map 轉換為陣列並按菜品名稱排序
+      const sortedItems = Array.from(group.items.values()).sort((a, b) => 
+        a['商品名稱'].localeCompare(b['商品名稱'])
+      );
+      
+      sortedItems.forEach((item, index) => {
+        exportData.push({
+          '收據號': group.receiptNumber, // 每行都填入，但會合併
+          '桌號': group.tableNumber, // 每行都填入，但會合併
+          '結帳時間': group.orderTime, // 每行都填入，但會合併
+          '商品名稱': item['商品名稱'],
+          '數量': item['數量'],
+          '單價': item['單價'],
+          '小計': item['小計'],
+          '選項': item['選項'],
+          '備註': item['備註']
         });
+        currentRow++;
+      });
       
       const endRow = currentRow - 1;
       
@@ -1052,15 +1066,14 @@ exports.exportHistoryOrders = catchAsync(async (req, res, next) => {
       if (endRow > startRow) {
         mergedRanges.push(
           { s: { r: startRow - 1, c: 0 }, e: { r: endRow - 1, c: 0 } }, // 收據號 (A列)
-          { s: { r: startRow - 1, c: 2 }, e: { r: endRow - 1, c: 2 } }, // 桌號 (C列)
-          { s: { r: startRow - 1, c: 3 }, e: { r: endRow - 1, c: 3 } }  // 結帳時間 (D列)
+          { s: { r: startRow - 1, c: 1 }, e: { r: endRow - 1, c: 1 } }, // 桌號 (B列)
+          { s: { r: startRow - 1, c: 2 }, e: { r: endRow - 1, c: 2 } }  // 結帳時間 (C列)
         );
       }
     } else {
       // 如果沒有項目，至少匯出訂單基本資訊
       exportData.push({
         '收據號': group.receiptNumber,
-        '訂單號': group.tableOrderNumber,
         '桌號': group.tableNumber,
         '結帳時間': group.orderTime,
         '商品名稱': '',
@@ -1126,7 +1139,6 @@ exports.exportHistoryOrders = catchAsync(async (req, res, next) => {
     // 設定欄寬
     const columnWidths = [
       { wch: 12 }, // 收據號 (10位數字)
-      { wch: 15 }, // 訂單號
       { wch: 10 }, // 桌號
       { wch: 20 }, // 結帳時間
       { wch: 20 }, // 商品名稱
@@ -1141,6 +1153,47 @@ exports.exportHistoryOrders = catchAsync(async (req, res, next) => {
     // 設定合併儲存格
     if (mergedRanges && mergedRanges.length > 0) {
       worksheet['!merges'] = mergedRanges;
+    }
+
+    // 設定樣式：框線和文字居中
+    const range = XLSX.utils.decode_range(worksheet['!ref']);
+    
+    // 為所有有數據的儲存格設定樣式
+    for (let R = range.s.r; R <= range.e.r; R++) {
+      for (let C = range.s.c; C <= range.e.c; C++) {
+        const cellAddress = XLSX.utils.encode_cell({ r: R, c: C });
+        const cell = worksheet[cellAddress];
+        
+        if (cell) {
+          // 設定儲存格樣式
+          cell.s = {
+            // 框線樣式
+            border: {
+              top: { style: 'thin', color: { rgb: '000000' } },
+              bottom: { style: 'thin', color: { rgb: '000000' } },
+              left: { style: 'thin', color: { rgb: '000000' } },
+              right: { style: 'thin', color: { rgb: '000000' } }
+            },
+            // 對齊方式：水平居中，垂直居中
+            alignment: {
+              horizontal: 'center',
+              vertical: 'center',
+              wrapText: true
+            },
+            // 字體樣式
+            font: {
+              name: '微軟正黑體',
+              sz: 11
+            }
+          };
+        }
+      }
+    }
+
+    // 設定工作表樣式
+    worksheet['!rows'] = [];
+    for (let R = range.s.r; R <= range.e.r; R++) {
+      worksheet['!rows'][R] = { hpt: 25 }; // 設定行高
     }
 
     XLSX.utils.book_append_sheet(workbook, worksheet, '歷史訂單');
