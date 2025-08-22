@@ -306,7 +306,7 @@ exports.getOrdersByMerchant = catchAsync(async (req, res, next) => {
     return next(new AppError('您沒有權限訪問此商家的訂單', 403));
   }
 
-  const { status, date, limit = 20, page = 1 } = req.query;
+  const { status, date, startDate, endDate, limit = 20, page = 1 } = req.query;
 
   const query = { merchantId };
   
@@ -320,7 +320,13 @@ exports.getOrdersByMerchant = catchAsync(async (req, res, next) => {
     }
   }
 
-  if (date) {
+  // 優先使用時間範圍查詢，如果沒有則使用單一日期查詢
+  if (startDate && endDate) {
+    query.createdAt = {
+      $gte: new Date(startDate),
+      $lte: new Date(endDate)
+    };
+  } else if (date) {
     const startDate = new Date(date);
     const endDate = new Date(date);
     endDate.setDate(endDate.getDate() + 1);

@@ -1,4 +1,4 @@
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { orderService, receiptAPI } from '@/services/api'
 import { generateReceiptFromStoredData } from '@/utils/receiptUtils'
 
@@ -31,6 +31,13 @@ export function useOrders(restaurantId = null) {
   
   // 歷史訂單數據 - 從API獲取
   const historyOrders = ref([])
+
+  // 監聽時間範圍變化，重新載入歷史訂單
+  watch(selectedTimeRange, () => {
+    if (activeTab.value === 'history') {
+      loadHistoryOrders()
+    }
+  })
 
   // 標籤頁配置
   const orderTabs = [
@@ -306,14 +313,9 @@ export function useOrders(restaurantId = null) {
     const completedOrders = historyOrders.value
     const totalRevenue = completedOrders.reduce((sum, order) => sum + order.totalAmount, 0)
     
-    // 計算總客人數（與儀表板計算方式一致）
-    const totalCustomers = completedOrders.reduce((sum, order) => {
-      return sum + (order.tableCapacity || 0)
-    }, 0)
-    
-    // 客單價 = 總營業額 / 總客人數（與儀表板計算方式一致）
-    const averageOrderValue = totalCustomers > 0 
-      ? Math.round(totalRevenue / totalCustomers) 
+    // 平均客單價 = 總營業額 / 總訂單數
+    const averageOrderValue = completedOrders.length > 0 
+      ? Math.round(totalRevenue / completedOrders.length) 
       : 0
 
     // 計算高峰時段
@@ -362,19 +364,107 @@ export function useOrders(restaurantId = null) {
       console.log('搜尋過濾後:', filtered)
     }
 
-    // 時間範圍過濾 - 使用 completedAt 進行過濾
+    // 時間範圍過濾 - 使用 completedAt 進行過濾，並正確處理時區
     const now = new Date()
     if (selectedTimeRange.value === 'today') {
+      // 獲取今天的開始時間（本地時區）
       const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+      
       filtered = filtered.filter(order => {
         try {
           const orderTime = new Date(order.completedAt)
-          return orderTime >= today
+          // 將訂單時間轉換為本地時區的日期
+          const orderDate = new Date(orderTime.getFullYear(), orderTime.getMonth(), orderTime.getDate())
+          
+          // 比較日期（忽略時間部分）
+          return orderDate.getTime() === today.getTime()
         } catch (error) {
           console.warn('時間過濾失敗:', order, error)
           return false
         }
       })
+      // 調試：檢查 completedAt 為 "2025-08-22T01:17:18.518Z" 的訂單
+      const t2_full_order = filtered.find(order => 
+        order.completedAt === "2025-08-22T01:17:18.518Z"
+      )
+      if (t2_full_order) {
+        const orderTime = new Date(t2_full_order.completedAt)
+        const orderDate = new Date(orderTime.getFullYear(), orderTime.getMonth(), orderTime.getDate())
+        
+        console.log('找到 completedAt="2025-08-22T01:17:18.518Z" 訂單（今日過濾後）:', {
+          tableOrderNumber: t2_full_order.tableOrderNumber,
+          lastCheckoutOrderNumber: t2_full_order.lastCheckoutOrder?.orderNumber,
+          completedAt: t2_full_order.completedAt,
+          orderTimeUTC: orderTime.toISOString(),
+          orderTimeLocal: orderTime.toLocaleString('zh-TW'),
+          orderDate: orderDate.toLocaleDateString('zh-TW'),
+          today: today.toLocaleDateString('zh-TW'),
+          isToday: orderDate.getTime() === today.getTime()
+        })
+      } else {
+        console.log('今日過濾後未找到 completedAt="2025-08-22T01:17:18.518Z" 訂單')
+      
+            // 檢查原始數據中是否有這個訂單
+      const original_t2_full = historyOrders.value.find(order => 
+        order.completedAt === "2025-08-22T01:17:18.518Z"
+      )
+      if (original_t2_full) {
+        console.log('在原始數據中找到 completedAt="2025-08-22T01:17:18.518Z" 訂單')
+      } else {
+        console.log('在原始數據中未找到 completedAt="2025-08-22T01:17:18.518Z" 訂單')
+        
+        // 檢查所有包含 "2025-08-22" 的訂單
+        const orders_with_20250822 = historyOrders.value.filter(order => 
+          order.completedAt && order.completedAt.includes('2025-08-22')
+        )
+        console.log('包含 "2025-08-22" 的訂單數量:', orders_with_20250822.length)
+        if (orders_with_20250822.length > 0) {
+          console.log('包含 "2025-08-22" 的訂單:', orders_with_20250822.map(order => ({
+            tableOrderNumber: order.tableOrderNumber,
+            completedAt: order.completedAt
+          })))
+        }
+      }
+         
+        // 檢查原始數據中是否有 completedAt 為 "2025-08-22T01:17:18.518Z" 的訂單（詳細調試）
+        const original_t2_full_detailed = historyOrders.value.find(order => 
+          order.completedAt === "2025-08-22T01:17:18.518Z"
+        )
+        if (original_t2_full_detailed) {
+          const orderTime = new Date(original_t2_full_detailed.completedAt)
+          const orderDate = new Date(orderTime.getFullYear(), orderTime.getMonth(), orderTime.getDate())
+          const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+          
+          console.log('原始數據中的 completedAt="2025-08-22T01:17:18.518Z" 訂單:', {
+            tableOrderNumber: original_t2_full_detailed.tableOrderNumber,
+            lastCheckoutOrderNumber: original_t2_full_detailed.lastCheckoutOrder?.orderNumber,
+            completedAt: original_t2_full_detailed.completedAt,
+            orderTimeUTC: orderTime.toISOString(),
+            orderTimeLocal: orderTime.toLocaleString('zh-TW'),
+            orderDate: orderDate.toLocaleDateString('zh-TW'),
+            today: today.toLocaleDateString('zh-TW'),
+            isToday: orderDate.getTime() === today.getTime(),
+            orderDateTimestamp: orderDate.getTime(),
+            todayTimestamp: today.getTime(),
+            timezoneOffset: orderTime.getTimezoneOffset(),
+            localTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+            // 詳細的時間比較調試
+            orderTimeYear: orderTime.getFullYear(),
+            orderTimeMonth: orderTime.getMonth(),
+            orderTimeDate: orderTime.getDate(),
+            todayYear: today.getFullYear(),
+            todayMonth: today.getMonth(),
+            todayDate: today.getDate(),
+            // 使用 UTC 時間進行比較
+            orderTimeUTCYear: orderTime.getUTCFullYear(),
+            orderTimeUTCMonth: orderTime.getUTCMonth(),
+            orderTimeUTCDate: orderTime.getUTCDate(),
+            nowUTCYear: now.getUTCFullYear(),
+            nowUTCMonth: now.getUTCMonth(),
+            nowUTCDate: now.getUTCDate()
+          })
+        }
+      }
       console.log('今日過濾後:', filtered)
     } else if (selectedTimeRange.value === 'week') {
       const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
@@ -387,6 +477,21 @@ export function useOrders(restaurantId = null) {
           return false
         }
       })
+      // 調試：檢查 completedAt 為 "2025-08-22T01:17:18.518Z" 的訂單
+      const t2_full_order = filtered.find(order => 
+        order.completedAt === "2025-08-22T01:17:18.518Z"
+      )
+      if (t2_full_order) {
+        console.log('找到 completedAt="2025-08-22T01:17:18.518Z" 訂單（本週過濾後）:', {
+          tableOrderNumber: t2_full_order.tableOrderNumber,
+          lastCheckoutOrderNumber: t2_full_order.lastCheckoutOrder?.orderNumber,
+          completedAt: t2_full_order.completedAt,
+          orderTime: new Date(t2_full_order.completedAt).toISOString(),
+          weekAgo: new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString()
+        })
+      } else {
+        console.log('本週過濾後未找到 completedAt="2025-08-22T01:17:18.518Z" 訂單')
+      }
       console.log('本週過濾後:', filtered)
     } else if (selectedTimeRange.value === 'month') {
       const monthAgo = new Date(now.getFullYear(), now.getMonth() - 1, now.getDate())
@@ -518,11 +623,43 @@ export function useOrders(restaurantId = null) {
         return
       }
       
+      // 根據選擇的時間範圍構建查詢參數
+      const now = new Date()
+      let dateParam = null
+      let timeRangeParams = {}
+      
+      if (selectedTimeRange.value === 'today') {
+        // 查詢今天的訂單（從今天00:00到現在）
+        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+        
+        // 使用時間範圍查詢
+        const startTime = today.toISOString()
+        const endTime = now.toISOString()
+        
+        console.log('今日查詢參數（今天00:00到現在）:', { 
+          startTime, 
+          endTime, 
+          selectedTimeRange: selectedTimeRange.value 
+        })
+        
+        // 使用時間範圍參數
+        dateParam = null
+        timeRangeParams = {
+          startDate: startTime,
+          endDate: endTime
+        }
+      } else {
+        console.log('非今日查詢參數:', { dateParam, selectedTimeRange: selectedTimeRange.value })
+        timeRangeParams = {}
+      }
+      
       const response = await orderService.getOrdersByMerchant(merchantId, {
         status: 'completed,cancelled',
         limit: 200, // 增加限制以獲取更多數據進行合併
         sortBy: 'createdAt',
-        sortOrder: 'desc'
+        sortOrder: 'desc',
+        ...(dateParam && { date: dateParam }), // 如果有日期參數則添加
+        ...timeRangeParams // 添加時間範圍參數
       })
       
       if (response.status === 'success') {
@@ -582,8 +719,22 @@ export function useOrders(restaurantId = null) {
         }
       }
       
-      // 使用桌次+客人組別作為分組鍵
-      const groupKey = `${tableId}_${customerGroup}`
+      // 從訂單號解析日期
+      let orderDate = null
+      if (order.orderNumber && order.orderNumber.includes('-')) {
+        const parts = order.orderNumber.split('-')
+        if (parts.length >= 2) {
+          const dateGroupBatch = parts[1]
+          if (dateGroupBatch.length >= 8) {
+            // 前8位是日期：20250818
+            const dateStr = dateGroupBatch.substring(0, 8)
+            orderDate = `${dateStr.substring(0, 4)}-${dateStr.substring(4, 6)}-${dateStr.substring(6, 8)}`
+          }
+        }
+      }
+      
+      // 使用桌次+客人組別+日期作為分組鍵，確保只合併同一天的訂單
+      const groupKey = `${tableId}_${customerGroup}_${orderDate}`
       
       if (!tableGroups[groupKey]) {
         tableGroups[groupKey] = {
@@ -604,8 +755,17 @@ export function useOrders(restaurantId = null) {
       const group = tableGroups[groupKey]
       group.orders.push(order)
       group.batchNumbers.add(batchNumber) // 添加批次號到 Set
+      
+      // 累加所有訂單的金額和項目數量
       group.totalAmount += order.totalAmount
       group.itemCount += order.items.length
+      
+      // 保存最後結帳的訂單信息（有 receiptOrderNumber 的訂單）
+      if (order.receiptOrderNumber) {
+        group.lastCheckoutOrder = order
+        group.lastCheckoutAmount = order.totalAmount // 保存最後結帳批次的金額
+        group.lastCheckoutItemCount = order.items.length // 保存最後結帳批次的項目數量
+      }
       
       // 更新時間範圍
       const orderTime = new Date(order.createdAt)
@@ -641,6 +801,9 @@ export function useOrders(restaurantId = null) {
         tableOrderNumber: tableOrderNumber,
         completedAt: group.lastOrderTime, // 使用最後訂單時間作為結帳時間
         tableCapacity: group.tableCapacity, // 添加桌次容量信息
+        // 如果有最後結帳的訂單，使用其金額；否則使用總金額
+        totalAmount: group.lastCheckoutAmount || group.totalAmount,
+        itemCount: group.lastCheckoutItemCount || group.itemCount,
         _id: `table_${group.tableId}_${group.customerGroup}_${group.lastOrderTime}` // 創建唯一ID
       }
     })

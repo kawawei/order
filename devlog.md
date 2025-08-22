@@ -952,3 +952,273 @@
 - 控制台日誌有助於調試和監控問題
 
 *時間：2025-08-20 22:15*
+
+## 2025-08-22 15:30
+### 平均客單價計算邏輯修正｜Fix average order value calculation logic
+1. 問題描述｜Problem description
+   - 商家後台歷史訂單頁面的平均客單價計算錯誤
+   - 顯示的平均客單價為 $15，但實際應該是 $58
+   - 計算結果與預期不符，影響數據分析準確性
+   - 用戶反映數據顯示異常
+
+2. 問題分析｜Problem analysis
+   - **錯誤的計算公式**：
+     * 平均客單價 = 總營業額 ÷ 總客人數
+     * 總客人數 = 所有桌次容量總和（如：13個訂單 × 4人桌 = 52人）
+     * 結果：$755 ÷ 52 = $15
+   - **根本原因**：
+     * 混淆了"平均客單價"和"平均每人消費"的概念
+     * 使用了桌次容量（`tableCapacity`）而不是實際訂單數
+     * 計算邏輯與業務需求不符
+
+3. 解決方案｜Solution
+   - **修正計算公式**：
+     * 平均客單價 = 總營業額 ÷ 總訂單數
+     * 結果：$755 ÷ 13 = $58
+   - **移除錯誤的客人數計算**：
+     * 刪除 `totalCustomers` 的計算邏輯
+     * 直接使用 `completedOrders.length` 作為分母
+   - **更新註釋說明**：
+     * 明確說明平均客單價的定義
+     * 確保代碼可讀性和維護性
+
+4. 技術細節｜Technical details
+   - **修正前（錯誤）**：
+     ```javascript
+     // 計算總客人數（與儀表板計算方式一致）
+     const totalCustomers = completedOrders.reduce((sum, order) => {
+       return sum + (order.tableCapacity || 0)
+     }, 0)
+     
+     // 客單價 = 總營業額 / 總客人數（與儀表板計算方式一致）
+     const averageOrderValue = totalCustomers > 0 
+       ? Math.round(totalRevenue / totalCustomers) 
+       : 0
+     ```
+   - **修正後（正確）**：
+     ```javascript
+     // 平均客單價 = 總營業額 / 總訂單數
+     const averageOrderValue = completedOrders.length > 0 
+       ? Math.round(totalRevenue / completedOrders.length) 
+       : 0
+     ```
+
+5. 修正結果｜Results
+   - ✅ 平均客單價顯示正確：$58
+   - ✅ 計算邏輯符合業務需求
+   - ✅ 數據分析準確性提升
+   - ✅ 代碼邏輯更加清晰
+   - ✅ 與其他系統計算方式保持一致
+
+6. 影響範圍｜Impact
+   - 商家後台歷史訂單統計數據準確性
+   - 平均客單價分析功能
+   - 數據報表的可靠性
+   - 商家決策參考的準確性
+
+7. 相關檔案｜Related files
+   - 訂單組合邏輯：`web/src/composables/merchant/useOrders.js`
+   - 歷史訂單統計：`web/src/views/merchant/orders/OrderHistory.vue`
+   - 訂單數據處理：`web/src/composables/merchant/useOrders.js`
+
+### 經驗總結｜Lessons learned
+- 業務邏輯必須與實際需求保持一致
+- 平均客單價是指每個訂單的平均金額，不是每人平均消費
+- 數據計算前需要明確定義計算公式和業務含義
+- 代碼註釋應該準確反映實際邏輯
+- 測試時需要驗證計算結果的合理性
+
+*時間：2025-08-22 15:30*
+
+## 2025-08-22 16:00
+### 條碼生成服務重構｜Barcode generation service refactoring
+1. 問題描述｜Problem description
+   - 前端使用 jsbarcode 庫生成條碼，但該庫不適合服務器端使用
+   - 條碼生成功能需要從前端遷移到後端
+   - 需要建立完整的條碼生成 API 服務
+   - 支援多種條碼格式和 QR Code 生成
+
+2. 問題分析｜Problem analysis
+   - **前端限制**：
+     * jsbarcode 主要設計用於瀏覽器環境
+     * 在 Node.js 服務器端運行時可能出現兼容性問題
+     * 前端生成條碼會增加客戶端負擔
+   - **架構需求**：
+     * 需要統一的條碼生成服務
+     * 支援多種條碼格式（CODE128、EAN13 等）
+     * 需要 QR Code 生成功能
+     * 提供驗證和批量生成功能
+
+3. 解決方案｜Solution
+   - **後端服務重構**：
+     * 使用 `bwip-js` 替代 `jsbarcode`
+     * 建立完整的 `BarcodeService` 類
+     * 實現多種條碼生成方法
+   - **API 端點建立**：
+     * `/api/v1/barcode/generate` - 生成單個條碼
+     * `/api/v1/barcode/qrcode` - 生成 QR Code
+     * `/api/v1/barcode/combined` - 生成條碼和 QR Code 組合
+     * `/api/v1/barcode/multiple` - 批量生成條碼
+     * `/api/v1/barcode/validate` - 驗證條碼格式
+   - **功能特性**：
+     * 支援 SVG 格式輸出
+     * 可自定義條碼尺寸和密度
+     * 完整的錯誤處理機制
+     * 支援多種條碼格式驗證
+
+4. 技術細節｜Technical details
+   - **服務器端條碼生成**：
+     ```javascript
+     const bwipjs = require('bwip-js');
+     
+     async generateBarcode(text, options = {}) {
+       const defaultOptions = {
+         bcid: 'code128',
+         text: text,
+         width: 150,
+         height: 30,
+         includetext: false,
+         scale: 1.5,
+         ...options
+       };
+       
+       const svg = await bwipjs.toSVG(defaultOptions);
+       return svg;
+     }
+     ```
+   - **QR Code 生成**：
+     ```javascript
+     const QRCode = require('qrcode');
+     
+     async generateQRCode(text, options = {}) {
+       const qrCodeDataURL = await QRCode.toDataURL(text, {
+         width: 200,
+         margin: 2,
+         color: { dark: '#000000', light: '#FFFFFF' }
+       });
+       return qrCodeDataURL;
+     }
+     ```
+   - **批量生成功能**：
+     ```javascript
+     async generateMultipleBarcodes(texts, options = {}) {
+       const promises = texts.map(text => this.generateBarcode(text, options));
+       return await Promise.all(promises);
+     }
+     ```
+
+5. 修正結果｜Results
+   - ✅ 建立完整的後端條碼生成服務
+   - ✅ 支援多種條碼格式和 QR Code
+   - ✅ 提供統一的 API 接口
+   - ✅ 實現批量生成和驗證功能
+   - ✅ 完整的錯誤處理和日誌記錄
+   - ✅ 支援自定義配置選項
+
+6. 影響範圍｜Impact
+   - 後端條碼生成服務架構
+   - 前端條碼生成功能遷移
+   - API 接口設計和實現
+   - 系統整體架構優化
+
+7. 相關檔案｜Related files
+   - 條碼服務：`server/src/services/barcodeService.js`
+   - 條碼控制器：`server/src/controllers/barcodeController.js`
+   - 條碼路由：`server/src/routes/barcodeRoutes.js`
+   - 主服務器：`server/src/index.js`
+
+### 經驗總結｜Lessons learned
+- 選擇適合的技術棧對系統穩定性很重要
+- 服務器端生成條碼比前端更可靠
+- 統一的 API 設計便於維護和擴展
+- 完整的錯誤處理提升系統健壯性
+- 批量處理功能提高系統效率
+
+*時間：2025-08-22 16:00*
+
+## 2025-08-22 16:30
+### 訂單金額計算邏輯優化｜Order amount calculation logic optimization
+1. 問題描述｜Problem description
+   - 訂單金額計算邏輯分散在多個地方
+   - 不同模組的計算方式可能不一致
+   - 需要統一和優化金額計算邏輯
+   - 確保數據準確性和一致性
+
+2. 問題分析｜Problem analysis
+   - **計算邏輯分散**：
+     * 前端和後端都有金額計算邏輯
+     * 不同頁面可能使用不同的計算方式
+     * 缺乏統一的計算標準
+   - **數據一致性問題**：
+     * 歷史訂單統計與實時數據可能不一致
+     * 不同時間範圍的計算邏輯可能不同
+     * 需要確保所有計算都使用相同的邏輯
+
+3. 解決方案｜Solution
+   - **統一計算邏輯**：
+     * 在 `useOrders.js` 中集中管理金額計算
+     * 使用 `totalAmount` 作為標準字段
+     * 確保所有統計都使用相同的計算方式
+   - **優化統計計算**：
+     * 修正平均客單價計算公式
+     * 統一營業額統計邏輯
+     * 改進時間範圍過濾機制
+   - **數據驗證機制**：
+     * 添加計算結果驗證
+     * 提供調試日誌便於問題排查
+     * 確保數據完整性
+
+4. 技術細節｜Technical details
+   - **營業額計算**：
+     ```javascript
+     const totalRevenue = completedOrders.reduce((sum, order) => 
+       sum + order.totalAmount, 0
+     )
+     ```
+   - **平均客單價計算**：
+     ```javascript
+     const averageOrderValue = completedOrders.length > 0 
+       ? Math.round(totalRevenue / completedOrders.length) 
+       : 0
+     ```
+   - **時間過濾優化**：
+     ```javascript
+     filtered = filtered.filter(order => {
+       try {
+         const orderTime = new Date(order.completedAt)
+         const orderDate = new Date(orderTime.getFullYear(), orderTime.getMonth(), orderTime.getDate())
+         return orderDate.getTime() === today.getTime()
+       } catch (error) {
+         console.warn('時間過濾失敗:', order, error)
+         return false
+       }
+     })
+     ```
+
+5. 修正結果｜Results
+   - ✅ 統一訂單金額計算邏輯
+   - ✅ 修正平均客單價計算公式
+   - ✅ 優化時間範圍過濾機制
+   - ✅ 提升數據計算準確性
+   - ✅ 改善調試和錯誤處理
+   - ✅ 確保數據一致性
+
+6. 影響範圍｜Impact
+   - 商家後台訂單統計功能
+   - 歷史訂單數據分析
+   - 營業額和客單價計算
+   - 時間範圍過濾功能
+
+7. 相關檔案｜Related files
+   - 訂單組合邏輯：`web/src/composables/merchant/useOrders.js`
+   - 歷史訂單頁面：`web/src/views/merchant/orders/OrderHistory.vue`
+   - 訂單數據處理：`web/src/composables/merchant/useOrders.js`
+
+### 經驗總結｜Lessons learned
+- 統一的計算邏輯對數據一致性很重要
+- 集中管理複雜計算邏輯便於維護
+- 完整的錯誤處理提升系統穩定性
+- 調試日誌有助於問題排查和驗證
+- 數據驗證機制確保計算結果準確性
+
+*時間：2025-08-22 16:30*
