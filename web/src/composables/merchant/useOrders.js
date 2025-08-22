@@ -111,6 +111,7 @@ export function useOrders(restaurantId = null) {
 
   // 歷史訂單表格欄位 - 簡化顯示
   const historyOrdersColumns = [
+    { key: 'receiptOrderNumber', label: '收據號', width: '120px' },
     { key: 'tableOrderNumber', label: '訂單號', width: '140px' },
     { key: 'tableNumber', label: '桌號', width: '80px' },
     { key: 'completedAt', label: '結帳時間', width: '150px' },
@@ -441,10 +442,11 @@ export function useOrders(restaurantId = null) {
     let filtered = historyOrders.value
     console.log('filteredHistoryOrders 計算 - 原始數據:', filtered)
 
-    // 搜尋過濾 - 修改為使用合併後的桌次訂單屬性
+    // 搜尋過濾 - 支援收據號、訂單號、桌號搜尋
     if (searchTerm.value) {
       const term = searchTerm.value.toLowerCase()
       filtered = filtered.filter(order => 
+        (order.receiptOrderNumber && order.receiptOrderNumber.toLowerCase().includes(term)) ||
         order.tableOrderNumber.toLowerCase().includes(term) ||
         order.tableNumber.toLowerCase().includes(term)
       )
@@ -750,10 +752,11 @@ export function useOrders(restaurantId = null) {
       return {
         ...group,
         tableOrderNumber: tableOrderNumber,
+        receiptOrderNumber: group.lastCheckoutOrder?.receiptOrderNumber || null, // 添加收據號
         completedAt: group.lastOrderTime, // 使用最後訂單時間作為結帳時間
         tableCapacity: group.tableCapacity, // 添加桌次容量信息
-        // 如果有最後結帳的訂單，使用其金額；否則使用總金額
-        totalAmount: group.lastCheckoutAmount || group.totalAmount,
+        // 使用所有批次的總金額
+        totalAmount: group.totalAmount,
         itemCount: group.lastCheckoutItemCount || group.itemCount,
         _id: `table_${group.tableId}_${group.customerGroup}_${group.lastOrderTime}` // 創建唯一ID
       }
@@ -974,13 +977,144 @@ export function useOrders(restaurantId = null) {
           employeeName: receipt.employeeName
         });
         
-        // 使用儲存的收據數據生成收據
-        const generatedReceiptData = generateReceiptFromStoredData(receipt);
-        console.log('生成的收據數據:', generatedReceiptData);
+        // 獲取餐廳名稱
+        let storeName = receipt.storeName || '餐廳';
+        
+        // 優先從URL參數獲取餐廳名稱
+        const urlParams = new URLSearchParams(window.location.search);
+        const urlStoreName = urlParams.get('restaurantName');
+        if (urlStoreName) {
+          storeName = urlStoreName;
+          console.log('從URL參數獲取餐廳名稱:', storeName);
+        } else {
+          // 如果URL中沒有餐廳名稱，嘗試從本地存儲獲取
+          if (!storeName || storeName === '餐廳' || storeName === '餐廳名稱') {
+            try {
+              const merchantUser = localStorage.getItem('merchant_user');
+              if (merchantUser) {
+                const userData = JSON.parse(merchantUser);
+                storeName = userData.businessName || userData.merchantName || userData.name || '餐廳';
+              }
+            } catch (error) {
+              console.error('獲取餐廳名稱失敗:', error);
+              storeName = '餐廳';
+            }
+          }
+        }
+        
+        console.log('使用的餐廳名稱:', storeName);
+        
+        // 更新收據中的餐廳名稱
+        receipt.storeName = storeName;
+        
+        // 如果是桌次訂單，需要修改收據數據以顯示所有批次的項目和總金額
+        let finalReceiptData;
+        if (order.tableOrderNumber && order.orders && order.orders.length > 1) {
+          console.log('桌次訂單，修改收據數據以顯示所有批次的項目和總金額');
+          const generatedReceiptData = generateReceiptFromStoredData(receipt);
+          
+          // 合併所有批次的項目，但保留選項差異
+          const allItems = [];
+          const itemMap = new Map(); // 用於合併相同項目
+          
+          order.orders.forEach((batchOrder, batchIndex) => {
+            console.log(`處理第 ${batchIndex + 1} 個批次的項目:`, batchOrder.items);
+            
+            batchOrder.items.forEach(item => {
+              // 創建更精確的項目鍵，包含所有影響價格的選項
+              const optionsKey = item.selectedOptions ? 
+                Object.entries(item.selectedOptions)
+                  .sort(([a], [b]) => a.localeCompare(b)) // 排序確保一致性
+                  .map(([key, value]) => {
+                    // 處理不同的選項值格式
+                    let displayValue = value;
+                    if (typeof value === 'object' && value !== null) {
+                      displayValue = value.label || value.name || value.value || JSON.stringify(value);
+                    }
+                    return `${key}:${displayValue}`;
+                  })
+                  .join('|') : '';
+              
+              const itemKey = `${item.dishId}-${optionsKey}`;
+              
+              console.log(`項目鍵: ${itemKey}`, {
+                dishId: item.dishId,
+                options: item.selectedOptions,
+                optionsKey: optionsKey,
+                price: item.price,
+                totalPrice: item.totalPrice
+              });
+              
+              if (itemMap.has(itemKey)) {
+                // 合併完全相同的項目（包括選項）
+                const existingItem = itemMap.get(itemKey);
+                existingItem.quantity += item.quantity;
+                existingItem.totalPrice += item.totalPrice;
+                
+                // 確保合併後的項目也有正確的顯示名稱
+                if (!existingItem.displayName) {
+                  existingItem.displayName = existingItem.dishName || existingItem.name;
+                }
+                
+                console.log(`合併項目: ${existingItem.displayName}，新數量: ${existingItem.quantity}，新總價: ${existingItem.totalPrice}`);
+              } else {
+                // 新增項目（可能是相同菜品但選項不同）
+                const newItem = {
+                  ...item,
+                  dishName: item.dishName || item.name, // 確保 dishName 存在
+                  batchNumber: batchIndex + 1, // 標記批次號碼
+                  originalPrice: item.price, // 保留原始單價
+                  originalTotalPrice: item.totalPrice, // 保留原始總價
+                  // 為收據顯示創建更清楚的項目名稱
+                  displayName: item.dishName || item.name
+                };
+                itemMap.set(itemKey, newItem);
+                console.log(`新增項目: ${item.dishName}，選項: ${JSON.stringify(item.selectedOptions)}，單價: ${item.price}，總價: ${item.totalPrice}`);
+              }
+            });
+          });
+          
+          // 將合併後的項目轉換為陣列，並按菜品名稱排序
+          allItems.push(...itemMap.values());
+          allItems.sort((a, b) => {
+            const nameA = a.dishName || a.displayName || a.name || '';
+            const nameB = b.dishName || b.displayName || b.name || '';
+            return nameA.localeCompare(nameB);
+          });
+          
+          console.log('合併後的所有項目:', allItems);
+          
+          // 計算所有批次的總金額
+          const totalAmount = order.totalAmount; // 使用桌次訂單的總金額
+          
+          finalReceiptData = {
+            ...generatedReceiptData,
+            items: allItems,
+            subtotal: totalAmount,
+            total: totalAmount,
+            storeName: storeName
+          };
+          
+          console.log('修改後的收據數據:', {
+            originalSubtotal: generatedReceiptData.subtotal,
+            originalTotal: generatedReceiptData.total,
+            newSubtotal: finalReceiptData.subtotal,
+            newTotal: finalReceiptData.total,
+            originalItemsCount: generatedReceiptData.items.length,
+            newItemsCount: finalReceiptData.items.length
+          });
+        } else {
+          // 單個批次訂單，使用原始收據數據
+          finalReceiptData = generateReceiptFromStoredData(receipt);
+          // 確保餐廳名稱正確
+          finalReceiptData.storeName = storeName;
+        }
+        
+        console.log('最終收據數據:', finalReceiptData);
         
         // 顯示收據預覽
         console.log('準備顯示收據預覽...');
-        receiptData.value = generatedReceiptData;
+        receiptData.value = finalReceiptData;
         showReceiptPreview.value = true;
         
         console.log('收據預覽已顯示');
@@ -1146,15 +1280,19 @@ export function useOrders(restaurantId = null) {
 
   // 匯出歷史訂單
   const exportHistoryOrders = async (format = 'xlsx') => {
+    console.log('=== 匯出函數被調用 ===', { format, isExporting: isExporting.value })
+    
     // 防止重複調用
     if (isExporting.value) {
       console.log('匯出進行中，請稍候...')
       return
     }
 
+    // 立即設置狀態，防止快速重複點擊
+    isExporting.value = true
+    console.log('設置匯出狀態為 true')
+
     try {
-      isExporting.value = true
-      
       const merchantId = getMerchantId()
       if (!merchantId) {
         console.error('無法獲取商家ID')
@@ -1167,15 +1305,70 @@ export function useOrders(restaurantId = null) {
         searchTerm: searchTerm.value
       }
 
-      // 根據選擇的日期設定匯出範圍
+      // 根據視圖模式設定匯出範圍
       const selectedDay = new Date(selectedDate.value)
       const year = selectedDay.getFullYear()
       const month = String(selectedDay.getMonth() + 1).padStart(2, '0')
       const day = String(selectedDay.getDate()).padStart(2, '0')
-      params.startDate = `${year}-${month}-${day}`
-      params.endDate = `${year}-${month}-${day}`
+      
+      switch (dateViewMode.value) {
+        case 'year':
+          // 年模式：匯出整年資料
+          params.startDate = `${year}-01-01`
+          params.endDate = `${year}-12-31T23:59:59.999Z`
+          break
+        case 'month':
+          // 月模式：匯出整月資料
+          params.startDate = `${year}-${month}-01`
+          // 計算該月的最後一天
+          const lastDay = new Date(year, selectedDay.getMonth() + 1, 0).getDate()
+          params.endDate = `${year}-${month}-${String(lastDay).padStart(2, '0')}T23:59:59.999Z`
+          break
+        case 'day':
+        default:
+          // 日模式：匯出單日資料 - 修正為包含整天的時間範圍
+          params.startDate = `${year}-${month}-${day}T00:00:00.000Z`
+          params.endDate = `${year}-${month}-${day}T23:59:59.999Z`
+          break
+      }
 
       console.log('匯出參數:', params)
+      console.log('視圖模式:', dateViewMode.value)
+
+      // 先檢查是否有訂單可以匯出
+      const checkParams = {
+        status: 'completed,cancelled',
+        startDate: params.startDate,
+        endDate: params.endDate,
+        searchTerm: params.searchTerm
+      }
+      
+      try {
+        const checkResponse = await orderService.getOrdersByMerchant(merchantId, checkParams)
+        const orderCount = checkResponse.data?.orders?.length || 0
+        
+        if (orderCount === 0) {
+          // 沒有訂單，顯示提醒
+          let message = ''
+          switch (dateViewMode.value) {
+            case 'year':
+              message = `${year}年沒有找到已完成的訂單`
+              break
+            case 'month':
+              message = `${year}年${month}月沒有找到已完成的訂單`
+              break
+            case 'day':
+            default:
+              message = `${year}年${month}月${day}日沒有找到已完成的訂單`
+              break
+          }
+          alert(message)
+          return
+        }
+      } catch (checkError) {
+        console.error('檢查訂單數量失敗:', checkError)
+        // 如果檢查失敗，繼續嘗試匯出
+      }
 
       // 呼叫匯出 API
       const response = await orderService.exportHistoryOrders(merchantId, params)
@@ -1220,7 +1413,15 @@ export function useOrders(restaurantId = null) {
           const errorText = await error.response.data.text()
           const errorData = JSON.parse(errorText)
           console.error('後端錯誤:', errorData)
-          // 可以在這裡添加錯誤提示，例如使用 toast 或 alert
+          
+          // 檢查是否是沒有訂單的錯誤
+          if (error.response.status === 404 && errorData.message && errorData.message.includes('沒有找到')) {
+            // 這是沒有訂單的情況，不需要顯示錯誤
+            console.log('沒有找到訂單，已在前端檢查中處理')
+            return
+          }
+          
+          // 其他錯誤顯示提示
           alert(`匯出失敗: ${errorData.message || '未知錯誤'}`)
         } catch (parseError) {
           console.error('無法解析錯誤響應:', parseError)
@@ -1230,7 +1431,12 @@ export function useOrders(restaurantId = null) {
         alert(`匯出失敗: ${error.message || '未知錯誤'}`)
       }
     } finally {
-      isExporting.value = false
+      console.log('匯出函數執行完成，準備重置狀態')
+      // 延遲重置狀態，防止快速重複調用
+      setTimeout(() => {
+        isExporting.value = false
+        console.log('延遲重置匯出狀態為 false')
+      }, 500)
     }
   }
 

@@ -37,8 +37,24 @@
             :key="item.id" 
             class="item-row"
           >
-            <span class="item-name">{{ item.name }}</span>
-            <span class="item-quantity">*{{ item.quantity }}</span>
+            <!-- 主要菜品名稱和數量 -->
+            <div class="item-main">
+              <span class="item-name">{{ getItemDisplayName(item) }}</span>
+              <span class="item-quantity">*{{ item.quantity }}</span>
+            </div>
+            
+            <!-- 選項信息 -->
+            <div v-if="item.selectedOptions && Object.keys(item.selectedOptions).length > 0" class="item-options">
+              <div 
+                v-for="(option, optionKey) in item.selectedOptions" 
+                :key="optionKey"
+                class="option-row"
+              >
+                <span class="option-name">{{ getOptionLabel(optionKey) }}: {{ option.label || option }}</span>
+                <span v-if="getOptionPrice(option)" class="option-price">+{{ getOptionPrice(option) }}</span>
+              </div>
+            </div>
+            
             <span class="item-price">{{ item.totalPrice }}</span>
           </div>
         </div>
@@ -110,6 +126,40 @@ export default {
     await this.generateBarcode()
   },
   methods: {
+    // 獲取項目顯示名稱
+    getItemDisplayName(item) {
+      // 如果有 displayName，使用它（來自合併邏輯）
+      if (item.displayName) {
+        return item.displayName
+      }
+      return item.name || item.dishName
+    },
+    
+    // 獲取選項標籤
+    getOptionLabel(optionKey) {
+      const optionLabels = {
+        'sweetness': '甜度',
+        'ice': '冰塊',
+        'size': '尺寸',
+        'temperature': '溫度',
+        'spiceLevel': '辣度',
+        'sugar': '糖度',
+        'milk': '奶精',
+        'toppings': '配料',
+        'sauce': '醬料',
+        'cooking': '烹調方式'
+      }
+      return optionLabels[optionKey] || optionKey
+    },
+    
+    // 獲取選項價格
+    getOptionPrice(option) {
+      if (typeof option === 'object' && option.price) {
+        return option.price > 0 ? option.price : null
+      }
+      return null
+    },
+    
     // 生成條碼
     async generateBarcode() {
       if (!this.receipt.billNumber) {
@@ -206,19 +256,49 @@ export default {
             }
             .item-row {
               display: flex;
+              flex-direction: column;
+              margin-bottom: 8px;
+              border-bottom: 1px dotted #eee;
+              padding-bottom: 5px;
+            }
+            .item-main {
+              display: flex;
               justify-content: space-between;
-              margin-bottom: 5px;
+              align-items: center;
             }
             .item-name {
               flex: 2;
+              font-weight: bold;
             }
             .item-quantity {
               flex: 1;
               text-align: center;
+              font-weight: bold;
             }
             .item-price {
               flex: 1;
               text-align: right;
+              font-weight: bold;
+            }
+            .item-options {
+              margin-top: 3px;
+              margin-left: 10px;
+            }
+            .option-row {
+              display: flex;
+              justify-content: space-between;
+              font-size: 10px;
+              color: #666;
+              margin-bottom: 2px;
+            }
+            .option-name {
+              flex: 2;
+            }
+            .option-price {
+              flex: 1;
+              text-align: right;
+              color: #e74c3c;
+              font-weight: bold;
             }
             .amount-section {
               margin-bottom: 15px;
@@ -353,22 +433,57 @@ export default {
 
 .item-row {
   display: flex;
+  flex-direction: column;
+  margin-bottom: 8px;
+  border-bottom: 1px dotted #eee;
+  padding-bottom: 5px;
+}
+
+.item-main {
+  display: flex;
   justify-content: space-between;
-  margin-bottom: 5px;
+  align-items: center;
 }
 
 .item-name {
   flex: 2;
+  font-weight: bold;
 }
 
 .item-quantity {
   flex: 1;
   text-align: center;
+  font-weight: bold;
 }
 
 .item-price {
   flex: 1;
   text-align: right;
+  font-weight: bold;
+}
+
+.item-options {
+  margin-top: 3px;
+  margin-left: 10px;
+}
+
+.option-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10px;
+  color: #666;
+  margin-bottom: 2px;
+}
+
+.option-name {
+  flex: 2;
+}
+
+.option-price {
+  flex: 1;
+  text-align: right;
+  color: #e74c3c;
+  font-weight: bold;
 }
 
 .amount-section {

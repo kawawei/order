@@ -24,7 +24,7 @@
           variant="primary" 
           size="small" 
           icon="download" 
-          @click="() => exportHistoryOrders('xlsx')"
+          @click="handleExport"
           :loading="isExporting"
           :disabled="isExporting"
         >
@@ -351,7 +351,7 @@
               <input
                 v-model="searchTerm"
                 type="text"
-                placeholder="搜尋訂單號或桌號..."
+                placeholder="搜尋收據號、訂單號或桌號..."
                 class="search-input"
               />
             </div>
@@ -363,6 +363,9 @@
           :loading="loading"
           hoverable
         >
+          <template #receiptOrderNumber="{ row }">
+            <span class="receipt-number">{{ row.receiptOrderNumber || '-' }}</span>
+          </template>
           <template #tableOrderNumber="{ row }">
             <span class="order-number-link" @click="viewOrderDetails(row)">
               {{ row.tableOrderNumber }}
@@ -394,6 +397,10 @@
     >
       <div v-if="selectedOrder" class="order-details">
         <div class="order-basic-info">
+          <div class="info-row">
+            <span class="label">收據號:</span>
+            <span class="value">{{ selectedOrder.receiptOrderNumber || '無' }}</span>
+          </div>
           <div class="info-row">
             <span class="label">桌次訂單號:</span>
             <span class="value">{{ selectedOrder.tableOrderNumber }}</span>
@@ -577,5 +584,11 @@ const handleDateChange = (newDate) => {
 const handleModeChange = (newMode) => {
   updateDateViewMode(newMode)
   console.log('視圖模式已更改:', newMode)
+}
+
+// 處理匯出事件
+const handleExport = () => {
+  console.log('匯出按鈕被點擊')
+  exportHistoryOrders('xlsx')
 }
 </script>

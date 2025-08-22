@@ -949,10 +949,12 @@ exports.exportHistoryOrders = catchAsync(async (req, res, next) => {
     return next(new AppError(errorMessage, 404));
   }
 
-  // 準備匯出數據
+  // 準備匯出數據 - 按收據號和結帳時間分組
   const exportData = [];
+  const groupedOrders = new Map(); // 用於分組的 Map
   
   orders.forEach(order => {
+    // 轉換為台灣本地時間 (UTC+8)
     const orderTime = order.completedAt ? 
       new Date(order.completedAt).toLocaleString('zh-TW', {
         year: 'numeric',
@@ -960,9 +962,26 @@ exports.exportHistoryOrders = catchAsync(async (req, res, next) => {
         day: '2-digit',
         hour: '2-digit',
         minute: '2-digit',
-        second: '2-digit'
+        second: '2-digit',
+        timeZone: 'Asia/Taipei'
       }) : '';
 
+    // 創建分組鍵：收據號 + 結帳時間
+    const receiptNumber = order.receiptOrderNumber || '';
+    const groupKey = `${receiptNumber}_${orderTime}`;
+    
+    if (!groupedOrders.has(groupKey)) {
+      groupedOrders.set(groupKey, {
+        receiptNumber: receiptNumber,
+        orderTime: orderTime,
+        tableOrderNumber: order.tableOrderNumber || order.orderNumber,
+        tableNumber: order.tableNumber || (order.tableId ? order.tableId.tableNumber : '未知'),
+        items: []
+      });
+    }
+    
+    const group = groupedOrders.get(groupKey);
+    
     // 處理訂單項目
     if (order.items && order.items.length > 0) {
       order.items.forEach(item => {
@@ -991,12 +1010,7 @@ exports.exportHistoryOrders = catchAsync(async (req, res, next) => {
           optionsText = options.join(', ');
         }
 
-        exportData.push({
-          '訂單號': order.tableOrderNumber || order.orderNumber,
-          '桌號': order.tableNumber || (order.tableId ? order.tableId.tableNumber : '未知'),
-          '結帳時間': orderTime,
-          '總金額': order.totalAmount,
-          '桌位容量': order.tableId ? order.tableId.tableCapacity : '',
+        group.items.push({
           '商品名稱': item.name,
           '數量': item.quantity,
           '單價': item.unitPrice,
@@ -1005,14 +1019,50 @@ exports.exportHistoryOrders = catchAsync(async (req, res, next) => {
           '備註': item.notes || ''
         });
       });
+    }
+  });
+  
+  // 將分組後的數據轉換為匯出格式
+  const mergedRanges = []; // 記錄需要合併的儲存格範圍
+  let currentRow = 2; // Excel 從第2行開始（第1行是標題）
+  
+  groupedOrders.forEach(group => {
+    if (group.items.length > 0) {
+      const startRow = currentRow;
+      
+              group.items.forEach((item, index) => {
+          exportData.push({
+            '收據號': group.receiptNumber, // 每行都填入，但會合併
+            '訂單號': group.tableOrderNumber, // 每行都填入，不合併
+            '桌號': group.tableNumber, // 每行都填入，但會合併
+            '結帳時間': group.orderTime, // 每行都填入，但會合併
+            '商品名稱': item['商品名稱'],
+            '數量': item['數量'],
+            '單價': item['單價'],
+            '小計': item['小計'],
+            '選項': item['選項'],
+            '備註': item['備註']
+          });
+          currentRow++;
+        });
+      
+      const endRow = currentRow - 1;
+      
+      // 如果有多行，記錄合併範圍
+      if (endRow > startRow) {
+        mergedRanges.push(
+          { s: { r: startRow - 1, c: 0 }, e: { r: endRow - 1, c: 0 } }, // 收據號 (A列)
+          { s: { r: startRow - 1, c: 2 }, e: { r: endRow - 1, c: 2 } }, // 桌號 (C列)
+          { s: { r: startRow - 1, c: 3 }, e: { r: endRow - 1, c: 3 } }  // 結帳時間 (D列)
+        );
+      }
     } else {
       // 如果沒有項目，至少匯出訂單基本資訊
       exportData.push({
-        '訂單號': order.tableOrderNumber || order.orderNumber,
-        '桌號': order.tableNumber || (order.tableId ? order.tableId.tableNumber : '未知'),
-        '結帳時間': orderTime,
-        '總金額': order.totalAmount,
-        '桌位容量': order.tableId ? order.tableId.tableCapacity : '',
+        '收據號': group.receiptNumber,
+        '訂單號': group.tableOrderNumber,
+        '桌號': group.tableNumber,
+        '結帳時間': group.orderTime,
         '商品名稱': '',
         '數量': '',
         '單價': '',
@@ -1020,14 +1070,42 @@ exports.exportHistoryOrders = catchAsync(async (req, res, next) => {
         '選項': '',
         '備註': ''
       });
+      currentRow++;
     }
   });
 
-  // 生成檔案名稱：年月日-餐廳名稱-歷史訂單
-  const now = new Date();
-  const dateStr = `${now.getFullYear()}${(now.getMonth() + 1).toString().padStart(2, '0')}${now.getDate().toString().padStart(2, '0')}`;
-  const timeStr = `${now.getHours().toString().padStart(2, '0')}${now.getMinutes().toString().padStart(2, '0')}`;
-  const fileName = `${dateStr}-${merchant.businessName}-歷史訂單`;
+  // 根據匯出範圍生成檔案名稱
+  let fileName;
+  
+  if (startDate && endDate) {
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    
+    // 判斷匯出範圍類型
+    if (startDate === endDate) {
+      // 單日匯出：年月日-餐廳名稱-歷史訂單
+      const dateStr = `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, '0')}-${String(start.getDate()).padStart(2, '0')}`;
+      fileName = `${dateStr}-${merchant.businessName}-歷史訂單`;
+    } else if (start.getMonth() === end.getMonth() && start.getFullYear() === end.getFullYear()) {
+      // 整月匯出：年月-餐廳名稱-歷史訂單
+      const monthStr = `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, '0')}`;
+      fileName = `${monthStr}-${merchant.businessName}-歷史訂單`;
+    } else if (start.getFullYear() === end.getFullYear()) {
+      // 整年匯出：年-餐廳名稱-歷史訂單
+      const yearStr = `${start.getFullYear()}`;
+      fileName = `${yearStr}-${merchant.businessName}-歷史訂單`;
+    } else {
+      // 其他情況：使用日期範圍
+      const startStr = `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, '0')}-${String(start.getDate()).padStart(2, '0')}`;
+      const endStr = `${end.getFullYear()}-${String(end.getMonth() + 1).padStart(2, '0')}-${String(end.getDate()).padStart(2, '0')}`;
+      fileName = `${startStr}_${endStr}-${merchant.businessName}-歷史訂單`;
+    }
+  } else {
+    // 預設檔案名稱
+    const now = new Date();
+    const dateStr = `${now.getFullYear()}${(now.getMonth() + 1).toString().padStart(2, '0')}${now.getDate().toString().padStart(2, '0')}`;
+    fileName = `${dateStr}-${merchant.businessName}-歷史訂單`;
+  }
   
   // 添加檔案名稱到響應標頭中，供前端使用
   res.setHeader('X-File-Name', encodeURIComponent(fileName));
@@ -1047,11 +1125,10 @@ exports.exportHistoryOrders = catchAsync(async (req, res, next) => {
     
     // 設定欄寬
     const columnWidths = [
+      { wch: 12 }, // 收據號 (10位數字)
       { wch: 15 }, // 訂單號
       { wch: 10 }, // 桌號
       { wch: 20 }, // 結帳時間
-      { wch: 12 }, // 總金額
-      { wch: 12 }, // 桌位容量
       { wch: 20 }, // 商品名稱
       { wch: 8 },  // 數量
       { wch: 10 }, // 單價
@@ -1060,6 +1137,11 @@ exports.exportHistoryOrders = catchAsync(async (req, res, next) => {
       { wch: 20 }  // 備註
     ];
     worksheet['!cols'] = columnWidths;
+    
+    // 設定合併儲存格
+    if (mergedRanges && mergedRanges.length > 0) {
+      worksheet['!merges'] = mergedRanges;
+    }
 
     XLSX.utils.book_append_sheet(workbook, worksheet, '歷史訂單');
     

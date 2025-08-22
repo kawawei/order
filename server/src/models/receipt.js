@@ -251,7 +251,7 @@ receiptSchema.statics.createFromOrderWithBillNumber = async function(order, empl
   
   console.log('訂單總金額:', order.totalAmount);
   console.log('收據項目總數:', receiptItems.length);
-  console.log('商家名稱:', order.merchantId?.businessName || order.merchantId?.name || '餐廳');
+  console.log('商家名稱:', order.merchantId?.businessName || '餐廳');
   
   const receipt = new this({
     billNumber,
@@ -265,7 +265,7 @@ receiptSchema.statics.createFromOrderWithBillNumber = async function(order, empl
     employeeId,
     employeeName,
     checkoutTime: new Date(),
-    storeName: order.merchantId?.businessName || order.merchantId?.name || '餐廳'
+    storeName: order.merchantId?.businessName || '餐廳'
   });
   
   console.log('🖨️ 歷史訂單收據對象創建完成，包含以下數據:');

@@ -449,6 +449,408 @@
      - 今年：顯示「今年」
      - 其他年份：顯示「2025年」
 
+### 智能匯出功能
+1. 需求描述
+   - 匯出功能需要根據當前選擇的視圖模式來決定匯出範圍
+   - 日模式：匯出選擇的單日資料，檔名為「2025-08-22-餐廳名稱-歷史訂單」
+   - 月模式：匯出選擇的整月資料，檔名為「2025-08-餐廳名稱-歷史訂單」
+   - 年模式：匯出選擇的整年資料，檔名為「2025-餐廳名稱-歷史訂單」
+
+2. 技術實現
+   - 修改前端 `useOrders.js` 中的 `exportHistoryOrders` 函數
+   - 修改後端 `orderController.js` 中的檔案名稱生成邏輯
+   - 根據 `dateViewMode` 和 `selectedDate` 動態設定匯出範圍
+
+3. 修改內容
+   ```javascript
+   // 前端：根據視圖模式設定匯出範圍
+   switch (dateViewMode.value) {
+     case 'year':
+       // 年模式：匯出整年資料
+       params.startDate = `${year}-01-01`
+       params.endDate = `${year}-12-31`
+       break
+     case 'month':
+       // 月模式：匯出整月資料
+       params.startDate = `${year}-${month}-01`
+       const lastDay = new Date(year, selectedDay.getMonth() + 1, 0).getDate()
+       params.endDate = `${year}-${month}-${String(lastDay).padStart(2, '0')}`
+       break
+     case 'day':
+     default:
+       // 日模式：匯出單日資料
+       params.startDate = `${year}-${month}-${day}`
+       params.endDate = `${year}-${month}-${day}`
+       break
+   }
+   
+   // 後端：根據匯出範圍生成檔案名稱
+   if (startDate === endDate) {
+     // 單日匯出：年月日-餐廳名稱-歷史訂單
+     fileName = `${dateStr}-${merchant.businessName}-歷史訂單`;
+   } else if (start.getMonth() === end.getMonth() && start.getFullYear() === end.getFullYear()) {
+     // 整月匯出：年月-餐廳名稱-歷史訂單
+     fileName = `${monthStr}-${merchant.businessName}-歷史訂單`;
+   } else if (start.getFullYear() === end.getFullYear()) {
+     // 整年匯出：年-餐廳名稱-歷史訂單
+     fileName = `${yearStr}-${merchant.businessName}-歷史訂單`;
+   }
+   ```
+
+4. 功能特點
+   - 智能判斷：自動檢測匯出範圍類型
+   - 動態命名：根據匯出範圍生成對應的檔案名稱
+   - 用戶友好：檔案名稱清楚標示匯出的時間範圍
+
+5. 匯出效果
+   - **日模式**：
+     - 匯出範圍：2025-08-22 單日資料
+     - 檔案名稱：`2025-08-22-餐廳名稱-歷史訂單.xlsx`
+   - **月模式**：
+     - 匯出範圍：2025-08-01 到 2025-08-31 整月資料
+     - 檔案名稱：`2025-08-餐廳名稱-歷史訂單.xlsx`
+   - **年模式**：
+     - 匯出範圍：2025-01-01 到 2025-12-31 整年資料
+     - 檔案名稱：`2025-餐廳名稱-歷史訂單.xlsx`
+
+6. 智能檢查機制
+   - 匯出前先檢查是否有訂單可匯出
+   - 使用 `getOrdersByMerchant` API 檢查訂單數量
+   - 沒有訂單時直接顯示提醒，不進行匯出操作
+   - 避免顯示「匯出進行中」的誤導訊息
+   - 根據視圖模式顯示對應的提醒訊息：
+     - 日模式：`2025年8月22日沒有找到已完成的訂單`
+     - 月模式：`2025年8月沒有找到已完成的訂單`
+     - 年模式：`2025年沒有找到已完成的訂單`
+   - 修正 API 方法名稱錯誤（從 `getHistoryOrders` 改為 `getOrdersByMerchant`）
+   - 修正參數格式，使用正確的 `startDate` 和 `endDate` 參數
+
+### 匯出功能時間格式和收據號修復｜Fix export time format and receipt number
+
+*時間：2025-08-22 18:00*
+
+1. 問題描述｜Problem description
+   - 匯出的結帳時間顯示 UTC 時間而非台灣本地時間
+   - 匯出資料缺少收據號欄位，用戶無法追蹤具體訂單
+   - 影響報表的可讀性和實用性
+
+2. 問題分析｜Problem analysis
+   - **時間格式問題**：`toLocaleString('zh-TW')` 沒有指定時區，預設使用 UTC
+   - **缺少收據號**：匯出資料結構中沒有包含訂單的唯一識別碼
+   - **欄位順序**：需要將收據號放在 A 列，其他欄位往後移動
+
+3. 解決方案｜Solution
+   - **修正時間格式**：
+     * 添加 `timeZone: 'Asia/Taipei'` 參數
+     * 確保顯示台灣本地時間 (UTC+8)
+   - **添加收據號欄位**：
+     * 在 A 列添加收據號 (10位數字收據號)
+     * 其他欄位順序往後移動
+   - **調整欄寬**：
+     * 收據號欄位寬度設為 12 字符
+     * 保持其他欄位的合適寬度
+
+4. 技術細節｜Technical details
+   - **時間格式修正**：
+     ```javascript
+     const orderTime = order.completedAt ? 
+       new Date(order.completedAt).toLocaleString('zh-TW', {
+         year: 'numeric',
+         month: '2-digit',
+         day: '2-digit',
+         hour: '2-digit',
+         minute: '2-digit',
+         second: '2-digit',
+         timeZone: 'Asia/Taipei'  // 新增時區設定
+       }) : '';
+     ```
+   - **收據號添加**：
+     ```javascript
+     exportData.push({
+       '收據號': order.receiptOrderNumber || '',  // 使用正確的收據號欄位
+       '訂單號': order.tableOrderNumber || order.orderNumber,
+       // ... 其他欄位
+     });
+     ```
+   - **欄寬調整**：
+     ```javascript
+     const columnWidths = [
+       { wch: 12 }, // 收據號 (10位數字)
+       { wch: 15 }, // 訂單號
+       // ... 其他欄位寬度
+     ];
+     ```
+
+5. 修正結果｜Results
+   - ✅ 結帳時間現在顯示台灣本地時間 (UTC+8)
+   - ✅ 匯出資料包含正確的收據號在 A 列
+   - ✅ 欄位順序：收據號 → 訂單號 → 桌號 → 結帳時間 → ...
+   - ✅ 欄寬設定適合內容長度
+   - ✅ 提升報表的可讀性和追蹤性
+
+6. 影響範圍｜Impact
+   - 匯出報表現在顯示正確的本地時間
+   - 用戶可以通過收據號追蹤具體訂單
+   - 提升報表的實用性和專業性
+   - 符合台灣本地化需求
+
+7. 相關檔案｜Related files
+   - 後端匯出控制器：`server/src/controllers/orderController.js`
+
+### 收據號格式修正｜Fix receipt number format
+
+*時間：2025-08-22 18:15*
+
+1. 問題描述｜Problem description
+   - 匯出功能中收據號使用了錯誤的欄位 (MongoDB ObjectId)
+   - 應該使用 `receiptOrderNumber` 欄位，這是10位數字的收據號
+   - 影響報表的準確性和專業性
+
+2. 問題分析｜Problem analysis
+   - **錯誤的收據號**：使用了 `order._id.toString()` (MongoDB ObjectId)
+   - **正確的收據號**：應該是 `order.receiptOrderNumber` (10位數字)
+   - **欄寬設定**：24字符寬度不適合10位數字
+
+3. 解決方案｜Solution
+   - **修正收據號欄位**：
+     * 使用 `order.receiptOrderNumber || ''` 替代 `order._id.toString()`
+     * 確保使用正確的收據號格式
+   - **調整欄寬**：
+     * 收據號欄位寬度從 24 調整為 12 字符
+     * 更適合10位數字的顯示
+
+4. 技術細節｜Technical details
+   - **收據號生成邏輯**：
+     ```javascript
+     // 生成10位隨機數字收據號碼
+     function generateReceiptNumber() {
+       return Math.floor(1000000000 + Math.random() * 9000000000).toString();
+     }
+     ```
+   - **收據號欄位修正**：
+     ```javascript
+     exportData.push({
+       '收據號': order.receiptOrderNumber || '',  // 修正：使用正確的收據號
+       '訂單號': order.tableOrderNumber || order.orderNumber,
+       // ... 其他欄位
+     });
+     ```
+   - **欄寬調整**：
+     ```javascript
+     const columnWidths = [
+       { wch: 12 }, // 收據號 (10位數字) - 修正寬度
+       { wch: 15 }, // 訂單號
+       // ... 其他欄位寬度
+     ];
+     ```
+
+5. 修正結果｜Results
+   - ✅ 收據號現在顯示正確的10位數字格式
+   - ✅ 欄寬設定更適合收據號長度
+   - ✅ 提升報表的專業性和準確性
+   - ✅ 符合商業收據的標準格式
+
+6. 影響範圍｜Impact
+   - 匯出報表現在顯示正確的收據號格式
+   - 提升報表的專業性和可讀性
+   - 符合台灣商業收據的標準格式
+   - 便於用戶追蹤和對帳
+
+7. 相關檔案｜Related files
+   - 後端匯出控制器：`server/src/controllers/orderController.js`
+   - 收據號生成邏輯：`server/src/controllers/orderController.js:747`
+
+### 匯出功能欄位簡化｜Simplify export columns
+
+*時間：2025-08-22 18:30*
+
+1. 問題描述｜Problem description
+   - 匯出功能包含過多欄位，影響報表的簡潔性
+   - 總金額和桌位容量欄位在商品明細中重複顯示
+   - 需要簡化匯出格式，提升可讀性
+
+2. 問題分析｜Problem analysis
+   - **總金額欄位**：在商品明細中顯示訂單總金額，與小計欄位功能重疊
+   - **桌位容量欄位**：與訂單內容無直接關係，影響報表焦點
+   - **欄位順序**：移除欄位後需要調整欄寬設定
+
+3. 解決方案｜Solution
+   - **移除總金額欄位**：避免與小計欄位功能重疊
+   - **移除桌位容量欄位**：專注於訂單內容，提升報表簡潔性
+   - **調整欄寬**：重新設定各欄位的合適寬度
+
+4. 技術細節｜Technical details
+   - **移除的欄位**：
+     ```javascript
+     // 移除前
+     '總金額': order.totalAmount,
+     '桌位容量': order.tableId ? order.tableId.tableCapacity : '',
+     
+     // 移除後
+     // 直接從桌號跳到商品名稱
+     ```
+   - **欄寬調整**：
+     ```javascript
+     const columnWidths = [
+       { wch: 12 }, // 收據號 (10位數字)
+       { wch: 15 }, // 訂單號
+       { wch: 10 }, // 桌號
+       { wch: 20 }, // 結帳時間
+       { wch: 20 }, // 商品名稱 (移除總金額和桌位容量後)
+       { wch: 8 },  // 數量
+       { wch: 10 }, // 單價
+       { wch: 12 }, // 小計
+       { wch: 30 }, // 選項
+       { wch: 20 }  // 備註
+     ];
+     ```
+
+5. 修正結果｜Results
+   - ✅ 匯出報表更加簡潔，專注於訂單內容
+   - ✅ 移除重複的總金額顯示，避免混淆
+   - ✅ 移除無關的桌位容量資訊，提升報表焦點
+   - ✅ 欄寬設定更適合簡化後的欄位結構
+   - ✅ 提升報表的可讀性和專業性
+
+6. 影響範圍｜Impact
+   - 匯出報表欄位從 12 個減少到 10 個
+   - 報表更加簡潔，專注於核心訂單資訊
+   - 提升用戶閱讀體驗
+   - 符合精簡化報表設計原則
+
+7. 相關檔案｜Related files
+   - 後端匯出控制器：`server/src/controllers/orderController.js`
+
+### 匯出功能日期範圍問題修復｜Fix export date range issue
+
+*時間：2025-08-22 17:45*
+
+1. 問題描述｜Problem description
+   - 匯出歷史訂單時，明明有訂單但系統提示「沒有找到已完成的訂單」
+   - 從日誌看到匯出參數正確，但查詢結果為空
+   - 影響用戶正常使用匯出功能
+   - 日期範圍查詢邏輯存在問題
+
+2. 問題分析｜Problem analysis
+   - 匯出參數：`{startDate: '2025-08-22', endDate: '2025-08-22'}`
+   - 後端解析時，`startDate` 和 `endDate` 都被解析為 `2025-08-22T00:00:00.000Z`
+   - 導致查詢範圍為 0 毫秒，無法找到任何訂單
+   - 日期範圍應該包含整天的時間（00:00:00 到 23:59:59）
+
+3. 解決方案｜Solution
+   - **修正日期範圍格式**：
+     * 日模式：`startDate: '2025-08-22T00:00:00.000Z'`, `endDate: '2025-08-22T23:59:59.999Z'`
+     * 月模式：`endDate: '2025-12-31T23:59:59.999Z'`
+     * 年模式：`endDate: '2025-12-31T23:59:59.999Z'`
+   - **確保時間範圍完整性**：
+     * 開始時間設為當天 00:00:00
+     * 結束時間設為當天 23:59:59.999
+     * 使用 ISO 8601 格式確保時區正確
+
+4. 技術細節｜Technical details
+   - **日模式修正**：
+     ```javascript
+     params.startDate = `${year}-${month}-${day}T00:00:00.000Z`
+     params.endDate = `${year}-${month}-${day}T23:59:59.999Z`
+     ```
+   - **月模式修正**：
+     ```javascript
+     params.endDate = `${year}-${month}-${String(lastDay).padStart(2, '0')}T23:59:59.999Z`
+     ```
+   - **年模式修正**：
+     ```javascript
+     params.endDate = `${year}-12-31T23:59:59.999Z`
+     ```
+
+5. 修正結果｜Results
+   - ✅ 修正日期範圍查詢邏輯
+   - ✅ 確保能正確查詢到當天的訂單
+   - ✅ 支持日、月、年三種視圖模式的匯出
+   - ✅ 使用標準 ISO 8601 時間格式
+   - ✅ 解決「沒有找到訂單」的錯誤提示
+
+6. 影響範圍｜Impact
+   - 匯出功能現在能正確查詢到訂單
+   - 提升用戶體驗，避免錯誤提示
+   - 確保日期範圍查詢的準確性
+   - 支持完整的時間範圍查詢
+
+7. 相關檔案｜Related files
+   - 訂單管理邏輯：`web/src/composables/merchant/useOrders.js`
+   - 後端訂單控制器：`server/src/controllers/orderController.js`
+
+### 匯出功能重複執行問題修復｜Fix duplicate export execution issue
+
+*時間：2025-08-22 17:30*
+
+1. 問題描述｜Problem description
+   - 匯出歷史訂單時，匯出函數被重複執行兩次
+   - 從控制台日誌看到匯出 API 被調用了兩次
+   - 用戶體驗不佳，可能導致重複下載檔案
+   - 影響系統性能和用戶體驗
+
+2. 問題分析｜Problem analysis
+   - 匯出按鈕使用了箭頭函數 `@click="() => exportHistoryOrders('xlsx')"`
+   - 每次組件重新渲染時都會創建新的函數實例
+   - 可能存在快速點擊或事件冒泡問題
+   - 防重複機制需要進一步加強
+
+3. 解決方案｜Solution
+   - **改進防重複機制**：
+     * 在函數開始時立即設置 `isExporting.value = true`
+     * 添加詳細的控制台日誌來追蹤執行流程
+     * 使用延遲重置機制（500ms）防止快速重複調用
+   - **優化事件處理**：
+     * 將箭頭函數改為具名函數 `handleExport`
+     * 避免每次渲染時創建新的函數實例
+     * 添加按鈕點擊日誌來追蹤事件觸發
+   - **加強日誌追蹤**：
+     * 在匯出函數開始時記錄調用信息
+     * 在狀態設置時記錄狀態變化
+     * 在函數完成時記錄執行結果
+
+4. 技術細節｜Technical details
+   - **防重複調用檢查**：
+     ```javascript
+     if (isExporting.value) {
+       console.log('匯出進行中，請稍候...')
+       return
+     }
+     isExporting.value = true
+     console.log('設置匯出狀態為 true')
+     ```
+   - **延遲重置機制**：
+     ```javascript
+     setTimeout(() => {
+       isExporting.value = false
+       console.log('延遲重置匯出狀態為 false')
+     }, 500)
+     ```
+   - **事件處理優化**：
+     ```javascript
+     const handleExport = () => {
+       console.log('匯出按鈕被點擊')
+       exportHistoryOrders('xlsx')
+     }
+     ```
+
+5. 修正結果｜Results
+   - ✅ 防止匯出函數重複執行
+   - ✅ 提升用戶體驗，避免重複下載
+   - ✅ 完整的日誌追蹤便於調試
+   - ✅ 穩定的防重複機制
+   - ✅ 優化的事件處理方式
+
+6. 影響範圍｜Impact
+   - 匯出功能更加穩定可靠
+   - 提升用戶體驗，避免重複操作
+   - 減少不必要的 API 調用
+   - 提高系統整體穩定性
+
+7. 相關檔案｜Related files
+   - 訂單管理邏輯：`web/src/composables/merchant/useOrders.js`
+   - 訂單頁面：`web/src/views/merchant/orders/Orders.vue`
+
 ### 隱藏訂單數統計顯示
 1. 需求描述
    - 隱藏左上角顯示的本週本月本日訂單數
@@ -1168,7 +1570,7 @@
 
 ## 2025-08-20 00:52
 ### 商家端訂單卡片顯示選項標籤｜Show option tags on merchant order cards
-1. 完成內容｜What’s done
+1. 完成內容｜What's done
    - ✅ 在 `web/src/composables/merchant/useOrders.js` 的 `groupOrdersByBatch` 中，改為使用 `processOrderItems()` 統一處理餐點選項，於餐點卡片名稱右側顯示標籤（如：無糖、去冰、大杯）。
    - ✅ 新增 `itemCount` 統計，批次卡片底部的「項」數量正確顯示。
 
@@ -1186,7 +1588,7 @@
 
 ## 2025-08-20 01:08
 ### 菜單圖片上傳與分類目錄管理｜Menu image upload & category folder management
-1. 完成內容｜What’s done
+1. 完成內容｜What's done
    - ✅ 後端靜態資源：在 `server/src/index.js` 掛載 `/uploads` 靜態目錄，提供圖片直接訪問。
    - ✅ 檔案上傳：新增 `multer`，在 `menuRoutes.js` 針對菜品建立/更新掛 `upload.single('image')`。
    - ✅ 類別目錄：在 `menuCategoryController.js` 新增建立/改名/刪除分類時，同步建立/重命名/刪除對應圖片資料夾：`uploads/menu/{merchantSlug}/{categorySlug}`。
@@ -1695,3 +2097,136 @@
 - 數據驗證機制確保計算結果準確性
 
 *時間：2025-08-22 16:30*
+
+## 2025-08-22 18:40
+### 收據菜品分組顯示邏輯實現｜Receipt item grouping display logic implementation
+1. 問題描述｜Problem description
+   - 桌次訂單包含多個批次的菜品項目
+   - 需要將相同菜品但不同選項的項目進行分組顯示
+   - 相同菜品相同選項的項目需要合併數量
+   - 不同選項的相同菜品需要分別顯示
+   - 收據顯示需要清晰易讀，便於顧客理解
+
+2. 問題分析｜Problem analysis
+   - **桌次訂單結構複雜**：
+     * 一個桌次訂單包含多個批次（orders）
+     * 每個批次包含多個菜品項目（items）
+     * 每個項目可能有不同的選項組合
+   - **菜品分組需求**：
+     * 相同菜品名稱 + 相同選項 = 合併數量
+     * 相同菜品名稱 + 不同選項 = 分別顯示
+     * 需要保持選項的完整性和準確性
+   - **顯示邏輯複雜**：
+     * 需要處理多種選項格式
+     * 需要計算合併後的總價
+     * 需要保持原始數據的完整性
+
+3. 解決方案｜Solution
+   - **精確項目鍵生成**：
+     * 使用菜品ID + 選項組合作為唯一鍵
+     * 選項按字母順序排序確保一致性
+     * 處理不同選項值格式（字符串、對象等）
+   - **智能項目合併**：
+     * 完全相同的項目（菜品+選項）合併數量
+     * 不同選項的相同菜品分別顯示
+     * 保留原始單價和總價信息
+   - **選項格式化處理**：
+     * 統一選項顯示格式
+     * 處理複雜的選項對象結構
+     * 確保選項信息的完整性
+
+4. 技術細節｜Technical details
+   - **項目鍵生成邏輯**：
+     ```javascript
+     const optionsKey = item.selectedOptions ? 
+       Object.entries(item.selectedOptions)
+         .sort(([a], [b]) => a.localeCompare(b)) // 排序確保一致性
+         .map(([key, value]) => {
+           // 處理不同的選項值格式
+           let displayValue = value;
+           if (typeof value === 'object' && value !== null) {
+             displayValue = value.label || value.name || value.value || JSON.stringify(value);
+           }
+           return `${key}:${displayValue}`;
+         })
+         .join('|') : '';
+     
+     const itemKey = `${item.dishId}-${optionsKey}`;
+     ```
+   
+   - **項目合併邏輯**：
+     ```javascript
+     if (itemMap.has(itemKey)) {
+       // 合併完全相同的項目（包括選項）
+       const existingItem = itemMap.get(itemKey);
+       existingItem.quantity += item.quantity;
+       existingItem.totalPrice += item.totalPrice;
+       
+       // 確保合併後的項目也有正確的顯示名稱
+       if (!existingItem.displayName) {
+         existingItem.displayName = existingItem.dishName || existingItem.name;
+       }
+     } else {
+       // 新增項目（可能是相同菜品但選項不同）
+       const newItem = {
+         ...item,
+         dishName: item.dishName || item.name,
+         batchNumber: batchIndex + 1,
+         originalPrice: item.price,
+         originalTotalPrice: item.totalPrice,
+         displayName: item.dishName || item.name
+       };
+       itemMap.set(itemKey, newItem);
+     }
+     ```
+   
+   - **最終數據處理**：
+     ```javascript
+     // 將合併後的項目轉換為陣列，並按菜品名稱排序
+     allItems.push(...itemMap.values());
+     allItems.sort((a, b) => {
+       const nameA = a.dishName || a.displayName || a.name || '';
+       const nameB = b.dishName || b.displayName || b.name || '';
+       return nameA.localeCompare(nameB);
+     });
+     
+     // 計算所有批次的總金額
+     const totalAmount = allItems.reduce((sum, item) => sum + item.totalPrice, 0);
+     ```
+
+5. 實現結果｜Results
+   - ✅ 實現精確的菜品分組邏輯
+   - ✅ 相同菜品相同選項自動合併數量
+   - ✅ 不同選項的相同菜品分別顯示
+   - ✅ 保持選項信息的完整性和準確性
+   - ✅ 按菜品名稱排序，提升可讀性
+   - ✅ 正確計算合併後的總金額
+   - ✅ 保留原始數據用於調試和驗證
+
+6. 顯示效果｜Display effects
+   - **合併顯示**：烏龍茶（吸管:粗|杯子:小|果糖:微糖）x3 = 75元
+   - **分別顯示**：
+     * 奶茶（吸管:細|杯子:大|果糖:正常|珍珠:無珍珠）x1 = 50元
+     * 奶茶（吸管:粗|杯子:小|果糖:正常）x1 = 35元
+   - **總計顯示**：所有項目合計 260元
+
+7. 影響範圍｜Impact
+   - 桌次訂單收據顯示
+   - 收據預覽功能
+   - 收據列印功能
+   - 訂單歷史查看
+
+8. 相關檔案｜Related files
+   - 訂單組合邏輯：`web/src/composables/merchant/useOrders.js`
+   - 收據工具函數：`web/src/utils/receiptUtils.js`
+   - 收據組件：`web/src/components/receipt/BaseReceipt.vue`
+
+### 經驗總結｜Lessons learned
+- 複雜的數據分組邏輯需要精確的鍵值生成策略
+- 選項處理需要考慮多種數據格式
+- 排序和合併邏輯對用戶體驗很重要
+- 保留原始數據有助於調試和驗證
+- 清晰的顯示邏輯提升收據的可讀性
+- 模組化的代碼結構便於維護和擴展
+
+*時間：2025-08-22 18:40*

@@ -7,9 +7,13 @@ const mongoose = require('mongoose');
 
 // 輔助函數：獲取商家ID（支持超級管理員訪問特定商家）
 const getMerchantId = (req) => {
+  // 優先使用查詢參數中的merchantId（前端傳遞）
+  if (req.query.merchantId) {
+    return req.query.merchantId;
+  }
   // 如果是超級管理員且指定了商家ID，使用指定的商家ID
-  if (req.admin && (req.query.merchantId || req.params.merchantId)) {
-    return req.query.merchantId || req.params.merchantId;
+  if (req.admin && req.params.merchantId) {
+    return req.params.merchantId;
   }
   // 如果是超級管理員但沒有指定商家ID，返回錯誤信息
   if (req.admin && !req.query.merchantId && !req.params.merchantId) {
@@ -356,7 +360,7 @@ exports.getReceiptByOrderId = catchAsync(async (req, res, next) => {
   console.log('商家ID:', merchantId);
 
   // 驗證訂單是否存在且屬於當前商家
-  const order = await Order.findById(orderId);
+  const order = await Order.findById(orderId).populate('merchantId', 'businessName');
   if (!order) {
     console.log('訂單不存在');
     return next(new AppError('訂單不存在', 404));
@@ -372,7 +376,16 @@ exports.getReceiptByOrderId = catchAsync(async (req, res, next) => {
     receiptOrderNumber: order.receiptOrderNumber
   });
 
-  if (order.merchantId.toString() !== merchantId) {
+  // 正確提取商家ID進行比較
+  const orderMerchantId = order.merchantId._id ? order.merchantId._id.toString() : order.merchantId.toString();
+  
+  console.log('權限檢查:', {
+    orderMerchantId: orderMerchantId,
+    requestMerchantId: merchantId,
+    isMatch: orderMerchantId === merchantId
+  });
+
+  if (orderMerchantId !== merchantId) {
     console.log('無權限訪問此訂單');
     return next(new AppError('無權限訪問此訂單', 403));
   }
