@@ -616,6 +616,42 @@ export function useOrders(restaurantId = null) {
       })
       
       if (response.status === 'success') {
+        // 添加詳細的調試信息
+        console.log('=== 歷史訂單載入詳細信息 ===');
+        console.log('原始訂單數量:', response.data.orders.length);
+        
+        // 顯示前5筆原始訂單的詳細信息
+        if (response.data.orders.length > 0) {
+          console.log('前5筆原始訂單詳細信息:');
+          response.data.orders.slice(0, 5).forEach((order, index) => {
+            console.log(`原始訂單 ${index + 1}:`, {
+              id: order._id,
+              orderNumber: order.orderNumber,
+              tableOrderNumber: order.tableOrderNumber,
+              receiptOrderNumber: order.receiptOrderNumber,
+              status: order.status,
+              createdAt: order.createdAt,
+              completedAt: order.completedAt,
+              tableNumber: order.tableId?.tableNumber || order.tableNumber,
+              itemsCount: order.items?.length || 0,
+              totalAmount: order.totalAmount
+            });
+          });
+          
+          // 顯示時間範圍統計
+          const completedOrders = response.data.orders.filter(o => o.completedAt);
+          const createdOrders = response.data.orders.filter(o => o.createdAt);
+          
+          console.log('歷史訂單時間範圍統計:', {
+            totalOrders: response.data.orders.length,
+            completedOrders: completedOrders.length,
+            createdOrders: createdOrders.length,
+            timeRange: `${startTime} 到 ${endTime}`,
+            viewMode: dateViewMode.value,
+            selectedDate: selectedDate.value.toLocaleDateString()
+          });
+        }
+        
         // 按桌次分組合併訂單
         const tableOrders = mergeOrdersByTable(response.data.orders)
         
@@ -631,7 +667,7 @@ export function useOrders(restaurantId = null) {
         
         historyOrders.value = processedOrders
         console.log('歷史訂單載入成功:', processedOrders.length, '筆桌次訂單')
-        console.log('歷史訂單數據:', processedOrders)
+        console.log('合併後的桌次訂單數據:', processedOrders)
       }
     } catch (error) {
       console.error('載入歷史訂單失敗:', error)
@@ -1327,8 +1363,9 @@ export function useOrders(restaurantId = null) {
         case 'day':
         default:
           // 日模式：匯出單日資料 - 修正為包含整天的時間範圍
-          params.startDate = `${year}-${month}-${day}T00:00:00.000Z`
-          params.endDate = `${year}-${month}-${day}T23:59:59.999Z`
+          // 使用本地時間，不添加時區標識，讓後端正確處理
+          params.startDate = `${year}-${month}-${day}`
+          params.endDate = `${year}-${month}-${day}`
           break
       }
 

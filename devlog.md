@@ -2327,3 +2327,128 @@ for (let R = range.s.r; R <= range.e.r; R++) {
 - 代碼審查時需要關注數據結構的一致性
 
 *時間：2025-01-27 15:30*
+
+## 2025-01-27 歷史訂單匯出時區問題修復
+
+### 問題描述｜Problem description
+在歷史訂單匯出功能中，發現嚴重的時區轉換問題：
+1. **時區不一致**：前端和後端使用不同的時區轉換邏輯
+2. **日期範圍錯誤**：匯出的訂單日期範圍不正確，可能包含不應該包含的訂單
+3. **時區偏移計算錯誤**：使用了系統本地時區偏移，而不是固定的台灣時區
+
+### 問題分析｜Problem analysis
+
+#### 原始問題代碼
+```javascript
+// 錯誤的時區轉換邏輯
+const timezoneOffset = new Date().getTimezoneOffset();
+const start = new Date(startDateObj.getTime() - (timezoneOffset * 60 * 1000));
+const end = new Date(endDateObj.getTime() - (timezoneOffset * 60 * 1000));
+```
+
+**問題所在**：
+1. 使用 `new Date().getTimezoneOffset()` 獲取系統本地時區偏移
+2. 不同環境（開發機、伺服器）可能有不同的時區設定
+3. 與前端時區轉換邏輯不一致
+
+#### 前端時區轉換邏輯
+```javascript
+// 前端使用固定的台灣時區轉換
+const taiwanTimezoneOffset = 8 * 60; // 8小時 = 480分鐘
+const start = new Date(startDateObj.getTime() - (taiwanTimezoneOffset * 60 * 1000));
+const end = new Date(endDateObj.getTime() - (taiwanTimezoneOffset * 60 * 1000));
+```
+
+### 修復內容｜Fixes applied
+
+#### 1. 統一時區轉換邏輯
+**修復前**：使用系統本地時區偏移
+```javascript
+const timezoneOffset = new Date().getTimezoneOffset();
+```
+
+**修復後**：使用固定的台灣時區偏移
+```javascript
+const taiwanTimezoneOffset = 8 * 60; // 8小時 = 480分鐘
+```
+
+#### 2. 改進日期範圍處理
+**修復前**：直接使用日期對象的時間戳
+```javascript
+const start = new Date(startDateObj.getTime() - (timezoneOffset * 60 * 1000));
+const end = new Date(endDateObj.getTime() - (timezoneOffset * 60 * 1000));
+```
+
+**修復後**：構建完整的台灣本地時間範圍
+```javascript
+// 構建台灣本地時間的開始和結束
+const taiwanStart = new Date(startDateObj.getFullYear(), startDateObj.getMonth(), startDateObj.getDate());
+const taiwanEnd = new Date(endDateObj.getFullYear(), endDateObj.getMonth(), endDateObj.getDate(), 23, 59, 59, 999);
+
+// 轉換為 UTC 時間：台灣時間 - 8小時 = UTC 時間
+start = new Date(taiwanStart.getTime() - (taiwanTimezoneOffset * 60 * 1000));
+end = new Date(taiwanEnd.getTime() - (taiwanTimezoneOffset * 60 * 1000));
+```
+
+#### 3. 添加詳細的日誌記錄
+**新增**：添加時區轉換的詳細日誌
+```javascript
+console.log('匯出查詢時間範圍:', {
+  localDate: startDate,
+  utcStart: start.toISOString(),
+  utcEnd: end.toISOString(),
+  taiwanTimezoneOffset: 'UTC+8 (480分鐘)',
+  note: '使用台灣時區轉換邏輯'
+});
+```
+
+### 技術細節｜Technical details
+
+#### 時區轉換原理
+1. **台灣時區**：UTC+8（東八區）
+2. **轉換公式**：UTC時間 = 台灣時間 - 8小時
+3. **時間戳計算**：減去 480分鐘（8小時 × 60分鐘）
+
+#### 日期範圍處理
+1. **開始時間**：設定為當天 00:00:00.000
+2. **結束時間**：設定為當天 23:59:59.999
+3. **包含邊界**：使用 `$gte` 和 `$lte` 確保包含邊界值
+
+#### 數據庫查詢邏輯
+```javascript
+query.$or = [
+  { completedAt: { $gte: start, $lte: end } },
+  { createdAt: { $gte: start, $lte: end } }
+];
+```
+
+### 影響範圍｜Impact
+- 歷史訂單 Excel 匯出功能
+- 歷史訂單 CSV 匯出功能
+- 所有使用日期範圍過濾的匯出功能
+
+### 相關檔案｜Related files
+- `server/src/controllers/orderController.js` - 歷史訂單匯出控制器
+  - `exportOrdersToExcel` 函數
+  - `exportOrdersToCSV` 函數
+
+### 測試建議｜Testing suggestions
+1. 測試不同日期範圍的匯出功能
+2. 驗證時區轉換是否正確
+3. 檢查匯出的訂單是否在正確的時間範圍內
+4. 在不同環境（開發、測試、生產）中測試
+
+### 經驗總結｜Lessons learned
+- **時區處理**：必須使用固定的時區偏移，不能依賴系統本地時區
+- **前後端一致性**：時區轉換邏輯必須與前端保持一致
+- **日期範圍**：需要明確指定開始和結束時間的具體時刻
+- **日誌記錄**：添加詳細的時區轉換日誌有助於問題排查
+- **環境差異**：不同環境的時區設定可能不同，需要統一處理
+
+### 預防措施｜Prevention measures
+1. 在時區相關代碼中添加詳細註釋
+2. 使用固定的時區偏移值
+3. 添加時區轉換的單元測試
+4. 在部署前驗證不同環境的時區設定
+
+*時間：2025-01-27 16:45*

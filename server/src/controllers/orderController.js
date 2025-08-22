@@ -321,18 +321,56 @@ exports.getOrdersByMerchant = catchAsync(async (req, res, next) => {
   }
 
   // 優先使用時間範圍查詢，如果沒有則使用單一日期查詢
+  // 對於已完成的訂單，使用 completedAt 字段
   if (startDate && endDate) {
-    query.createdAt = {
-      $gte: new Date(startDate),
-      $lte: new Date(endDate)
+    // 正確處理日期字符串，支援多種格式
+    let start, end;
+    
+    // 檢查是否已經是完整的日期時間字符串
+    if (startDate.includes('T') || startDate.includes('Z')) {
+      start = new Date(startDate);
+    } else {
+      // 處理純日期字符串
+      start = new Date(startDate + 'T00:00:00');
+    }
+    
+    if (endDate.includes('T') || endDate.includes('Z')) {
+      end = new Date(endDate);
+    } else {
+      // 處理純日期字符串
+      end = new Date(endDate + 'T23:59:59.999');
+    }
+    
+    // 驗證日期是否有效
+    if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+      return next(new AppError('日期格式無效', 400));
+    }
+    
+    query.completedAt = {
+      $gte: start,
+      $lte: end
     };
   } else if (date) {
-    const startDate = new Date(date);
-    const endDate = new Date(date);
-    endDate.setDate(endDate.getDate() + 1);
-    query.createdAt = {
+    let startDate, endDate;
+    
+    // 檢查是否已經是完整的日期時間字符串
+    if (date.includes('T') || date.includes('Z')) {
+      startDate = new Date(date);
+      endDate = new Date(date);
+    } else {
+      // 處理純日期字符串
+      startDate = new Date(date + 'T00:00:00');
+      endDate = new Date(date + 'T23:59:59.999');
+    }
+    
+    // 驗證日期是否有效
+    if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
+      return next(new AppError('日期格式無效', 400));
+    }
+    
+    query.completedAt = {
       $gte: startDate,
-      $lt: endDate
+      $lte: endDate
     };
   }
 
@@ -878,19 +916,87 @@ exports.exportHistoryOrders = catchAsync(async (req, res, next) => {
     status: { $in: ['completed', 'cancelled'] } // 匯出已完成和已取消的訂單
   };
 
-  // 時間範圍過濾 - 使用 createdAt 作為備選
+  // 時間範圍過濾 - 將本地時間轉換為 UTC 時間進行查詢
   if (startDate && endDate) {
-    const start = new Date(startDate);
-    const end = new Date(endDate);
-    end.setHours(23, 59, 59, 999); // 設定為當天結束時間
+    let start, end;
+    
+    if (startDate.includes('T') || startDate.includes('Z')) {
+      // 如果已經是完整的日期時間字符串，直接使用
+      start = new Date(startDate);
+      end = new Date(endDate);
+    } else {
+      // 處理純日期字符串：使用與前端一致的時區轉換邏輯
+      const startDateObj = new Date(startDate);
+      const endDateObj = new Date(endDate);
+      
+      // 台灣時區是 UTC+8，所以需要減去 8 小時來轉換為 UTC
+      const taiwanTimezoneOffset = 8 * 60; // 8小時 = 480分鐘
+      
+      // 構建台灣本地時間的開始和結束
+      const taiwanStart = new Date(startDateObj.getFullYear(), startDateObj.getMonth(), startDateObj.getDate());
+      const taiwanEnd = new Date(endDateObj.getFullYear(), endDateObj.getMonth(), endDateObj.getDate(), 23, 59, 59, 999);
+      
+      // 轉換為 UTC 時間：台灣時間 - 8小時 = UTC 時間
+      start = new Date(taiwanStart.getTime() - (taiwanTimezoneOffset * 60 * 1000));
+      end = new Date(taiwanEnd.getTime() - (taiwanTimezoneOffset * 60 * 1000));
+    }
+    
+    // 驗證日期是否有效
+    if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+      return next(new AppError('日期格式無效', 400));
+    }
+    
+    console.log('匯出查詢時間範圍:', {
+      localDate: startDate,
+      utcStart: start.toISOString(),
+      utcEnd: end.toISOString(),
+      timezoneOffset: new Date().getTimezoneOffset()
+    });
+    
     query.$or = [
       { completedAt: { $gte: start, $lte: end } },
       { createdAt: { $gte: start, $lte: end } }
     ];
   } else if (startDate) {
-    const start = new Date(startDate);
-    const end = new Date(startDate);
-    end.setHours(23, 59, 59, 999);
+    // 只有開始日期時，查詢當天的所有訂單
+    let start, end;
+    
+    if (startDate.includes('T') || startDate.includes('Z')) {
+      // 如果已經是完整的日期時間字符串，轉換為當天 UTC 範圍
+      const dateObj = new Date(startDate);
+      const timezoneOffset = dateObj.getTimezoneOffset();
+      
+      const localStart = new Date(dateObj.getFullYear(), dateObj.getMonth(), dateObj.getDate());
+      const localEnd = new Date(dateObj.getFullYear(), dateObj.getMonth(), dateObj.getDate(), 23, 59, 59, 999);
+      
+      start = new Date(localStart.getTime() + (timezoneOffset * 60 * 1000));
+      end = new Date(localEnd.getTime() + (timezoneOffset * 60 * 1000));
+    } else {
+      // 處理純日期字符串，使用與前端一致的時區轉換邏輯
+      const dateObj = new Date(startDate);
+      
+      // 台灣時區是 UTC+8，所以需要減去 8 小時來轉換為 UTC
+      const taiwanTimezoneOffset = 8 * 60; // 8小時 = 480分鐘
+      
+      const taiwanStart = new Date(dateObj.getFullYear(), dateObj.getMonth(), dateObj.getDate());
+      const taiwanEnd = new Date(dateObj.getFullYear(), dateObj.getMonth(), dateObj.getDate(), 23, 59, 59, 999);
+      
+      start = new Date(taiwanStart.getTime() - (taiwanTimezoneOffset * 60 * 1000));
+      end = new Date(taiwanEnd.getTime() - (taiwanTimezoneOffset * 60 * 1000));
+    }
+    
+    // 驗證日期是否有效
+    if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+      return next(new AppError('日期格式無效', 400));
+    }
+    
+    console.log('匯出查詢時間範圍:', {
+      localDate: startDate,
+      utcStart: start.toISOString(),
+      utcEnd: end.toISOString(),
+      timezoneOffset: new Date().getTimezoneOffset()
+    });
+    
     query.$or = [
       { completedAt: { $gte: start, $lte: end } },
       { createdAt: { $gte: start, $lte: end } }
@@ -928,7 +1034,55 @@ exports.exportHistoryOrders = catchAsync(async (req, res, next) => {
     .select('+items.selectedOptions')
     .sort({ createdAt: -1 });
 
+  console.log('=== 匯出訂單詳細信息 ===');
   console.log('找到訂單數量:', orders.length);
+  
+  // 顯示前5筆訂單的詳細信息用於比對
+  if (orders.length > 0) {
+    console.log('前5筆訂單詳細信息:');
+    orders.slice(0, 5).forEach((order, index) => {
+      console.log(`訂單 ${index + 1}:`, {
+        id: order._id,
+        orderNumber: order.orderNumber,
+        tableOrderNumber: order.tableOrderNumber,
+        receiptOrderNumber: order.receiptOrderNumber,
+        status: order.status,
+        createdAt: order.createdAt,
+        completedAt: order.completedAt,
+        tableNumber: order.tableId?.tableNumber || order.tableNumber,
+        itemsCount: order.items?.length || 0,
+        totalAmount: order.totalAmount
+      });
+    });
+    
+    // 顯示時間範圍統計
+    const completedOrders = orders.filter(o => o.completedAt);
+    const createdOrders = orders.filter(o => o.createdAt);
+    
+    console.log('時間範圍統計:', {
+      totalOrders: orders.length,
+      completedOrders: completedOrders.length,
+      createdOrders: createdOrders.length,
+      timeRange: startDate && endDate ? `${startDate} 到 ${endDate}` : startDate ? `單日 ${startDate}` : '無時間限制'
+    });
+    
+    // 顯示每個訂單的本地時間轉換
+    console.log('訂單時間轉換示例:');
+    orders.slice(0, 3).forEach((order, index) => {
+      const utcCreated = order.createdAt;
+      const utcCompleted = order.completedAt;
+      const localCreated = utcCreated ? new Date(utcCreated).toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' }) : 'N/A';
+      const localCompleted = utcCompleted ? new Date(utcCompleted).toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' }) : 'N/A';
+      
+      console.log(`訂單 ${index + 1} 時間轉換:`, {
+        orderNumber: order.orderNumber,
+        utcCreated: utcCreated?.toISOString(),
+        localCreated,
+        utcCompleted: utcCompleted?.toISOString(),
+        localCompleted
+      });
+    });
+  }
 
   if (orders.length === 0) {
     // 如果沒有找到訂單，嘗試查找所有訂單來調試
@@ -1095,7 +1249,7 @@ exports.exportHistoryOrders = catchAsync(async (req, res, next) => {
     const end = new Date(endDate);
     
     // 判斷匯出範圍類型
-    if (startDate === endDate) {
+    if (startDate === endDate || (start.getFullYear() === end.getFullYear() && start.getMonth() === end.getMonth() && start.getDate() === end.getDate())) {
       // 單日匯出：年月日-餐廳名稱-歷史訂單
       const dateStr = `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, '0')}-${String(start.getDate()).padStart(2, '0')}`;
       fileName = `${dateStr}-${merchant.businessName}-歷史訂單`;
