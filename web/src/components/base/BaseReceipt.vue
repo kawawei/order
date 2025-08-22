@@ -59,10 +59,15 @@
         </div>
       </div>
 
-      <!-- 條碼區域 -->
-      <div class="barcode-section">
-        <div class="barcode-text">{{ receipt.billNumber }}</div>
-      </div>
+             <!-- 條碼區域 -->
+       <div class="barcode-section">
+         <div v-if="barcodeImage" class="barcode-image" v-html="barcodeImage"></div>
+         <div v-else class="barcode-text">{{ receipt.billNumber }}</div>
+         <!-- 條碼數字顯示 -->
+         <div class="barcode-number">
+           {{ receipt.billNumber }}
+         </div>
+       </div>
 
       <!-- 底部資訊 -->
       <div class="receipt-footer">
@@ -74,6 +79,8 @@
 </template>
 
 <script>
+import api from '../../services/api'
+
 export default {
   name: 'BaseReceipt',
   props: {
@@ -92,7 +99,54 @@ export default {
       })
     }
   },
+  data() {
+    return {
+      barcodeImage: null,
+      isLoadingBarcode: false
+    }
+  },
+  async mounted() {
+    // 組件掛載時生成條碼
+    await this.generateBarcode()
+  },
   methods: {
+    // 生成條碼
+    async generateBarcode() {
+      if (!this.receipt.billNumber) {
+        console.warn('沒有帳單號碼，無法生成條碼')
+        return
+      }
+
+      try {
+        this.isLoadingBarcode = true
+        
+        const response = await api.post('/barcode/generate', {
+          text: this.receipt.billNumber,
+                      options: {
+              bcid: 'code128',
+              width: 150,
+              height: 30,
+              includetext: false,
+              scale: 1.5
+            }
+        })
+
+        console.log('條碼 API 響應:', response)
+        if (response.success && response.data.barcode) {
+          this.barcodeImage = response.data.barcode
+          console.log('條碼生成成功:', this.receipt.billNumber)
+        } else {
+          console.warn('條碼生成失敗，使用文字顯示')
+          console.warn('響應數據:', response.data)
+        }
+      } catch (error) {
+        console.error('生成條碼時發生錯誤:', error)
+        // 如果條碼生成失敗，保持文字顯示
+      } finally {
+        this.isLoadingBarcode = false
+      }
+    },
+
     // 列印收據
     printReceipt() {
       const printWindow = window.open('', '_blank')
@@ -185,6 +239,15 @@ export default {
             .barcode-section {
               text-align: center;
               margin-bottom: 15px;
+            }
+            .barcode-image {
+              display: flex;
+              justify-content: center;
+              margin-bottom: 5px;
+            }
+            .barcode-image img {
+              max-width: 100%;
+              height: auto;
             }
             .barcode-text {
               font-size: 10px;
@@ -330,6 +393,29 @@ export default {
 .barcode-section {
   text-align: center;
   margin-bottom: 15px;
+}
+
+.barcode-image {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 10px;
+  min-height: 40px;
+  max-width: 170px;
+  margin: 0 auto 10px auto;
+}
+
+.barcode-number {
+  font-size: 14px;
+  font-weight: bold;
+  color: #333;
+  text-align: center;
+  letter-spacing: 1px;
+  margin-top: 5px;
+}
+
+.barcode-image svg {
+  max-width: 100%;
+  height: auto;
 }
 
 .barcode-text {
