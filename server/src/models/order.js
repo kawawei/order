@@ -119,18 +119,28 @@ const orderSchema = new mongoose.Schema({
 
 // 生成訂單編號的靜態方法
 orderSchema.statics.generateOrderNumber = async function(tableId, tableNumber) {
-  const today = new Date();
-  const dateStr = today.toISOString().slice(0, 10).replace(/-/g, '');
+  // 使用台北時區（UTC+8）生成日期字符串
+  const now = new Date();
+  // 轉換為台北時區（UTC+8）
+  const taipeiTime = new Date(now.getTime() + (8 * 60 * 60 * 1000));
+  const year = taipeiTime.getUTCFullYear();
+  const month = String(taipeiTime.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(taipeiTime.getUTCDate()).padStart(2, '0');
+  const dateStr = `${year}${month}${day}`;
   
   // 獲取桌號（去掉可能的T前綴）
   const cleanTableNumber = tableNumber.replace(/^T/i, '');
   
   // 查找該桌今天的最後一組客人編號
+  // 使用台北時區的開始和結束時間
+  const startOfDay = new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0) - (8 * 60 * 60 * 1000));
+  const endOfDay = new Date(Date.UTC(year, month - 1, day, 23, 59, 59, 999) - (8 * 60 * 60 * 1000));
+  
   const todayOrders = await this.find({
     tableId: tableId,
     createdAt: {
-      $gte: new Date(today.getFullYear(), today.getMonth(), today.getDate()),
-      $lt: new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1)
+      $gte: startOfDay,
+      $lte: endOfDay
     }
   }).sort({ createdAt: -1 });
   
@@ -176,8 +186,14 @@ orderSchema.statics.generateOrderNumber = async function(tableId, tableNumber) {
 
 // 獲取同一桌同一組客人的所有批次訂單
 orderSchema.statics.getOrdersByGroup = async function(tableId, groupNumber) {
-  const today = new Date();
-  const dateStr = today.toISOString().slice(0, 10).replace(/-/g, '');
+  // 使用台北時區（UTC+8）生成日期字符串
+  const now = new Date();
+  // 轉換為台北時區（UTC+8）
+  const taipeiTime = new Date(now.getTime() + (8 * 60 * 60 * 1000));
+  const year = taipeiTime.getUTCFullYear();
+  const month = String(taipeiTime.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(taipeiTime.getUTCDate()).padStart(2, '0');
+  const dateStr = `${year}${month}${day}`;
   
   const table = await this.findOne({ tableId }).populate('tableId');
   const tableNumber = table?.tableId?.tableNumber || '1';
@@ -193,8 +209,14 @@ orderSchema.statics.getOrdersByGroup = async function(tableId, groupNumber) {
 
 // 獲取同一桌今天的所有組別
 orderSchema.statics.getTodayGroupsByTable = async function(tableId) {
-  const today = new Date();
-  const dateStr = today.toISOString().slice(0, 10).replace(/-/g, '');
+  // 使用台北時區（UTC+8）生成日期字符串
+  const now = new Date();
+  // 轉換為台北時區（UTC+8）
+  const taipeiTime = new Date(now.getTime() + (8 * 60 * 60 * 1000));
+  const year = taipeiTime.getUTCFullYear();
+  const month = String(taipeiTime.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(taipeiTime.getUTCDate()).padStart(2, '0');
+  const dateStr = `${year}${month}${day}`;
   
   const table = await this.findOne({ tableId }).populate('tableId');
   const tableNumber = table?.tableId?.tableNumber || '1';
@@ -202,11 +224,15 @@ orderSchema.statics.getTodayGroupsByTable = async function(tableId) {
   
   const groupPattern = `T${cleanTableNumber}-${dateStr}`;
   
+  // 使用本地時間的開始和結束時間
+  const startOfDay = new Date(localTime.getFullYear(), localTime.getMonth(), localTime.getDate(), 0, 0, 0, 0);
+  const endOfDay = new Date(localTime.getFullYear(), localTime.getMonth(), localTime.getDate(), 23, 59, 59, 999);
+  
   const orders = await this.find({
     orderNumber: { $regex: `^${groupPattern}` },
     createdAt: {
-      $gte: new Date(today.getFullYear(), today.getMonth(), today.getDate()),
-      $lt: new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1)
+      $gte: startOfDay,
+      $lte: endOfDay
     }
   }).sort({ createdAt: -1 });
   
@@ -224,6 +250,7 @@ orderSchema.statics.getTodayGroupsByTable = async function(tableId) {
 
 // 更新時間的中間件
 orderSchema.pre('save', function(next) {
+  // 使用 UTC 時間（MongoDB 標準）
   this.updatedAt = new Date();
   next();
 });
@@ -256,16 +283,19 @@ orderSchema.methods.calculateTotal = function() {
 orderSchema.methods.updateStatus = function(newStatus) {
   this.status = newStatus;
   
+  // 使用 UTC 時間（MongoDB 標準）
+  const now = new Date();
+  
   if (newStatus === 'confirmed') {
-    this.confirmedAt = new Date();
+    this.confirmedAt = now;
   } else if (newStatus === 'ready') {
-    this.readyAt = new Date();
+    this.readyAt = now;
   } else if (newStatus === 'delivered') {
-    this.deliveredAt = new Date();
+    this.deliveredAt = now;
   } else if (newStatus === 'served') {
-    this.servedAt = new Date();
+    this.servedAt = now;
   } else if (newStatus === 'completed') {
-    this.completedAt = new Date();
+    this.completedAt = now;
   }
   
   return this.save();

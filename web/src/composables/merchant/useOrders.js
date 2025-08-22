@@ -683,32 +683,52 @@ export function useOrders(restaurantId = null) {
         return
       }
       
-      // 根據視圖模式決定查詢時間範圍
+      // 根據視圖模式決定查詢時間範圍 - 使用本地時間
       const selectedDay = new Date(selectedDate.value)
+      console.log('=== 時間範圍計算調試 ===')
+      console.log('selectedDate.value:', selectedDate.value)
+      console.log('selectedDay:', selectedDay)
+      console.log('selectedDay.getDate():', selectedDay.getDate())
+      console.log('selectedDay.getMonth():', selectedDay.getMonth())
+      console.log('selectedDay.getFullYear():', selectedDay.getFullYear())
       let startTime, endTime
       
       switch (dateViewMode.value) {
         case 'year':
-          // 查詢整年的訂單
-          const startOfYear = new Date(selectedDay.getFullYear(), 0, 1)
+          // 查詢整年的訂單 - 轉換為 UTC 時間
+          const startOfYear = new Date(selectedDay.getFullYear(), 0, 1, 0, 0, 0, 0)
           const endOfYear = new Date(selectedDay.getFullYear(), 11, 31, 23, 59, 59, 999)
+          // 轉換為 UTC 時間以匹配 MongoDB 存儲
           startTime = startOfYear.toISOString()
           endTime = endOfYear.toISOString()
           break
         case 'month':
-          // 查詢整月的訂單
-          const startOfMonth = new Date(selectedDay.getFullYear(), selectedDay.getMonth(), 1)
+          // 查詢整月的訂單 - 轉換為 UTC 時間
+          const startOfMonth = new Date(selectedDay.getFullYear(), selectedDay.getMonth(), 1, 0, 0, 0, 0)
           const endOfMonth = new Date(selectedDay.getFullYear(), selectedDay.getMonth() + 1, 0, 23, 59, 59, 999)
+          // 轉換為 UTC 時間以匹配 MongoDB 存儲
           startTime = startOfMonth.toISOString()
           endTime = endOfMonth.toISOString()
           break
         case 'day':
         default:
-          // 查詢單日的訂單
-          const startOfDay = new Date(selectedDay.getFullYear(), selectedDay.getMonth(), selectedDay.getDate())
+          // 查詢單日的訂單 - 轉換為 UTC 時間（00:00:00到23:59:59）
+          const startOfDay = new Date(selectedDay.getFullYear(), selectedDay.getMonth(), selectedDay.getDate(), 0, 0, 0, 0)
           const endOfDay = new Date(selectedDay.getFullYear(), selectedDay.getMonth(), selectedDay.getDate(), 23, 59, 59, 999)
-          startTime = startOfDay.toISOString()
-          endTime = endOfDay.toISOString()
+          
+          console.log('=== 時間計算調試 ===')
+          console.log('selectedDay:', selectedDay)
+          console.log('startOfDay:', startOfDay)
+          console.log('endOfDay:', endOfDay)
+          
+          // 使用本地時間進行查詢，轉換為本地時間字符串
+          const localStartTime = new Date(startOfDay.getTime() - (startOfDay.getTimezoneOffset() * 60000))
+          const localEndTime = new Date(endOfDay.getTime() - (endOfDay.getTimezoneOffset() * 60000))
+          startTime = localStartTime.toISOString()
+          endTime = localEndTime.toISOString()
+          
+          console.log('計算出的 startTime:', startTime)
+          console.log('計算出的 endTime:', endTime)
           break
       }
       
@@ -716,7 +736,8 @@ export function useOrders(restaurantId = null) {
         startTime, 
         endTime, 
         selectedDate: selectedDate.value.toLocaleDateString(),
-        viewMode: dateViewMode.value
+        viewMode: dateViewMode.value,
+        localTimeRange: `${new Date(startTime).toLocaleString('zh-TW')} 到 ${new Date(endTime).toLocaleString('zh-TW')}`
       })
       
       const response = await orderService.getOrdersByMerchant(merchantId, {
