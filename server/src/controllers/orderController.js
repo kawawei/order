@@ -313,6 +313,11 @@ exports.getOrdersByMerchant = catchAsync(async (req, res, next) => {
 
   const { status, date, startDate, endDate, limit = 20, page = 1 } = req.query;
 
+  // === 調試訊息：顯示查詢參數 ===
+  console.log('\n=== 歷史訂單查詢調試 ===');
+  console.log(`商家ID: ${merchantId}`);
+  console.log(`查詢參數:`, { status, date, startDate, endDate, limit, page });
+
   const query = { merchantId };
   
   if (status) {
@@ -355,6 +360,10 @@ exports.getOrdersByMerchant = catchAsync(async (req, res, next) => {
       $gte: start,
       $lte: end
     };
+
+    // === 調試訊息：顯示時間範圍 ===
+    console.log(`時間範圍查詢: ${startDate} 到 ${endDate}`);
+    console.log(`轉換後時間: ${start.toISOString()} 到 ${end.toISOString()}`);
   } else if (date) {
     let startDate, endDate;
     
@@ -377,9 +386,46 @@ exports.getOrdersByMerchant = catchAsync(async (req, res, next) => {
       $gte: startDate,
       $lte: endDate
     };
+
+    // === 調試訊息：顯示單日查詢 ===
+    console.log(`單日查詢: ${date}`);
+    console.log(`轉換後時間: ${startDate.toISOString()} 到 ${endDate.toISOString()}`);
   }
 
+  // === 調試訊息：顯示最終查詢條件 ===
+  console.log(`最終查詢條件:`, JSON.stringify(query, null, 2));
+
   const skip = (page - 1) * limit;
+
+  // === 調試：先獲取所有符合條件的訂單（不分頁） ===
+  const allMatchingOrders = await Order.find(query)
+    .populate([
+      { path: 'tableId', select: 'tableNumber status' },
+      { path: 'items.dishId', select: 'name price category image' }
+    ])
+    .select('+items.selectedOptions') // 確保選項信息被包含
+    .sort({ createdAt: -1 });
+
+  console.log(`\n=== 符合條件的所有訂單 (共 ${allMatchingOrders.length} 筆) ===`);
+  allMatchingOrders.forEach((order, index) => {
+    console.log(`\n訂單 ${index + 1}:`);
+    console.log(`  收據號: ${order.receiptOrderNumber || '無'}`);
+    console.log(`  訂單號: ${order.orderNumber}`);
+    console.log(`  桌次: ${order.tableId?.tableNumber || '未知'}`);
+    console.log(`  狀態: ${order.status}`);
+    console.log(`  完成時間: ${order.completedAt}`);
+    console.log(`  總金額: ${order.totalAmount}`);
+    console.log(`  商品項目:`);
+    order.items.forEach((item, itemIndex) => {
+      console.log(`    項目 ${itemIndex + 1}: ${item.dishId?.name || '未知商品'} x${item.quantity} = $${item.price * item.quantity}`);
+      if (item.selectedOptions && Object.keys(item.selectedOptions).length > 0) {
+        console.log(`      選項:`, item.selectedOptions);
+      }
+      if (item.additionalPrice && item.additionalPrice > 0) {
+        console.log(`      加價: $${item.additionalPrice}`);
+      }
+    });
+  });
 
   const orders = await Order.find(query)
     .populate([
@@ -392,6 +438,9 @@ exports.getOrdersByMerchant = catchAsync(async (req, res, next) => {
     .skip(skip);
 
   const total = await Order.countDocuments(query);
+
+  console.log(`\n=== 分頁結果 ===`);
+  console.log(`當前頁: ${page}, 每頁: ${limit}, 總數: ${total}, 當前頁結果數: ${orders.length}`);
 
   res.status(200).json({
     status: 'success',
@@ -598,61 +647,16 @@ exports.getOrderStats = catchAsync(async (req, res, next) => {
       $gte: start,
       $lt: end
     };
-  }
-
-  const stats = await Order.aggregate([
-    { $match: matchQuery },
-    {
-      $group: {
-        _id: '$status',
-        count: { $sum: 1 },
-        totalAmount: { $sum: '$totalAmount' }
-      }
-    }
-  ]);
-
-  // 計算訂單數量 - 使用 completedAt 過濾已完成的訂單
-  let totalOrders;
-  if (date) {
-    // 如果指定了日期，使用該日期
-    const startDate = new Date(date);
-    const endDate = new Date(date);
-    endDate.setDate(endDate.getDate() + 1);
-    totalOrders = await Order.countDocuments({
-      merchantId: new mongoose.Types.ObjectId(merchantId),
-      status: { $in: ['completed', 'cancelled'] },
-      completedAt: {
-        $gte: startDate,
-        $lt: endDate
-      }
-    });
-  } else if (startDate && endDate) {
-    // 如果指定了日期範圍，使用該範圍
-    const start = new Date(startDate);
-    const end = new Date(endDate);
-    end.setDate(end.getDate() + 1);
-    totalOrders = await Order.countDocuments({
-      merchantId: new mongoose.Types.ObjectId(merchantId),
-      status: { $in: ['completed', 'cancelled'] },
-      completedAt: {
-        $gte: start,
-        $lt: end
-      }
-    });
   } else {
     // 默認計算今日結帳的訂單
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
     const todayEnd = new Date();
     todayEnd.setHours(23, 59, 59, 999);
-    totalOrders = await Order.countDocuments({
-      merchantId: new mongoose.Types.ObjectId(merchantId),
-      status: { $in: ['completed', 'cancelled'] },
-      completedAt: {
-        $gte: todayStart,
-        $lte: todayEnd
-      }
-    });
+    matchQuery.completedAt = {
+      $gte: todayStart,
+      $lte: todayEnd
+    };
   }
   
   // 添加調試日誌

@@ -29,61 +29,235 @@ exports.getReportStats = catchAsync(async (req, res, next) => {
   const merchantId = getMerchantId(req);
   const { period, date, startDate, endDate } = req.query;
 
+  // === 調試訊息：顯示查詢參數 ===
+  console.log('\n=== 統計報表查詢調試 ===');
+  console.log(`商家ID: ${merchantId}`);
+  console.log(`查詢參數:`, { period, date, startDate, endDate });
+
   // 構建日期查詢條件
   let dateQuery = {};
   let groupBy = {};
   
   if (period === 'day' && date) {
-    // 單日查詢 - 正確處理台灣時區
-    // 直接使用本地時間，避免時區轉換問題
-    const startOfDay = new Date(date + 'T00:00:00');
-    const endOfDay = new Date(date + 'T23:59:59.999');
-    dateQuery.createdAt = { $gte: startOfDay, $lte: endOfDay };
-    // 使用台灣時區格式化時間
+    // 單日查詢 - 採用與歷史訂單一致的時區轉換方式
+    let startOfDay, endOfDay;
+    
+    if (date.includes('T') || date.includes('Z')) {
+      const dateObj = new Date(date);
+      const timezoneOffset = dateObj.getTimezoneOffset();
+      
+      const localStart = new Date(dateObj.getFullYear(), dateObj.getMonth(), dateObj.getDate());
+      const localEnd = new Date(dateObj.getFullYear(), dateObj.getMonth(), dateObj.getDate(), 23, 59, 59, 999);
+      
+      startOfDay = new Date(localStart.getTime() + (timezoneOffset * 60 * 1000));
+      endOfDay = new Date(localEnd.getTime() + (timezoneOffset * 60 * 1000));
+    } else {
+      // 處理純日期字符串，使用與前端一致的時區轉換邏輯
+      const dateObj = new Date(date);
+      
+      // 台灣時區是 UTC+8，所以需要減去 8 小時來轉換為 UTC
+      const taiwanTimezoneOffset = 8 * 60; // 8小時 = 480分鐘
+      
+      const taiwanStart = new Date(dateObj.getFullYear(), dateObj.getMonth(), dateObj.getDate());
+      const taiwanEnd = new Date(dateObj.getFullYear(), dateObj.getMonth(), dateObj.getDate(), 23, 59, 59, 999);
+      
+      startOfDay = new Date(taiwanStart.getTime() - (taiwanTimezoneOffset * 60 * 1000));
+      endOfDay = new Date(taiwanEnd.getTime() - (taiwanTimezoneOffset * 60 * 1000));
+    }
+    
+    // 驗證日期是否有效
+    if (isNaN(startOfDay.getTime()) || isNaN(endOfDay.getTime())) {
+      return next(new AppError('日期格式無效', 400));
+    }
+    
+    dateQuery.completedAt = { $gte: startOfDay, $lte: endOfDay };
+    // 使用本地時間格式化，與歷史訂單保持一致
     groupBy = { 
       $dateToString: { 
         format: "%H:00", 
-        date: { $add: ["$createdAt", 8 * 60 * 60 * 1000] } // 轉換為台灣時區 (UTC+8)
+        date: "$completedAt" // 直接使用completedAt，不進行時區轉換
       } 
     };
+
+    // === 調試訊息：顯示單日查詢 ===
+    console.log(`單日查詢: ${date}`);
+    console.log(`轉換後時間: ${startOfDay.toISOString()} 到 ${endOfDay.toISOString()}`);
   } else if (period === 'month' && startDate && endDate) {
-    // 月份查詢 - 正確處理台灣時區
-    const start = new Date(startDate + 'T00:00:00');
-    const end = new Date(endDate + 'T23:59:59.999');
-    dateQuery.createdAt = { $gte: start, $lt: end };
+    // 月份查詢 - 採用與歷史訂單一致的時區轉換方式
+    let start, end;
+    
+    // 檢查是否已經是完整的日期時間字符串
+    if (startDate.includes('T') || startDate.includes('Z')) {
+      const dateObj = new Date(startDate);
+      const timezoneOffset = dateObj.getTimezoneOffset();
+      
+      const localStart = new Date(dateObj.getFullYear(), dateObj.getMonth(), dateObj.getDate());
+      start = new Date(localStart.getTime() + (timezoneOffset * 60 * 1000));
+    } else {
+      // 處理純日期字符串，使用與前端一致的時區轉換邏輯
+      const dateObj = new Date(startDate);
+      
+      // 台灣時區是 UTC+8，所以需要減去 8 小時來轉換為 UTC
+      const taiwanTimezoneOffset = 8 * 60; // 8小時 = 480分鐘
+      
+      const taiwanStart = new Date(dateObj.getFullYear(), dateObj.getMonth(), dateObj.getDate());
+      start = new Date(taiwanStart.getTime() - (taiwanTimezoneOffset * 60 * 1000));
+    }
+    
+    if (endDate.includes('T') || endDate.includes('Z')) {
+      const dateObj = new Date(endDate);
+      const timezoneOffset = dateObj.getTimezoneOffset();
+      
+      const localEnd = new Date(dateObj.getFullYear(), dateObj.getMonth(), dateObj.getDate(), 23, 59, 59, 999);
+      end = new Date(localEnd.getTime() + (timezoneOffset * 60 * 1000));
+    } else {
+      // 處理純日期字符串，使用與前端一致的時區轉換邏輯
+      const dateObj = new Date(endDate);
+      
+      // 台灣時區是 UTC+8，所以需要減去 8 小時來轉換為 UTC
+      const taiwanTimezoneOffset = 8 * 60; // 8小時 = 480分鐘
+      
+      const taiwanEnd = new Date(dateObj.getFullYear(), dateObj.getMonth(), dateObj.getDate(), 23, 59, 59, 999);
+      end = new Date(taiwanEnd.getTime() - (taiwanTimezoneOffset * 60 * 1000));
+    }
+    
+    // 驗證日期是否有效
+    if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+      return next(new AppError('日期格式無效', 400));
+    }
+    
+    dateQuery.completedAt = { $gte: start, $lt: end };
+    // 使用本地時間格式化，與歷史訂單保持一致
     groupBy = { 
       $dateToString: { 
         format: "%Y-%m-%d", 
-        date: { $add: ["$createdAt", 8 * 60 * 60 * 1000] } // 轉換為台灣時區 (UTC+8)
+        date: "$completedAt" // 直接使用completedAt，不進行時區轉換
       } 
     };
+
+    // === 調試訊息：顯示月份查詢 ===
+    console.log(`月份查詢: ${startDate} 到 ${endDate}`);
+    console.log(`轉換後時間: ${start.toISOString()} 到 ${end.toISOString()}`);
   } else if (period === 'year' && startDate && endDate) {
-    // 年份查詢 - 正確處理台灣時區
-    const start = new Date(startDate + 'T00:00:00');
-    const end = new Date(endDate + 'T23:59:59.999');
-    dateQuery.createdAt = { $gte: start, $lt: end };
+    // 年份查詢 - 採用與歷史訂單一致的時區轉換方式
+    let start, end;
+    
+    // 檢查是否已經是完整的日期時間字符串
+    if (startDate.includes('T') || startDate.includes('Z')) {
+      const dateObj = new Date(startDate);
+      const timezoneOffset = dateObj.getTimezoneOffset();
+      
+      const localStart = new Date(dateObj.getFullYear(), dateObj.getMonth(), dateObj.getDate());
+      start = new Date(localStart.getTime() + (timezoneOffset * 60 * 1000));
+    } else {
+      // 處理純日期字符串，使用與前端一致的時區轉換邏輯
+      const dateObj = new Date(startDate);
+      
+      // 台灣時區是 UTC+8，所以需要減去 8 小時來轉換為 UTC
+      const taiwanTimezoneOffset = 8 * 60; // 8小時 = 480分鐘
+      
+      const taiwanStart = new Date(dateObj.getFullYear(), dateObj.getMonth(), dateObj.getDate());
+      start = new Date(taiwanStart.getTime() - (taiwanTimezoneOffset * 60 * 1000));
+    }
+    
+    if (endDate.includes('T') || endDate.includes('Z')) {
+      const dateObj = new Date(endDate);
+      const timezoneOffset = dateObj.getTimezoneOffset();
+      
+      const localEnd = new Date(dateObj.getFullYear(), dateObj.getMonth(), dateObj.getDate(), 23, 59, 59, 999);
+      end = new Date(localEnd.getTime() + (timezoneOffset * 60 * 1000));
+    } else {
+      // 處理純日期字符串，使用與前端一致的時區轉換邏輯
+      const dateObj = new Date(endDate);
+      
+      // 台灣時區是 UTC+8，所以需要減去 8 小時來轉換為 UTC
+      const taiwanTimezoneOffset = 8 * 60; // 8小時 = 480分鐘
+      
+      const taiwanEnd = new Date(dateObj.getFullYear(), dateObj.getMonth(), dateObj.getDate(), 23, 59, 59, 999);
+      end = new Date(taiwanEnd.getTime() - (taiwanTimezoneOffset * 60 * 1000));
+    }
+    
+    // 驗證日期是否有效
+    if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+      return next(new AppError('日期格式無效', 400));
+    }
+    
+    dateQuery.completedAt = { $gte: start, $lt: end };
+    // 使用本地時間格式化，與歷史訂單保持一致
     groupBy = { 
       $dateToString: { 
         format: "%Y-%m", 
-        date: { $add: ["$createdAt", 8 * 60 * 60 * 1000] } // 轉換為台灣時區 (UTC+8)
+        date: "$completedAt" // 直接使用completedAt，不進行時區轉換
       } 
     };
+
+    // === 調試訊息：顯示年份查詢 ===
+    console.log(`年份查詢: ${startDate} 到 ${endDate}`);
+    console.log(`轉換後時間: ${start.toISOString()} 到 ${end.toISOString()}`);
   } else {
-    // 預設查詢今天 - 正確處理台灣時區
+    // 預設查詢今天 - 採用與歷史訂單一致的時區轉換方式
     const today = new Date();
     const todayStr = today.toISOString().split('T')[0];
-    const startOfDay = new Date(todayStr + 'T00:00:00');
-    const endOfDay = new Date(todayStr + 'T23:59:59.999');
-    dateQuery.createdAt = { $gte: startOfDay, $lte: endOfDay };
+    
+    // 台灣時區是 UTC+8，所以需要減去 8 小時來轉換為 UTC
+    const taiwanTimezoneOffset = 8 * 60; // 8小時 = 480分鐘
+    
+    const taiwanStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    const taiwanEnd = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59, 999);
+    
+    const startOfDay = new Date(taiwanStart.getTime() - (taiwanTimezoneOffset * 60 * 1000));
+    const endOfDay = new Date(taiwanEnd.getTime() - (taiwanTimezoneOffset * 60 * 1000));
+    
+    dateQuery.completedAt = { $gte: startOfDay, $lte: endOfDay };
+    // 使用本地時間格式化，與歷史訂單保持一致
     groupBy = { 
       $dateToString: { 
         format: "%H:00", 
-        date: { $add: ["$createdAt", 8 * 60 * 60 * 1000] } // 轉換為台灣時區 (UTC+8)
+        date: "$completedAt" // 直接使用completedAt，不進行時區轉換
       } 
     };
+
+    // === 調試訊息：顯示預設查詢 ===
+    console.log(`預設查詢今天: ${todayStr}`);
+    console.log(`轉換後時間: ${startOfDay.toISOString()} 到 ${endOfDay.toISOString()}`);
   }
 
+  // === 調試訊息：顯示最終查詢條件 ===
+  console.log(`最終日期查詢條件:`, JSON.stringify(dateQuery, null, 2));
+
   try {
+    // === 調試：先獲取所有符合條件的訂單 ===
+    const allMatchingOrders = await Order.find({
+      merchantId: new mongoose.Types.ObjectId(merchantId),
+      status: 'completed', // 只計算已結帳的訂單
+      ...dateQuery
+    }).populate([
+      { path: 'tableId', select: 'tableNumber status' },
+      { path: 'items.dishId', select: 'name price category image' }
+    ]).select('+items.selectedOptions');
+
+    console.log(`\n=== 符合條件的所有訂單 (共 ${allMatchingOrders.length} 筆) ===`);
+    allMatchingOrders.forEach((order, index) => {
+      console.log(`\n訂單 ${index + 1}:`);
+      console.log(`  收據號: ${order.receiptOrderNumber || '無'}`);
+      console.log(`  訂單號: ${order.orderNumber}`);
+      console.log(`  桌次: ${order.tableId?.tableNumber || '未知'}`);
+      console.log(`  狀態: ${order.status}`);
+      console.log(`  創建時間: ${order.createdAt}`);
+      console.log(`  完成時間: ${order.completedAt}`);
+      console.log(`  總金額: ${order.totalAmount}`);
+      console.log(`  商品項目:`);
+      order.items.forEach((item, itemIndex) => {
+        console.log(`    項目 ${itemIndex + 1}: ${item.dishId?.name || '未知商品'} x${item.quantity} = $${item.price * item.quantity}`);
+        if (item.selectedOptions && Object.keys(item.selectedOptions).length > 0) {
+          console.log(`      選項:`, item.selectedOptions);
+        }
+        if (item.additionalPrice && item.additionalPrice > 0) {
+          console.log(`      加價: $${item.additionalPrice}`);
+        }
+      });
+    });
+
     // 1. 獲取營收統計（只計算已結帳的訂單）
     const revenueStats = await Order.aggregate([
       { 
@@ -103,6 +277,12 @@ exports.getReportStats = catchAsync(async (req, res, next) => {
       { $sort: { _id: 1 } }
     ]);
 
+    console.log(`\n=== 營收統計結果 ===`);
+    console.log(`統計項目數: ${revenueStats.length}`);
+    revenueStats.forEach((stat, index) => {
+      console.log(`項目 ${index + 1}: 時間=${stat._id}, 營收=${stat.revenue}, 訂單數=${stat.orderCount}`);
+    });
+
     // 2. 獲取人流量統計（基於桌次使用，只計算已結帳的訂單）
     // 使用與儀表板相同的邏輯：按桌次和客人組別分組
     
@@ -111,12 +291,12 @@ exports.getReportStats = catchAsync(async (req, res, next) => {
       merchantId: new mongoose.Types.ObjectId(merchantId),
       status: 'completed',
       ...dateQuery
-    }).select('orderNumber tableId createdAt totalAmount status');
+    }).select('orderNumber tableId completedAt totalAmount status');
     
-    console.log('=== 調試：原始訂單數據 ===');
+    console.log('\n=== 調試：原始訂單數據 ===');
     console.log(`總訂單數: ${debugOrders.length}`);
     debugOrders.forEach((order, index) => {
-      console.log(`訂單 ${index + 1}: ${order.orderNumber} | 桌次: ${order.tableId} | 金額: ${order.totalAmount} | 時間: ${order.createdAt}`);
+      console.log(`訂單 ${index + 1}: ${order.orderNumber} | 桌次: ${order.tableId} | 金額: ${order.totalAmount} | 時間: ${order.completedAt}`);
     });
     
     const trafficStats = await Order.aggregate([
@@ -378,17 +558,26 @@ exports.getReportStats = catchAsync(async (req, res, next) => {
     let previousPeriodStats = null;
     
     if (period === 'day' && date) {
-      // 與前一天比較
+      // 與前一天比較 - 使用時區轉換
       const currentDate = new Date(date);
       const previousDate = new Date(currentDate);
       previousDate.setDate(previousDate.getDate() - 1);
       
-      previousPeriodQuery.createdAt = {
-        $gte: new Date(previousDate.getFullYear(), previousDate.getMonth(), previousDate.getDate()),
-        $lt: new Date(previousDate.getFullYear(), previousDate.getMonth(), previousDate.getDate() + 1)
+      // 台灣時區是 UTC+8，所以需要減去 8 小時來轉換為 UTC
+      const taiwanTimezoneOffset = 8 * 60; // 8小時 = 480分鐘
+      
+      const taiwanStart = new Date(previousDate.getFullYear(), previousDate.getMonth(), previousDate.getDate());
+      const taiwanEnd = new Date(previousDate.getFullYear(), previousDate.getMonth(), previousDate.getDate() + 1);
+      
+      const startOfDay = new Date(taiwanStart.getTime() - (taiwanTimezoneOffset * 60 * 1000));
+      const endOfDay = new Date(taiwanEnd.getTime() - (taiwanTimezoneOffset * 60 * 1000));
+      
+      previousPeriodQuery.completedAt = {
+        $gte: startOfDay,
+        $lt: endOfDay
       };
     } else if (period === 'month' && startDate) {
-      // 與上個月比較
+      // 與上個月比較 - 使用時區轉換
       const currentStart = new Date(startDate);
       const previousStart = new Date(currentStart);
       previousStart.setMonth(previousStart.getMonth() - 1);
@@ -396,21 +585,33 @@ exports.getReportStats = catchAsync(async (req, res, next) => {
       previousEnd.setMonth(previousEnd.getMonth() - 1);
       previousEnd.setDate(0);
       
-      previousPeriodQuery.createdAt = {
-        $gte: previousStart,
-        $lt: previousEnd
+      // 台灣時區是 UTC+8，所以需要減去 8 小時來轉換為 UTC
+      const taiwanTimezoneOffset = 8 * 60; // 8小時 = 480分鐘
+      
+      const startOfMonth = new Date(previousStart.getTime() - (taiwanTimezoneOffset * 60 * 1000));
+      const endOfMonth = new Date(previousEnd.getTime() - (taiwanTimezoneOffset * 60 * 1000));
+      
+      previousPeriodQuery.completedAt = {
+        $gte: startOfMonth,
+        $lt: endOfMonth
       };
     } else if (period === 'year' && startDate) {
-      // 與上一年比較
+      // 與上一年比較 - 使用時區轉換
       const currentStart = new Date(startDate);
       const previousStart = new Date(currentStart);
       previousStart.setFullYear(previousStart.getFullYear() - 1);
       const previousEnd = new Date(currentStart);
       previousEnd.setFullYear(previousEnd.getFullYear() - 1);
       
-      previousPeriodQuery.createdAt = {
-        $gte: previousStart,
-        $lt: previousEnd
+      // 台灣時區是 UTC+8，所以需要減去 8 小時來轉換為 UTC
+      const taiwanTimezoneOffset = 8 * 60; // 8小時 = 480分鐘
+      
+      const startOfYear = new Date(previousStart.getTime() - (taiwanTimezoneOffset * 60 * 1000));
+      const endOfYear = new Date(previousEnd.getTime() - (taiwanTimezoneOffset * 60 * 1000));
+      
+      previousPeriodQuery.completedAt = {
+        $gte: startOfYear,
+        $lt: endOfYear
       };
     }
 
@@ -448,7 +649,7 @@ exports.getReportStats = catchAsync(async (req, res, next) => {
         merchantId: new mongoose.Types.ObjectId(merchantId),
         status: 'completed',
         ...previousPeriodQuery
-      }).select('orderNumber tableId createdAt totalAmount status');
+      }).select('orderNumber tableId completedAt totalAmount status');
       
       console.log('=== 調試：前一期原始訂單數據 ===');
       console.log(`前一期總訂單數: ${previousDebugOrders.length}`);
@@ -571,12 +772,16 @@ exports.getReportStats = catchAsync(async (req, res, next) => {
     const sevenDaysAgo = new Date();
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
     
+    // 台灣時區是 UTC+8，所以需要減去 8 小時來轉換為 UTC
+    const taiwanTimezoneOffset = 8 * 60; // 8小時 = 480分鐘
+    const sevenDaysAgoUTC = new Date(sevenDaysAgo.getTime() - (taiwanTimezoneOffset * 60 * 1000));
+    
     const peakHours = await Order.aggregate([
       { 
         $match: { 
           merchantId: new mongoose.Types.ObjectId(merchantId),
           status: 'completed', // 只計算已結帳的訂單
-          createdAt: { $gte: sevenDaysAgo }
+          completedAt: { $gte: sevenDaysAgoUTC }
         } 
       },
       {
@@ -584,7 +789,7 @@ exports.getReportStats = catchAsync(async (req, res, next) => {
           // 轉換為台灣時區 (UTC+8)
           localHour: {
             $add: [
-              { $hour: '$createdAt' },
+              { $hour: '$completedAt' },
               8 // 台灣時區偏移
             ]
           }
@@ -703,13 +908,13 @@ exports.getSimpleReportStats = catchAsync(async (req, res, next) => {
     startOfDay.setHours(0, 0, 0, 0);
     const endOfDay = new Date(date);
     endOfDay.setHours(23, 59, 59, 999);
-    dateQuery.createdAt = { $gte: startOfDay, $lte: endOfDay };
+    dateQuery.completedAt = { $gte: startOfDay, $lte: endOfDay };
   } else {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const tomorrow = new Date(today);
     tomorrow.setDate(tomorrow.getDate() + 1);
-    dateQuery.createdAt = { $gte: today, $lt: tomorrow };
+    dateQuery.completedAt = { $gte: today, $lt: tomorrow };
   }
 
   try {
@@ -877,19 +1082,19 @@ exports.exportReport = catchAsync(async (req, res, next) => {
     // 單日查詢 - 正確處理台灣時區
     const startOfDay = new Date(date + 'T00:00:00');
     const endOfDay = new Date(date + 'T23:59:59.999');
-    dateQuery.createdAt = { $gte: startOfDay, $lte: endOfDay };
+    dateQuery.completedAt = { $gte: startOfDay, $lte: endOfDay };
     periodDisplay = `日報_${date}`;
   } else if (period === 'month' && startDate && endDate) {
     // 月份查詢 - 正確處理台灣時區
     const start = new Date(startDate + 'T00:00:00');
     const end = new Date(endDate + 'T23:59:59.999');
-    dateQuery.createdAt = { $gte: start, $lt: end };
+    dateQuery.completedAt = { $gte: start, $lt: end };
     periodDisplay = `月報_${startDate}_${endDate}`;
   } else if (period === 'year' && startDate && endDate) {
     // 年份查詢 - 正確處理台灣時區
     const start = new Date(startDate + 'T00:00:00');
     const end = new Date(endDate + 'T23:59:59.999');
-    dateQuery.createdAt = { $gte: start, $lt: end };
+    dateQuery.completedAt = { $gte: start, $lt: end };
     periodDisplay = `年報_${startDate}_${endDate}`;
   } else {
     // 預設查詢今天 - 正確處理台灣時區
@@ -897,7 +1102,7 @@ exports.exportReport = catchAsync(async (req, res, next) => {
     const todayStr = today.toISOString().split('T')[0];
     const startOfDay = new Date(todayStr + 'T00:00:00');
     const endOfDay = new Date(todayStr + 'T23:59:59.999');
-    dateQuery.createdAt = { $gte: startOfDay, $lte: endOfDay };
+    dateQuery.completedAt = { $gte: startOfDay, $lte: endOfDay };
     periodDisplay = `日報_${todayStr}`;
   }
 
@@ -1125,7 +1330,7 @@ exports.exportReport = catchAsync(async (req, res, next) => {
               timeSlot: {
                 $dateToString: { 
                   format: "%H:00", 
-                  date: { $add: ["$createdAt", 8 * 60 * 60 * 1000] }
+                  date: "$completedAt"
                 }
               },
               tableId: '$tableId',
@@ -1211,7 +1416,7 @@ exports.exportReport = catchAsync(async (req, res, next) => {
               timeSlot: {
                 $dateToString: { 
                   format: "%m/%d", 
-                  date: { $add: ["$createdAt", 8 * 60 * 60 * 1000] }
+                  date: "$completedAt"
                 }
               },
               tableId: '$tableId',
@@ -1297,7 +1502,7 @@ exports.exportReport = catchAsync(async (req, res, next) => {
               timeSlot: {
                 $dateToString: { 
                   format: "%Y年%m月", 
-                  date: { $add: ["$createdAt", 8 * 60 * 60 * 1000] }
+                  date: "$completedAt"
                 }
               },
               tableId: '$tableId',

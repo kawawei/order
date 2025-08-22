@@ -51,6 +51,44 @@
    - 確認訊息清楚說明操作後果
    - 清理後的桌次狀態正確重置為可用
 
+### 修復清理桌次功能刪除歷史訂單的問題
+1. 問題描述
+   - 當按下「清理桌次」按鈕時，歷史訂單也會被刪除一筆
+   - 這會影響歷史訂單統計的準確性
+   - 已完成的訂單應該保留在歷史記錄中
+
+2. 根本原因分析
+   - 在 `tableController.js` 的 `updateTableStatus` 函數中
+   - 清理桌次時使用 `Order.deleteMany({ tableId: table._id })` 刪除所有訂單
+   - 沒有區分訂單狀態，導致已完成的歷史訂單也被刪除
+
+3. 解決方案
+   - 修改刪除條件，只刪除未完成的訂單
+   - 保留已完成（completed）和已取消（cancelled）的歷史訂單
+   - 更新日誌訊息和回應訊息
+
+4. 技術實現
+   ```javascript
+   // 修改前：刪除所有訂單
+   const deleteResult = await Order.deleteMany({ tableId: table._id });
+
+   // 修改後：只刪除未完成的訂單
+   const deleteResult = await Order.deleteMany({ 
+     tableId: table._id,
+     status: { $nin: ['completed', 'cancelled'] } // 排除已完成和已取消的訂單
+   });
+   ```
+
+5. 影響範圍
+   - 桌次管理頁面的清理功能
+   - 歷史訂單統計的準確性
+   - 訂單資料的完整性
+
+6. 測試驗證
+   - 清理桌次後，未完成訂單被刪除
+   - 已完成的歷史訂單保留在歷史記錄中
+   - 歷史訂單統計數據保持準確
+
 ### 日期選擇器左右箭頭修復與優化
 
 ### 日期選擇器左右箭頭修復與優化
@@ -2503,3 +2541,160 @@ query.$or = [
 4. 在部署前驗證不同環境的時區設定
 
 *時間：2025-01-27 16:45*
+
+## 2025-01-27 時區問題處理與修復
+
+### 問題描述｜Problem description
+在商家後台的歷史訂單統計功能中，發現嚴重的時區轉換問題：
+1. **統計數據不準確**：顯示的訂單數量與實際不符
+2. **日期範圍錯誤**：查詢的日期範圍不正確，可能包含不應該包含的訂單
+3. **時區偏移計算錯誤**：使用了系統本地時區偏移，而不是固定的台灣時區
+4. **前後端不一致**：前端和後端的時區處理邏輯不同步
+
+### 問題分析｜Problem analysis
+
+#### 原始問題代碼
+```javascript
+// 錯誤的時區轉換邏輯
+const startOfDay = new Date(selectedDay.getFullYear(), selectedDay.getMonth(), selectedDay.getDate());
+const endOfDay = new Date(selectedDay.getFullYear(), selectedDay.getMonth(), selectedDay.getDate(), 23, 59, 59, 999);
+```
+
+**問題所在**：
+1. 直接使用 JavaScript Date 構造函數，會使用系統本地時區
+2. 不同環境（開發機、伺服器）可能有不同的時區設定
+3. 與前端時區轉換邏輯不一致
+4. 導致查詢範圍不準確
+
+### 解決方案｜Solution
+
+#### 1. 統一時區轉換邏輯
+**修復前**：直接使用系統本地時區
+```javascript
+const startOfDay = new Date(selectedDay.getFullYear(), selectedDay.getMonth(), selectedDay.getDate());
+const endOfDay = new Date(selectedDay.getFullYear(), selectedDay.getMonth(), selectedDay.getDate(), 23, 59, 59, 999);
+```
+
+**修復後**：使用固定的台灣時區轉換
+```javascript
+// 台灣時區是 UTC+8，所以需要減去 8 小時來轉換為 UTC
+const taiwanTimezoneOffset = 8 * 60; // 8小時 = 480分鐘
+
+const taiwanStart = new Date(selectedDay.getFullYear(), selectedDay.getMonth(), selectedDay.getDate());
+const taiwanEnd = new Date(selectedDay.getFullYear(), selectedDay.getMonth(), selectedDay.getDate(), 23, 59, 59, 999);
+
+const startOfDay = new Date(taiwanStart.getTime() - (taiwanTimezoneOffset * 60 * 1000));
+const endOfDay = new Date(taiwanEnd.getTime() - (taiwanTimezoneOffset * 60 * 1000));
+```
+
+#### 2. 修復前一期查詢的時區處理
+**修復內容**：
+- 日視圖：與前一天比較的時區轉換
+- 月視圖：與上個月比較的時區轉換  
+- 年視圖：與上一年比較的時區轉換
+
+**修復邏輯**：
+```javascript
+// 台灣時區是 UTC+8，所以需要減去 8 小時來轉換為 UTC
+const taiwanTimezoneOffset = 8 * 60; // 8小時 = 480分鐘
+
+const taiwanStart = new Date(previousDate.getFullYear(), previousDate.getMonth(), previousDate.getDate());
+const taiwanEnd = new Date(previousDate.getFullYear(), previousDate.getMonth(), previousDate.getDate() + 1);
+
+const startOfDay = new Date(taiwanStart.getTime() - (taiwanTimezoneOffset * 60 * 1000));
+const endOfDay = new Date(taiwanEnd.getTime() - (taiwanTimezoneOffset * 60 * 1000));
+```
+
+#### 3. 修復高峰時段查詢的時區處理
+**修復內容**：
+- 使用 `completedAt` 而非 `createdAt` 進行查詢
+- 修正時區轉換邏輯
+- 確保查詢範圍準確
+
+**修復邏輯**：
+```javascript
+// 台灣時區是 UTC+8，所以需要減去 8 小時來轉換為 UTC
+const taiwanTimezoneOffset = 8 * 60; // 8小時 = 480分鐘
+const sevenDaysAgoUTC = new Date(sevenDaysAgo.getTime() - (taiwanTimezoneOffset * 60 * 1000));
+
+const peakHours = await Order.aggregate([
+  { 
+    $match: { 
+      merchantId: new mongoose.Types.ObjectId(merchantId),
+      status: 'completed',
+      completedAt: { $gte: sevenDaysAgoUTC }
+    } 
+  },
+  {
+    $addFields: {
+      // 轉換為台灣時區 (UTC+8)
+      localHour: {
+        $add: [
+          { $hour: '$completedAt' },
+          8 // 台灣時區偏移
+        ]
+      }
+    }
+  }
+]);
+```
+
+### 技術細節｜Technical details
+
+#### 時區轉換原理
+1. **台灣時區**：UTC+8（東八區）
+2. **轉換公式**：UTC時間 = 台灣時間 - 8小時
+3. **時間戳計算**：減去 480分鐘（8小時 × 60分鐘）
+
+#### 修復範圍
+1. **主要查詢邏輯**：`loadHistoryOrders` 函數
+2. **前一期比較**：`previousPeriodQuery` 邏輯
+3. **高峰時段查詢**：`peakHours` 聚合查詢
+4. **時區轉換統一**：所有日期範圍查詢
+
+#### 數據庫查詢邏輯
+```javascript
+// 修正後的查詢條件
+const query = {
+  merchantId: new mongoose.Types.ObjectId(merchantId),
+  status: 'completed',
+  completedAt: { $gte: startOfDay, $lt: endOfDay }
+};
+```
+
+### 影響範圍｜Impact
+- 商家後台歷史訂單統計功能
+- 訂單數量統計準確性
+- 營業額計算準確性
+- 高峰時段分析功能
+- 前一期比較功能
+
+### 相關檔案｜Related files
+- `server/src/controllers/reportController.js` - 報表控制器
+  - `getOrderStats` 函數
+  - 時區轉換邏輯
+  - 前一期查詢邏輯
+  - 高峰時段查詢邏輯
+
+### 測試建議｜Testing suggestions
+1. 測試不同日期範圍的訂單統計
+2. 驗證時區轉換是否正確
+3. 檢查統計數據是否與實際訂單數量一致
+4. 在不同環境（開發、測試、生產）中測試
+5. 驗證前一期比較功能的準確性
+
+### 經驗總結｜Lessons learned
+- **時區處理**：必須使用固定的時區偏移，不能依賴系統本地時區
+- **前後端一致性**：時區轉換邏輯必須與前端保持一致
+- **數據準確性**：時區錯誤會導致統計數據完全不準確
+- **環境差異**：不同環境的時區設定可能不同，需要統一處理
+- **查詢範圍**：需要明確指定開始和結束時間的具體時刻
+
+### 預防措施｜Prevention measures
+1. 在時區相關代碼中添加詳細註釋
+2. 使用固定的時區偏移值（台灣時區：UTC+8）
+3. 添加時區轉換的單元測試
+4. 在部署前驗證不同環境的時區設定
+5. 建立時區處理的最佳實踐文檔
+
+*時間：2025-01-27 18:00*
