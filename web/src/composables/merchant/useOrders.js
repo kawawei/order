@@ -26,6 +26,20 @@ export function useOrders(restaurantId = null) {
     })
   })
 
+  // 時間範圍標題
+  const timeRangeTitle = computed(() => {
+    switch (selectedTimeRange.value) {
+      case 'today':
+        return '今日訂單'
+      case 'week':
+        return '本週訂單'
+      case 'month':
+        return '本月訂單'
+      default:
+        return '今日訂單'
+    }
+  })
+
   // 即時訂單數據 - 從API獲取
   const liveOrders = ref([])
   
@@ -293,20 +307,75 @@ export function useOrders(restaurantId = null) {
     delivered: deliveredOrders.value.length
   }))
 
-  const todayOrdersCount = computed(() => {
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
+  const selectedTimeRangeOrdersCount = computed(() => {
+    const now = new Date()
     
-    // 只計算今日結帳的訂單（包括即時訂單中已結帳的和歷史訂單）
-    const todayCompletedOrders = historyOrders.value.filter(order => {
-      if (!order.completedAt) return false
-      const completedDate = new Date(order.completedAt)
-      completedDate.setHours(0, 0, 0, 0)
-      return completedDate.getTime() === today.getTime()
-    })
+    // 計算歷史訂單中符合時間範圍的訂單數量
+    const getHistoryOrdersCount = () => {
+      if (selectedTimeRange.value === 'today') {
+        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+        const todayCompletedOrders = historyOrders.value.filter(order => {
+          if (!order.completedAt) return false
+          const completedDate = new Date(order.completedAt)
+          const orderDate = new Date(completedDate.getFullYear(), completedDate.getMonth(), completedDate.getDate())
+          return orderDate.getTime() === today.getTime()
+        })
+        return todayCompletedOrders.length
+      } else if (selectedTimeRange.value === 'week') {
+        const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
+        const weekCompletedOrders = historyOrders.value.filter(order => {
+          if (!order.completedAt) return false
+          const completedDate = new Date(order.completedAt)
+          return completedDate >= weekAgo
+        })
+        return weekCompletedOrders.length
+      } else if (selectedTimeRange.value === 'month') {
+        const monthAgo = new Date(now.getFullYear(), now.getMonth() - 1, now.getDate())
+        const monthCompletedOrders = historyOrders.value.filter(order => {
+          if (!order.completedAt) return false
+          const completedDate = new Date(order.completedAt)
+          return completedDate >= monthAgo
+        })
+        return monthCompletedOrders.length
+      }
+      return 0
+    }
     
-    return todayCompletedOrders.length
+    // 計算即時訂單中已完成的訂單數量（已送出的訂單）
+    const getLiveCompletedOrdersCount = () => {
+      const completedLiveOrders = liveOrders.value.filter(order => 
+        ['served', 'delivered'].includes(order.status)
+      )
+      
+      if (selectedTimeRange.value === 'today') {
+        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+        return completedLiveOrders.filter(order => {
+          const orderDate = new Date(order.createdAt)
+          const orderDay = new Date(orderDate.getFullYear(), orderDate.getMonth(), orderDate.getDate())
+          return orderDay.getTime() === today.getTime()
+        }).length
+      } else if (selectedTimeRange.value === 'week') {
+        const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
+        return completedLiveOrders.filter(order => {
+          const orderDate = new Date(order.createdAt)
+          return orderDate >= weekAgo
+        }).length
+      } else if (selectedTimeRange.value === 'month') {
+        const monthAgo = new Date(now.getFullYear(), now.getMonth() - 1, now.getDate())
+        return completedLiveOrders.filter(order => {
+          const orderDate = new Date(order.createdAt)
+          return orderDate >= monthAgo
+        }).length
+      }
+      return 0
+    }
+    
+    // 返回歷史訂單 + 即時訂單的總數
+    return getHistoryOrdersCount() + getLiveCompletedOrdersCount()
   })
+
+  // 保持向後兼容性
+  const todayOrdersCount = computed(() => selectedTimeRangeOrdersCount.value)
 
   const historyStats = computed(() => {
     // 歷史訂單都是已完成的桌次訂單
@@ -1280,6 +1349,8 @@ export function useOrders(restaurantId = null) {
     loading,
     isExporting,
     currentDate,
+    timeRangeTitle,
+    selectedTimeRangeOrdersCount,
     todayOrdersCount,
     
     // 即時訂單數據

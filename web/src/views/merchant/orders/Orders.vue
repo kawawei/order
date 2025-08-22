@@ -8,9 +8,9 @@
             <font-awesome-icon icon="clock" class="mr-1" />
             {{ currentDate }}
           </BaseTag>
-          <BaseTag variant="info" size="medium">
+          <BaseTag v-if="activeTab === 'history'" variant="info" size="medium">
             <font-awesome-icon icon="receipt" class="mr-1" />
-            今日訂單: {{ todayOrdersCount }}
+            {{ timeRangeTitle }}: {{ selectedTimeRangeOrdersCount }}
           </BaseTag>
         </div>
       </div>
@@ -501,6 +501,8 @@ const {
   loading,
   isExporting,
   currentDate,
+  timeRangeTitle,
+  selectedTimeRangeOrdersCount,
   todayOrdersCount,
   
   // 即時訂單數據
