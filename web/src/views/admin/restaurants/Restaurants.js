@@ -31,6 +31,11 @@ export const useUsers = () => {
   const currentPage = ref(1)
   const totalPages = ref(1)
 
+  // 添加防重複調用狀態
+  const isDeleting = ref(false)
+  const isTogglingStatus = ref(false)
+  const isAddingMerchant = ref(false)
+
   const sanitizePhoneForDisplay = (value) => {
     const phone = String(value || '').trim()
     if (!phone) return ''
@@ -156,7 +161,17 @@ export const useUsers = () => {
   }
 
   const toggleUserStatus = async (user) => {
+    // 防重複調用檢查
+    if (isTogglingStatus.value) {
+      console.log('正在切換狀態中，忽略重複調用')
+      return
+    }
+    
     try {
+      // 立即設置為切換中狀態，防止重複調用
+      isTogglingStatus.value = true
+      console.log('設置切換狀態為 true')
+      
       const newStatus = user.status === 'active' ? 'suspended' : 'active'
       
       await merchantAPI.updateMerchantStatus(user.id, newStatus)
@@ -165,9 +180,16 @@ export const useUsers = () => {
       user.status = newStatus
       
       toast.success(`已${newStatus === 'active' ? '啟用' : '停用'}商家 ${user.businessName}`)
+      console.log('切換商家狀態成功')
     } catch (err) {
       console.error('更新商家狀態失敗:', err)
       toast.error('更新商家狀態失敗')
+    } finally {
+      // 延遲重置切換狀態，防止快速重複調用
+      setTimeout(() => {
+        isTogglingStatus.value = false
+        console.log('延遲重置切換狀態為 false')
+      }, 500)
     }
   }
 
@@ -178,7 +200,17 @@ export const useUsers = () => {
 
   // 新增商家
   const addMerchant = async (merchantData) => {
+    // 防重複調用檢查
+    if (isAddingMerchant.value) {
+      console.log('正在新增商家中，忽略重複調用')
+      return
+    }
+    
     try {
+      // 立即設置為新增中狀態，防止重複調用
+      isAddingMerchant.value = true
+      console.log('設置新增商家狀態為 true')
+      
       loading.value = true
       const response = await merchantAPI.createMerchant(merchantData)
       if (response.status === 'success') {
@@ -190,6 +222,7 @@ export const useUsers = () => {
         if (generatedCode) {
           toast.info(`請記下老闆員工編號：${generatedCode}`)
         }
+        console.log('新增餐廳成功')
         return response
       }
       throw new Error(response.message || '新增餐廳失敗')
@@ -199,24 +232,50 @@ export const useUsers = () => {
       throw err
     } finally {
       loading.value = false
+      
+      // 延遲重置新增狀態，防止快速重複調用
+      setTimeout(() => {
+        isAddingMerchant.value = false
+        console.log('延遲重置新增商家狀態為 false')
+      }, 500)
     }
   }
 
   // 刪除商家
   const deleteUser = async (user) => {
+    // 防重複調用檢查
+    if (isDeleting.value) {
+      console.log('正在刪除中，忽略重複調用')
+      return
+    }
+    
     try {
       if (!confirm(`確定要刪除「${user.businessName}」嗎？`)) return
+      
+      // 立即設置為刪除中狀態，防止重複調用
+      isDeleting.value = true
+      console.log('設置刪除狀態為 true')
+      
       loading.value = true
       await merchantAPI.deleteMerchant(user.id)
+      
       // 從本地列表移除，或重新載入
       users.value = users.value.filter(u => u.id !== user.id)
       totalUsers.value = Math.max(0, totalUsers.value - 1)
       toast.success('已刪除餐廳')
+      
+      console.log('刪除餐廳成功')
     } catch (err) {
       console.error('刪除商家失敗:', err)
       toast.error('刪除餐廳失敗')
     } finally {
       loading.value = false
+      
+      // 延遲重置刪除狀態，防止快速重複調用
+      setTimeout(() => {
+        isDeleting.value = false
+        console.log('延遲重置刪除狀態為 false')
+      }, 500)
     }
   }
 

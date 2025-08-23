@@ -126,7 +126,7 @@
                   size="small"
                   @click="toggleUserStatus(row)"
                   title="切換狀態"
-                  :disabled="loading"
+                  :disabled="loading || isTogglingStatus"
                 >
                   <font-awesome-icon
                     :icon="row.status === 'active' ? 'pause' : 'play'"
@@ -149,6 +149,7 @@
                   size="small"
                   @click="deleteUser(row)"
                   title="刪除餐廳"
+                  :disabled="loading || isDeleting"
                 >
                   <font-awesome-icon icon="trash" />
                 </BaseButton>
@@ -229,7 +230,7 @@
 
       <template #footer>
         <BaseButton variant="text" @click="showAddDialog = false">取消</BaseButton>
-        <BaseButton :disabled="!canSubmitNew" @click="handleAddMerchant">新增</BaseButton>
+        <BaseButton :disabled="!canSubmitNew || isAddingMerchant" @click="handleAddMerchant">新增</BaseButton>
       </template>
     </BaseDialog>
 
@@ -401,7 +402,10 @@ const {
   loadMerchants,
   addMerchant,
   isEditDialogOpen,
-  editingUser
+  editingUser,
+  isDeleting,
+  isTogglingStatus,
+  isAddingMerchant
 } = useUsers()
 
 // 新增餐廳對話框狀態
