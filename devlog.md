@@ -2944,3 +2944,94 @@ historicalCost: {
 - 建立成本數據的備份和恢復機制
 
 *時間：2025-08-22 23:00*
+
+## 2025-08-22 23:30
+### 統計報表成本計算邏輯修正｜Fix cost calculation logic in statistics report
+1. 問題描述｜Problem description
+   - 商家後台統計報表的成本計算與歷史訂單報表不一致
+   - 統計報表顯示總成本為 0，而歷史訂單報表顯示正確的成本數據
+   - 兩個報表使用不同的成本計算邏輯，導致數據不一致
+   - 影響財務報表的準確性和可靠性
+
+2. 問題分析｜Problem analysis
+   - **統計報表邏輯**：使用 `order.totalCost` 欄位進行成本統計
+   - **歷史訂單報表邏輯**：使用 `items.historicalCost.totalCost` 進行成本統計
+   - **根本原因**：兩個報表使用了不同的成本數據來源
+   - **數據差異**：`order.totalCost` 可能未正確設置，而 `items.historicalCost.totalCost` 在訂單確認時正確記錄
+
+3. 解決方案｜Solution
+   - **統一成本計算邏輯**：修改統計報表使用與歷史訂單報表相同的計算方式
+   - **使用歷史成本數據**：統計報表改為使用 `items.historicalCost.totalCost`
+   - **確保數據一致性**：兩個報表使用相同的成本計算邏輯
+
+4. 技術實現｜Technical implementation
+   - **修改統計報表聚合查詢**：
+     ```javascript
+     // 修改前：使用 order.totalCost
+     const totalCost = await Order.aggregate([
+       { 
+         $match: { 
+           merchantId: new mongoose.Types.ObjectId(merchantId),
+           status: 'completed',
+           ...dateQuery 
+         } 
+       },
+       {
+         $group: {
+           _id: null,
+           totalCost: { $sum: '$totalCost' }
+         }
+       }
+     ]);
+     
+     // 修改後：使用 items.historicalCost.totalCost
+     const totalCost = await Order.aggregate([
+       { 
+         $match: { 
+           merchantId: new mongoose.Types.ObjectId(merchantId),
+           status: 'completed',
+           ...dateQuery 
+         } 
+       },
+       {
+         $unwind: '$items'
+       },
+       {
+         $group: {
+           _id: null,
+           totalCost: { $sum: '$items.historicalCost.totalCost' }
+         }
+       }
+     ]);
+     ```
+
+5. 修正結果｜Results
+   - ✅ 統計報表成本計算與歷史訂單報表保持一致
+   - ✅ 成本數據準確反映實際的庫存消耗成本
+   - ✅ 財務報表的可靠性和準確性得到提升
+   - ✅ 兩個報表使用統一的成本計算邏輯
+
+6. 影響範圍｜Impact
+   - 商家後台統計報表的成本計算
+   - 財務報表的數據準確性
+   - 成本分析功能的可靠性
+   - 報表數據的一致性
+
+7. 相關檔案｜Related files
+   - 報表控制器：`server/src/controllers/reportController.js`
+   - 訂單控制器：`server/src/controllers/orderController.js`
+   - 前端訂單邏輯：`web/src/composables/merchant/useOrders.js`
+
+8. 經驗總結｜Lessons learned
+   - **數據一致性**：不同報表必須使用相同的數據計算邏輯
+   - **成本計算標準**：歷史成本數據是成本計算的權威來源
+   - **報表驗證**：新功能開發後必須驗證不同報表間的數據一致性
+   - **代碼維護**：統一的計算邏輯便於維護和擴展
+
+9. 預防措施｜Prevention measures
+   - 建立報表數據一致性檢查機制
+   - 統一成本計算的標準和規範
+   - 定期驗證不同報表間的數據一致性
+   - 建立報表開發的最佳實踐文檔
+
+*時間：2025-08-22 23:30*

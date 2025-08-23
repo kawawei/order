@@ -457,6 +457,7 @@ exports.getReportStats = catchAsync(async (req, res, next) => {
     ]);
 
     // 3.1 計算總成本（基於訂單中已計算的庫存成本，只計算已結帳的訂單）
+    // 3. 獲取成本統計 - 使用與歷史訂單報表相同的邏輯
     const totalCost = await Order.aggregate([
       { 
         $match: { 
@@ -466,9 +467,12 @@ exports.getReportStats = catchAsync(async (req, res, next) => {
         } 
       },
       {
+        $unwind: '$items'
+      },
+      {
         $group: {
           _id: null,
-          totalCost: { $sum: '$totalCost' }
+          totalCost: { $sum: '$items.historicalCost.totalCost' }
         }
       }
     ]);
@@ -1221,22 +1225,58 @@ exports.exportReport = catchAsync(async (req, res, next) => {
       }
     ]);
 
-    // 2. 獲取成本統計（基於訂單中已計算的庫存成本）
-    const costStats = await Order.aggregate([
-      { 
-        $match: { 
-          merchantId: new mongoose.Types.ObjectId(merchantId),
-          status: 'completed',
-          ...dateQuery 
-        } 
-      },
-      {
-        $group: {
-          _id: null,
-          totalCost: { $sum: '$totalCost' }
+    // 2. 直接調用歷史訂單統計邏輯來獲取成本，確保與歷史訂單統計完全一致
+    console.log('\n=== 歷史訂單成本計算調試 ===');
+    console.log(`查詢條件:`, { merchantId, dateQuery });
+    
+    const historicalOrders = await Order.find({
+      merchantId: new mongoose.Types.ObjectId(merchantId),
+      status: 'completed',
+      ...dateQuery
+    }).populate('tableId').populate('items.historicalCost.consumptionDetails.inventoryId');
+
+    console.log(`找到歷史訂單數量: ${historicalOrders.length}`);
+
+    let totalHistoricalCost = 0;
+    let orderCostDetails = [];
+    
+    if (historicalOrders && historicalOrders.length > 0) {
+      historicalOrders.forEach((order, orderIndex) => {
+        let orderCost = 0;
+        let itemCostDetails = [];
+        
+        if (order.items && order.items.length > 0) {
+          order.items.forEach((item, itemIndex) => {
+            if (item.historicalCost && item.historicalCost.totalCost) {
+              orderCost += item.historicalCost.totalCost;
+              itemCostDetails.push({
+                itemName: item.name || `項目${itemIndex + 1}`,
+                cost: item.historicalCost.totalCost
+              });
+            }
+          });
         }
-      }
-    ]);
+        
+        totalHistoricalCost += orderCost;
+        orderCostDetails.push({
+          orderNumber: order.orderNumber,
+          orderCost: orderCost,
+          items: itemCostDetails
+        });
+        
+        console.log(`訂單 ${orderIndex + 1}: ${order.orderNumber} - 成本: ${orderCost}`);
+        if (itemCostDetails.length > 0) {
+          itemCostDetails.forEach(item => {
+            console.log(`  - ${item.itemName}: ${item.cost}`);
+          });
+        }
+      });
+    }
+
+    console.log(`總歷史成本: ${totalHistoricalCost}`);
+    console.log('=== 歷史訂單成本計算完成 ===\n');
+
+    const costStats = [{ totalCost: totalHistoricalCost }];
 
     // 3. 獲取人流量統計（使用與報表統計頁面相同的邏輯）
     const trafficStats = await Order.aggregate([

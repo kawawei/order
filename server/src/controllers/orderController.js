@@ -1264,14 +1264,41 @@ exports.exportHistoryOrders = catchAsync(async (req, res, next) => {
   let totalHistoricalCost = 0;
   let totalProfit = 0;
   
+  console.log(`\n=== 歷史訂單統計成本計算調試 ===`);
+  console.log(`開始處理 ${orders.length} 個訂單的歷史成本計算`);
+  
   orders.forEach((order, orderIndex) => {
     console.log(`\n--- 處理訂單 ${orderIndex + 1}: ${order.orderNumber} ---`);
-    console.log(`訂單狀態: ${order.status}, 總成本: $${order.totalCost || 0}`);
+    console.log(`訂單狀態: ${order.status}, 總金額: $${order.totalAmount || 0}`);
     
-    // 累計統計
+    // 累計統計 - 使用項目級別的歷史成本，確保與匯出報表一致
     totalRevenue += order.totalAmount || 0;
-    totalHistoricalCost += order.totalCost || 0;
-    totalProfit += (order.totalAmount || 0) - (order.totalCost || 0);
+    
+    // 計算訂單的總歷史成本（基於項目級別的歷史成本）
+    let orderHistoricalCost = 0;
+    let itemCostDetails = [];
+    
+    if (order.items && order.items.length > 0) {
+      order.items.forEach((item, itemIndex) => {
+        if (item.historicalCost && item.historicalCost.totalCost) {
+          orderHistoricalCost += item.historicalCost.totalCost;
+          itemCostDetails.push({
+            itemName: item.name || `項目${itemIndex + 1}`,
+            cost: item.historicalCost.totalCost
+          });
+        }
+      });
+    }
+    
+    console.log(`訂單 ${order.orderNumber} 歷史成本: $${orderHistoricalCost}`);
+    if (itemCostDetails.length > 0) {
+      itemCostDetails.forEach(item => {
+        console.log(`  - ${item.itemName}: $${item.cost}`);
+      });
+    }
+    
+    totalHistoricalCost += orderHistoricalCost;
+    totalProfit += (order.totalAmount || 0) - orderHistoricalCost;
     
     // 轉換為台灣本地時間 (UTC+8)
     const orderTime = order.completedAt ? 
