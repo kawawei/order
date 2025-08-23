@@ -70,6 +70,16 @@ export default {
     // 防止重複提交的標誌
     const isSubmitting = ref(false)
 
+    // 解析圖片路徑，當為相對路徑時自動加上 API 基底
+    const resolveImage = (src) => {
+      if (!src) return ''
+      if (/^https?:\/\//i.test(src)) return src
+      const base = import.meta.env?.VITE_API_URL || 'http://localhost:3002/api/v1'
+      // 後端以 /uploads 提供靜態資源，API 基底去掉 /api/v1 再拼接
+      const origin = base.replace(/\/?api\/v1\/?$/, '')
+      return `${origin}${src.startsWith('/') ? src : '/' + src}`
+    }
+
     // 選項組標籤映射 - Option Group Label Mapping
     const optionGroupLabels = {
       size: '份量',
@@ -782,7 +792,8 @@ export default {
       addConfiguredItemToCart,
       updateQuantity,
       proceedToCheckout,
-      loadMenuData
+      loadMenuData,
+      resolveImage
     }
   }
 }

@@ -65,7 +65,7 @@
         <div class="item-content">
           <!-- 菜品圖片 -->
           <div class="item-image">
-            <img :src="item.image || '/api/placeholder/120/120'" :alt="item.name">
+            <img :src="resolveImage(item.image) || '/api/placeholder/120/120'" :alt="item.name">
           </div>
 
           <!-- 菜品信息 -->
