@@ -251,17 +251,21 @@ export function useOrders(restaurantId = null) {
     return `${item.name}|${optionsString}`
   }
 
-  // 將訂單按批次分組，每個批次一張卡片，按時間順序排列
+  // 將訂單按桌次和批次分組，同一桌次的同一批次訂單分在同一張卡片裡
   const groupOrdersByBatch = (orders) => {
     const batchMap = new Map()
     
     orders.forEach(order => {
-      const batchKey = order.batchNumber || order._id
+      // 使用桌號+批次號作為分組鍵，確保同一桌次的同一批次訂單分在一起
+      const tableNumber = getTableNumber(order.tableId)
+      const batchKey = `${tableNumber}_${order.batchNumber || order._id}`
+      
       if (!batchMap.has(batchKey)) {
         batchMap.set(batchKey, {
           _id: order._id, // 使用真正的訂單ID，而不是批次號碼
           batchNumber: order.batchNumber || '單一訂單',
-          tableNumber: order.tableNumber,
+          tableNumber: tableNumber,
+          tableId: order.tableId, // 保存桌次ID
           createdAt: order.createdAt,
           items: [],
           totalAmount: 0,
