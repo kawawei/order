@@ -5,7 +5,9 @@ const catchAsync = require('../utils/catchAsync');
 const { normalizePermissionKeys } = require('../config/permissions');
 
 const getMerchantId = (req) => {
-  if (req.admin && req.query.merchantId) return req.query.merchantId;
+  if (req.admin && (req.query.merchantId || req.params.merchantId)) {
+    return req.query.merchantId || req.params.merchantId;
+  }
   if (req.employee) return req.employee.merchant?.toString();
   if (req.merchant) return req.merchant.id;
   throw new AppError('無法確定商家身份', 401);

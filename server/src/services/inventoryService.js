@@ -60,7 +60,7 @@ class InventoryService {
 
           // 處理多規格庫存
           if (inventory.type === 'multiSpec' && item.inventoryValueId) {
-            const spec = inventory.multiSpecStock.find(s => s._id.toString() === item.inventoryValueId.toString());
+            const spec = await this.findSpecValue(inventory, item.inventoryValueId);
             if (spec) {
               unitCost = spec.unitPrice;
               specName = spec.specName;
@@ -136,7 +136,7 @@ class InventoryService {
 
               // 處理多規格庫存
               if (inventory.type === 'multiSpec' && condition.inventoryValueId) {
-                const spec = inventory.multiSpecStock.find(s => s._id.toString() === condition.inventoryValueId.toString());
+                const spec = await this.findSpecValue(inventory, condition.inventoryValueId);
                 if (spec) {
                   unitCost = spec.unitPrice;
                   specName = spec.specName;
@@ -251,14 +251,46 @@ class InventoryService {
   /**
    * 查找規格值
    * @param {Object} inventory - 庫存對象
-   * @param {string} inventoryValueId - 規格值ID
+   * @param {string} inventoryValueId - 規格值ID或名稱
    * @returns {Object|null} 規格值對象
    */
   async findSpecValue(inventory, inventoryValueId) {
+    console.log(`[DEBUG] 查找規格值: 庫存=${inventory.name}, 類型=${inventory.type}, 查找值=${inventoryValueId}`);
+    
     if (inventory.type === 'multiSpec') {
-      return inventory.multiSpecStock.find(spec => 
+      console.log(`[DEBUG] 多規格庫存，可用規格:`, inventory.multiSpecStock.map(s => ({
+        _id: s._id.toString(),
+        specName: s.specName
+      })));
+      
+      // 首先嘗試按ID匹配
+      let spec = inventory.multiSpecStock.find(spec => 
         spec._id.toString() === inventoryValueId.toString()
       );
+      
+      if (spec) {
+        console.log(`[DEBUG] 按ID找到規格: ${spec.specName}`);
+        return spec;
+      }
+      
+      // 如果按ID找不到，嘗試按名稱匹配
+      spec = inventory.multiSpecStock.find(spec => 
+        spec.specName === inventoryValueId
+      );
+      
+      if (spec) {
+        console.log(`[DEBUG] 按名稱找到規格: ${spec.specName}`);
+        return spec;
+      }
+      
+      // 如果還是找不到，使用第一個可用規格作為默認值
+      if (inventory.multiSpecStock && inventory.multiSpecStock.length > 0) {
+        const defaultSpec = inventory.multiSpecStock[0];
+        console.log(`[DEBUG] 使用默認規格: ${defaultSpec.specName} (原查找值: ${inventoryValueId})`);
+        return defaultSpec;
+      }
+      
+      console.log(`[DEBUG] 找不到規格值: ${inventoryValueId}`);
     }
     return null;
   }

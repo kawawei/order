@@ -15,7 +15,9 @@ const signToken = (employee) => {
 };
 
 const getMerchantId = (req) => {
-  if (req.admin && req.query.merchantId) return req.query.merchantId;
+  if (req.admin && (req.query.merchantId || req.params.merchantId)) {
+    return req.query.merchantId || req.params.merchantId;
+  }
   if (req.merchant) return req.merchant.id;
   if (req.employee) return req.employee.merchant.toString();
   throw new AppError('無法確定商家身份', 401);

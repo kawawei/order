@@ -215,9 +215,18 @@ orderSchema.statics.generateOrderNumber = async function(tableId, tableNumber) {
   // 檢查這個訂單號是否已經存在
   const existingOrder = await this.findOne({ orderNumber });
   if (existingOrder) {
-    // 如果重複，批次號+1
-    currentBatchNumber++;
-    return `T${cleanTableNumber}-${dateStr}${currentGroupNumber.toString().padStart(4, '0')}${currentBatchNumber.toString().padStart(3, '0')}`;
+    // 如果重複，批次號+1，最多嘗試10次
+    for (let i = 1; i <= 10; i++) {
+      currentBatchNumber++;
+      const newOrderNumber = `T${cleanTableNumber}-${dateStr}${currentGroupNumber.toString().padStart(4, '0')}${currentBatchNumber.toString().padStart(3, '0')}`;
+      
+      const checkExisting = await this.findOne({ orderNumber: newOrderNumber });
+      if (!checkExisting) {
+        return newOrderNumber;
+      }
+    }
+    // 如果10次都重複，拋出錯誤
+    throw new Error('無法生成唯一的訂單號碼');
   }
   
   return orderNumber;
@@ -263,9 +272,9 @@ orderSchema.statics.getTodayGroupsByTable = async function(tableId) {
   
   const groupPattern = `T${cleanTableNumber}-${dateStr}`;
   
-  // 使用本地時間的開始和結束時間
-  const startOfDay = new Date(localTime.getFullYear(), localTime.getMonth(), localTime.getDate(), 0, 0, 0, 0);
-  const endOfDay = new Date(localTime.getFullYear(), localTime.getMonth(), localTime.getDate(), 23, 59, 59, 999);
+  // 使用台北時區的開始和結束時間
+  const startOfDay = new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0) - (8 * 60 * 60 * 1000));
+  const endOfDay = new Date(Date.UTC(year, month - 1, day, 23, 59, 59, 999) - (8 * 60 * 60 * 1000));
   
   const orders = await this.find({
     orderNumber: { $regex: `^${groupPattern}` },

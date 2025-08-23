@@ -7,13 +7,9 @@ const mongoose = require('mongoose');
 
 // 輔助函數：獲取商家ID（支持超級管理員訪問特定商家）
 const getMerchantId = (req) => {
-  // 優先使用查詢參數中的merchantId（前端傳遞）
-  if (req.query.merchantId) {
-    return req.query.merchantId;
-  }
   // 如果是超級管理員且指定了商家ID，使用指定的商家ID
-  if (req.admin && req.params.merchantId) {
-    return req.params.merchantId;
+  if (req.admin && (req.query.merchantId || req.params.merchantId)) {
+    return req.query.merchantId || req.params.merchantId;
   }
   // 如果是超級管理員但沒有指定商家ID，返回錯誤信息
   if (req.admin && !req.query.merchantId && !req.params.merchantId) {

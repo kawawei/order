@@ -7,8 +7,10 @@ const AppError = require('../utils/appError');
 // 輔助函數：獲取商家ID（支援員工與超管）
 const getMerchantId = (req) => {
   // 超管/管理員可帶入 merchantId
-  if (req.admin && req.query.merchantId) return req.query.merchantId;
-  if (req.admin && !req.query.merchantId) {
+  if (req.admin && (req.query.merchantId || req.params.merchantId)) {
+    return req.query.merchantId || req.params.merchantId;
+  }
+  if (req.admin && !req.query.merchantId && !req.params.merchantId) {
     throw new AppError('超級管理員訪問商家後台需要指定merchantId參數', 400);
   }
   // 員工從所屬商家取得

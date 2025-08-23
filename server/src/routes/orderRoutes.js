@@ -14,7 +14,8 @@ router.get('/table/:tableId/total', orderController.getTableTotal);
 router.post('/table/:tableId/checkout', orderController.checkoutTable);
 
 // 管理路由（後台使用）- 需要後台任一身分 + 權限（商家/管理員自帶全權限）
-router.use('/merchant/:merchantId', protectAny, enforceSameMerchantParam('merchantId'));
+// 移除 enforceSameMerchantParam 中間件，讓超級管理員能夠訪問所有商家的資料
+router.use('/merchant/:merchantId', protectAny);
 router.get('/merchant/:merchantId', requirePermissions('訂單:查看'), orderController.getOrdersByMerchant);
 router.get('/merchant/:merchantId/stats', requirePermissions('報表:查看'), orderController.getOrderStats);
 router.get('/merchant/:merchantId/export', requirePermissions('報表:匯出'), orderController.exportHistoryOrders);

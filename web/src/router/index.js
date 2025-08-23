@@ -202,7 +202,8 @@ router.beforeEach((to, from, next) => {
           if (isStaff) {
             const targetPath = to.path || ''
             const isOrdersPage = targetPath.startsWith('/merchant/orders')
-            if (!isOrdersPage) {
+            const isTablesPage = targetPath.startsWith('/merchant/tables')
+            if (!isOrdersPage && !isTablesPage) {
               next({ name: 'MerchantOrders' })
               return
             }

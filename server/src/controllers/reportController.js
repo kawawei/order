@@ -9,9 +9,9 @@ const XLSX = require('xlsx');
 
 // 獲取商家ID（支援商家、員工與超管指定 merchantId）
 const getMerchantId = (req) => {
-  // 超級管理員或管理員可透過查詢參數指定商家
-  if (req.admin && req.query.merchantId) {
-    return req.query.merchantId;
+  // 超級管理員或管理員可透過查詢參數或路由參數指定商家
+  if (req.admin && (req.query.merchantId || req.params.merchantId)) {
+    return req.query.merchantId || req.params.merchantId;
   }
   // 員工從所屬商家取得 ID
   if (req.employee) {

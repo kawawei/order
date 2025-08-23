@@ -20,7 +20,7 @@
         <span class="nav-text">菜單管理</span>
       </router-link>
 
-      <router-link v-if="showAllMenu" :to="{ path: '/merchant/tables', query: route.query }" class="nav-item">
+      <router-link v-if="showAllMenu || canViewTables" :to="{ path: '/merchant/tables', query: route.query }" class="nav-item">
         <div class="icon-wrapper">
           <font-awesome-icon icon="table" />
         </div>
@@ -151,6 +151,9 @@ const isStaff = (
 // 員工僅可見訂單；管理人員可見全部（含人員管理）；老闆與管理員可見全部
 const showAllMenu = computed(() => isOwner || isManager || isAdmin)
 const canManagePeople = computed(() => isOwner || isManager || isAdmin)
+
+// 工作人員可以查看桌次管理（根據後端權限配置：工作人員有「桌位:查看」權限）
+const canViewTables = computed(() => isOwner || isManager || isAdmin || isStaff)
 </script>
 
 <style scoped>
