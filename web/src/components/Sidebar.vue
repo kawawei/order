@@ -55,12 +55,14 @@
         <span class="nav-text">權限管理</span>
       </router-link>
 
+      <!-- 暫時隱藏設置選項
       <router-link v-if="showAllMenu" :to="{ path: '/merchant/settings', query: route.query }" class="nav-item">
         <div class="icon-wrapper">
           <font-awesome-icon icon="cog" />
         </div>
         <span class="nav-text">基礎設置</span>
       </router-link>
+      -->
     </nav>
   </aside>
 </template>

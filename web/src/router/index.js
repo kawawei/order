@@ -51,11 +51,12 @@ const routes = [
         name: 'MerchantReports',
         component: () => import('../views/merchant/reports/Reports.vue')
       },
-      {
-        path: 'settings',
-        name: 'MerchantSettings',
-        component: () => import('../views/merchant/settings/Settings.vue')
-      },
+      // 暫時隱藏設置頁面路由
+      // {
+      //   path: 'settings',
+      //   name: 'MerchantSettings',
+      //   component: () => import('../views/merchant/settings/Settings.vue')
+      // },
       {
         path: 'inventory',
         name: 'MerchantInventory',

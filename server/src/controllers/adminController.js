@@ -565,9 +565,27 @@ exports.getDashboardStats = catchAsync(async (req, res, next) => {
   const Order = require('../models/order');
   const Table = require('../models/table');
   
-  // 獲取當前日期和時間範圍
+  // 獲取當前日期和時間範圍（使用台灣時區 UTC+8）
   const now = new Date();
-  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  
+  // 台灣時區是 UTC+8，所以需要減去 8 小時來轉換為 UTC
+  const taiwanTimezoneOffset = 8 * 60; // 8小時 = 480分鐘
+  
+  // 構建台灣本地時間的開始和結束
+  const taiwanStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const taiwanEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+  
+  // 轉換為 UTC 時間：台灣時間 - 8小時 = UTC 時間
+  const startOfToday = new Date(taiwanStart.getTime() - (taiwanTimezoneOffset * 60 * 1000));
+  const endOfToday = new Date(taiwanEnd.getTime() - (taiwanTimezoneOffset * 60 * 1000));
+  
+  console.log('=== 超級管理員儀表板時區調試 ===');
+  console.log('當前時間:', now.toISOString());
+  console.log('台灣開始時間:', taiwanStart.toISOString());
+  console.log('台灣結束時間:', taiwanEnd.toISOString());
+  console.log('UTC 開始時間:', startOfToday.toISOString());
+  console.log('UTC 結束時間:', endOfToday.toISOString());
+  console.log('台灣時區偏移:', taiwanTimezoneOffset, '分鐘');
   
   // 1. 餐廳統計
   const restaurantStats = await Merchant.aggregate([
@@ -661,6 +679,7 @@ exports.getDashboardStats = catchAsync(async (req, res, next) => {
               { 
                 $and: [
                   { $gte: ['$completedAt', startOfToday] },
+                  { $lte: ['$completedAt', endOfToday] },
                   { $eq: ['$status', 'completed'] }
                 ]
               }, 
@@ -675,6 +694,7 @@ exports.getDashboardStats = catchAsync(async (req, res, next) => {
               { 
                 $and: [
                   { $gte: ['$completedAt', startOfToday] },
+                  { $lte: ['$completedAt', endOfToday] },
                   { $eq: ['$status', 'completed'] }
                 ]
               }, 
@@ -801,9 +821,13 @@ exports.getDashboardStats = catchAsync(async (req, res, next) => {
       $match: { status: 'completed' }
     },
     {
+      $unwind: '$items'
+    },
+    {
       $group: {
         _id: '$merchantId',
-        revenue: { $sum: '$totalAmount' }
+        revenue: { $sum: '$totalAmount' },
+        totalCost: { $sum: '$items.historicalCost.totalCost' }
       }
     },
     {
@@ -830,7 +854,8 @@ exports.getDashboardStats = catchAsync(async (req, res, next) => {
       $project: {
         id: '$_id',
         name: '$merchant.businessName',
-        revenue: 1
+        revenue: 1,
+        totalCost: 1
       }
     }
   ]);
@@ -881,8 +906,10 @@ exports.getDashboardStats = catchAsync(async (req, res, next) => {
     };
   }).sort((a, b) => b.activeTables - a.activeTables);
   
-  // 6. 利潤率計算（假設成本為營收的 30%）
-  const profitMargin = totalRevenue > 0 ? Math.round(((totalRevenue - (totalRevenue * 0.3)) / totalRevenue) * 100) : 0;
+  // 6. 利潤率計算（使用實際成本數據）
+  // 計算所有餐廳的總成本
+  const totalCost = restaurantRevenue.reduce((sum, restaurant) => sum + (restaurant.totalCost || 0), 0);
+  const profitMargin = totalRevenue > 0 ? Math.round(((totalRevenue - totalCost) / totalRevenue) * 100) : 0;
   
   const result = {
     restaurants: {
@@ -893,8 +920,8 @@ exports.getDashboardStats = catchAsync(async (req, res, next) => {
       activeTables
     },
     orders: orderStats[0] || {
-      totalOrders: 0,
-      todayOrders: 0,
+      totalCustomerGroups: 0,
+      todayCustomerGroups: 0,
       totalRevenue: 0,
       todayRevenue: 0
     },
@@ -908,6 +935,39 @@ exports.getDashboardStats = catchAsync(async (req, res, next) => {
     result.orders.totalOrders = result.orders.totalCustomerGroups || 0;
     result.orders.todayOrders = result.orders.todayCustomerGroups || 0;
   }
+  
+  // 添加調試日誌
+  console.log('=== 超級管理員儀表板統計結果 ===');
+  console.log('今日客人組數:', result.orders.todayCustomerGroups);
+  console.log('今日營收:', result.orders.todayRevenue);
+  console.log('總客人組數:', result.orders.totalCustomerGroups);
+  console.log('總營收:', result.orders.totalRevenue);
+  
+  // 詳細的餐廳營收和成本調試訊息
+  console.log('=== 餐廳營收和成本詳細統計 ===');
+  console.log('總營業額:', totalRevenue);
+  console.log('總成本:', totalCost);
+  console.log('毛利率:', profitMargin + '%');
+  console.log('各餐廳詳細數據:');
+  
+  restaurantRevenue.forEach((restaurant, index) => {
+    const restaurantProfit = restaurant.revenue - (restaurant.totalCost || 0);
+    const restaurantMargin = restaurant.revenue > 0 ? Math.round((restaurantProfit / restaurant.revenue) * 100) : 0;
+    
+    console.log(`${index + 1}. ${restaurant.name}:`);
+    console.log(`   營業額: $${restaurant.revenue}`);
+    console.log(`   成本: $${restaurant.totalCost || 0}`);
+    console.log(`   利潤: $${restaurantProfit}`);
+    console.log(`   毛利率: ${restaurantMargin}%`);
+    console.log(`   佔總營收比例: ${restaurant.percentage}%`);
+    console.log('');
+  });
+  
+  // 驗證成本計算邏輯
+  console.log('=== 成本計算驗證 ===');
+  console.log('使用 items.historicalCost.totalCost 進行成本統計');
+  console.log('總成本計算方式: 所有餐廳成本總和');
+  console.log('毛利率計算方式: (總營業額 - 總成本) / 總營業額 * 100');
   
   res.status(200).json({
     status: 'success',

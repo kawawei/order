@@ -20,12 +20,14 @@
         <span class="nav-text">菜單管理</span>
       </router-link>
 
+      <!-- 暫時隱藏設置選項
       <router-link to="/merchant/settings" class="nav-item">
         <div class="icon-wrapper">
           <i class="fas fa-cog"></i>
         </div>
         <span class="nav-text">基礎設置</span>
       </router-link>
+      -->
     </nav>
   </aside>
 </template>
