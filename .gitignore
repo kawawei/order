@@ -24,3 +24,7 @@ yarn-error.log*
 # System Files
 .DS_Store
 Thumbs.db
+
+# Uploads
+server/src/uploads/
+uploads/
