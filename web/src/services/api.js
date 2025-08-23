@@ -358,6 +358,18 @@ export const menuAPI = {
         'Content-Type': 'multipart/form-data'
       }
     })
+  },
+  
+  // 匯入菜品圖片
+  importImages: (formData) => {
+    const merchantId = resolveActiveMerchantId()
+    const params = merchantId ? { merchantId } : {}
+    return api.post('/menu/import-images', formData, {
+      params,
+      headers: {
+        'Content-Type': 'multipart/form-data'
+      }
+    })
   }
 };
 

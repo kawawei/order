@@ -87,7 +87,9 @@ import {
   faCloudUploadAlt,
   faArrowUp,
   faArrowDown,
-  faCalendar
+  faCalendar,
+  faImage,
+  faImages
 } from '@fortawesome/free-solid-svg-icons'
 
 /* Import Base Components */
@@ -171,7 +173,9 @@ library.add(
   faCloudUploadAlt,
   faArrowUp,
   faArrowDown,
-  faCalendar
+  faCalendar,
+  faImage,
+  faImages
 )
 
 const app = createApp(App)

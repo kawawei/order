@@ -1295,3 +1295,139 @@ exports.importMenu = catchAsync(async (req, res, next) => {
     return next(new AppError(`菜單匯入失敗：${error.message}`, 500));
   }
 });
+
+// 匯入菜品圖片
+exports.importImages = catchAsync(async (req, res, next) => {
+  const merchantId = getMerchantId(req);
+  
+  if (!req.files || req.files.length === 0) {
+    return next(new AppError('請選擇要匯入的圖片檔案', 400));
+  }
+
+  const results = [];
+  let success = 0;
+  let notFound = 0;
+  let failed = 0;
+
+  try {
+    for (const file of req.files) {
+      try {
+        // 從檔案名提取菜品名稱（去除副檔名）
+        // 處理中文文件名編碼問題
+        const originalName = Buffer.from(file.originalname, 'latin1').toString('utf8');
+        const fileName = path.basename(originalName, path.extname(originalName));
+        
+        // 查找對應的菜品
+        const dish = await Dish.findOne({
+          name: fileName,
+          merchant: merchantId
+        });
+
+        if (!dish) {
+                  results.push({
+          fileName: originalName,
+          dishName: fileName,
+          success: false,
+          notFound: true,
+          error: '未找到對應的菜品'
+        });
+          notFound++;
+          continue;
+        }
+
+        // 獲取菜品的分類信息
+        const category = await MenuCategory.findById(dish.category);
+        if (!category) {
+          results.push({
+            fileName: originalName,
+            dishName: dish.name,
+            success: false,
+            failed: true,
+            error: '菜品分類不存在'
+          });
+          failed++;
+          continue;
+        }
+
+        // 建立圖片目錄
+        const categoryDir = getCategoryDir(merchantId, category.name);
+        fs.mkdirSync(categoryDir, { recursive: true });
+
+        // 生成新的檔案名
+        const ext = path.extname(originalName);
+        const newFileName = buildDishFilename(dish.name, dish._id, ext);
+        const destinationPath = path.join(categoryDir, newFileName);
+
+        // 移動檔案到目標目錄
+        safeMoveFileSync(file.path, destinationPath);
+
+        // 更新菜品的圖片路徑
+        const imageUrl = `/uploads/menu/${toSlug(String(merchantId))}/${toSlug(category.name)}/${newFileName}`;
+        await Dish.findByIdAndUpdate(dish._id, { image: imageUrl });
+
+        results.push({
+          fileName: originalName,
+          dishName: dish.name,
+          success: true,
+          imageUrl: imageUrl
+        });
+        success++;
+
+      } catch (error) {
+        // 在 catch 塊中重新處理文件名，以防 originalName 未定義
+        const originalName = Buffer.from(file.originalname, 'latin1').toString('utf8');
+        const fileName = path.basename(originalName, path.extname(originalName));
+        
+        console.error(`處理圖片 ${originalName} 失敗:`, error);
+        results.push({
+          fileName: originalName,
+          dishName: fileName,
+          success: false,
+          failed: true,
+          error: error.message
+        });
+        failed++;
+      }
+    }
+
+    // 清理未處理的暫存檔案
+    req.files.forEach(file => {
+      try {
+        if (fs.existsSync(file.path)) {
+          fs.unlinkSync(file.path);
+        }
+      } catch (error) {
+        console.warn('清理暫存檔案失敗:', error);
+      }
+    });
+
+    console.log(`圖片匯入完成：成功 ${success} 張，未找到菜品 ${notFound} 張，失敗 ${failed} 張`);
+
+    res.status(200).json({
+      status: 'success',
+      message: `圖片匯入完成：成功 ${success} 張，未找到菜品 ${notFound} 張，失敗 ${failed} 張`,
+      data: {
+        success,
+        notFound,
+        failed,
+        details: results
+      }
+    });
+
+  } catch (error) {
+    console.error('圖片匯入失敗:', error);
+    
+    // 清理暫存檔案
+    req.files.forEach(file => {
+      try {
+        if (fs.existsSync(file.path)) {
+          fs.unlinkSync(file.path);
+        }
+      } catch (cleanupError) {
+        console.warn('清理暫存檔案失敗:', cleanupError);
+      }
+    });
+
+    return next(new AppError(`圖片匯入失敗：${error.message}`, 500));
+  }
+});

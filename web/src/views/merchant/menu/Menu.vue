@@ -7,6 +7,10 @@
             <font-awesome-icon icon="upload" />
             匯入菜單
           </button>
+          <button @click="handleImportImages" class="btn btn-secondary">
+            <font-awesome-icon icon="image" />
+            匯入圖片
+          </button>
         <BaseButton variant="primary" @click="handleAddCategory">
           <font-awesome-icon icon="cog" />
           種類管理
@@ -93,6 +97,12 @@
       :on-import="handleImportMenuData"
       @import-success="handleImportSuccess"
     />
+
+    <!-- 匯入圖片對話框 -->
+    <ImportImagesDialog
+      v-model:show="showImportImagesDialog"
+      @import-success="handleImportImagesSuccess"
+    />
   </div>
 </template>
 
@@ -104,6 +114,7 @@ import AddCategoryDialog from '../../../components/merchant/menu/AddCategoryDial
 import AddMenuItemDialog from '../../../components/merchant/menu/AddMenuItemDialog.vue'
 import MenuItemCard from '../../../components/merchant/menu/MenuItemCard.vue'
 import ImportDialog from '../../../components/common/ImportDialog.vue'
+import ImportImagesDialog from '../../../components/merchant/menu/ImportImagesDialog.vue'
 import '../../../assets/styles/menu.css'
 
 const route = useRoute()
@@ -140,7 +151,10 @@ const {
   importInstructions,
   menuFormatGuide,
   handleImportMenuData,
-  handleImportSuccess
+  handleImportSuccess,
+  handleImportImages,
+  showImportImagesDialog,
+  handleImportImagesSuccess
 } = useMenuPage(route.query.restaurantId)
 </script>
 

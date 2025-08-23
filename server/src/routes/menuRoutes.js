@@ -19,6 +19,7 @@ if (!fs.existsSync(tempDir)) {
 const imageUpload = multer({
   dest: tempDir,
   limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
+  preserveExtension: true,
   fileFilter: (req, file, cb) => {
     if (/^image\/(png|jpe?g|gif|webp)$/.test(file.mimetype)) return cb(null, true);
     cb(new Error('只允許上傳圖片檔案'));
@@ -76,5 +77,8 @@ router.get('/dishes/stats', requirePermissions('報表:查看'), dishController.
 
 // 菜單匯入
 router.post('/import', requirePermissions('菜單:編輯'), excelUpload.single('file'), dishController.importMenu);
+
+// 圖片匯入
+router.post('/import-images', requirePermissions('菜單:編輯'), imageUpload.array('images', 20), dishController.importImages);
 
 module.exports = router;

@@ -162,6 +162,7 @@ export function useMenuPage(restaurantId = null) {
 
   // 匯入相關狀態
   const showImportDialog = ref(false)
+  const showImportImagesDialog = ref(false)
   
   // 範本數據
   const templateData = [
@@ -325,6 +326,17 @@ export function useMenuPage(restaurantId = null) {
     initializePageData()
   }
 
+  // 圖片匯入處理
+  const handleImportImages = () => {
+    showImportImagesDialog.value = true
+  }
+
+  const handleImportImagesSuccess = (result) => {
+    console.log('圖片匯入成功:', result)
+    // 重新載入數據以顯示新圖片
+    initializePageData()
+  }
+
   
   
   // 處理選項和庫存關聯
@@ -455,6 +467,9 @@ export function useMenuPage(restaurantId = null) {
     templateData,
     handleImportMenuData,
     handleImportSuccess,
+    handleImportImages,
+    showImportImagesDialog,
+    handleImportImagesSuccess,
     loadAvailableInventory
   }
 }
