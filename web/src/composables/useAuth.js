@@ -49,7 +49,10 @@ export function useAuth() {
           role: 'employee',
           merchantId,
           employeeRoleId,
-          employeeRoleName
+          employeeRoleName,
+          // 確保餐廳名稱和代碼被保存
+          businessName: employee.businessName || null,
+          merchantCode: employee.merchantCode || null
         }))
       } else if (response?.data?.merchant) {
         const merchant = response.data.merchant

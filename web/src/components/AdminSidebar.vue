@@ -24,11 +24,23 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 
 const route = useRoute()
-const isCollapsed = ref(false)
+
+// 從 localStorage 讀取側邊欄狀態，預設為展開狀態
+const getInitialSidebarState = () => {
+  try {
+    const stored = localStorage.getItem('admin_sidebar_collapsed')
+    return stored ? JSON.parse(stored) : false
+  } catch (error) {
+    console.error('讀取管理員側邊欄狀態失敗:', error)
+    return false
+  }
+}
+
+const isCollapsed = ref(getInitialSidebarState())
 
 const menuItems = [
   { path: '/admin/dashboard', icon: 'chart-line', label: '儀表板' },
@@ -38,7 +50,22 @@ const menuItems = [
 
 const toggleSidebar = () => {
   isCollapsed.value = !isCollapsed.value
+  // 將狀態保存到 localStorage
+  try {
+    localStorage.setItem('admin_sidebar_collapsed', JSON.stringify(isCollapsed.value))
+  } catch (error) {
+    console.error('保存管理員側邊欄狀態失敗:', error)
+  }
 }
+
+// 組件掛載時確保狀態同步
+onMounted(() => {
+  // 如果 localStorage 中的狀態與當前狀態不一致，則同步
+  const storedState = getInitialSidebarState()
+  if (storedState !== isCollapsed.value) {
+    isCollapsed.value = storedState
+  }
+})
 </script>
 
 <style scoped>
@@ -135,4 +162,4 @@ const toggleSidebar = () => {
 .collapsed .icon-wrapper {
   margin: 0;
 }
-</style>]]>
+</style>

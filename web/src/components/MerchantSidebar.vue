@@ -31,13 +31,39 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 
-const isCollapsed = ref(false)
+// 從 localStorage 讀取側邊欄狀態，預設為展開狀態
+const getInitialSidebarState = () => {
+  try {
+    const stored = localStorage.getItem('merchant_sidebar_collapsed')
+    return stored ? JSON.parse(stored) : false
+  } catch (error) {
+    console.error('讀取商家側邊欄狀態失敗:', error)
+    return false
+  }
+}
+
+const isCollapsed = ref(getInitialSidebarState())
 
 const toggleSidebar = () => {
   isCollapsed.value = !isCollapsed.value
+  // 將狀態保存到 localStorage
+  try {
+    localStorage.setItem('merchant_sidebar_collapsed', JSON.stringify(isCollapsed.value))
+  } catch (error) {
+    console.error('保存商家側邊欄狀態失敗:', error)
+  }
 }
+
+// 組件掛載時確保狀態同步
+onMounted(() => {
+  // 如果 localStorage 中的狀態與當前狀態不一致，則同步
+  const storedState = getInitialSidebarState()
+  if (storedState !== isCollapsed.value) {
+    isCollapsed.value = storedState
+  }
+})
 </script>
 
 <style scoped>

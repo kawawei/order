@@ -3035,3 +3035,93 @@ historicalCost: {
    - 建立報表開發的最佳實踐文檔
 
 *時間：2025-08-22 23:30*
+
+## 2025-08-23 00:15
+### QR Code 下載功能商家名稱獲取問題修復｜Fix business name retrieval in QR Code download feature
+1. 問題描述｜Problem description
+   - QR Code 下載功能生成的檔案名稱始終使用預設的「餐廳」名稱
+   - 即使 URL 查詢參數中包含正確的餐廳名稱（如：test11），檔案名稱仍顯示為「餐廳-桌次2.png」
+   - 影響 QR Code 檔案的可識別性和專業性
+   - 用戶無法區分不同餐廳的 QR Code 檔案
+
+2. 問題分析｜Problem analysis
+   - **優先級問題**：原本的邏輯優先從 `localStorage` 獲取商家信息，然後才檢查 URL 查詢參數
+   - **localStorage 數據干擾**：`localStorage` 中可能存儲了包含商家信息的數據，導致 URL 查詢參數被忽略
+   - **日誌顯示**：控制台顯示「使用 URL 查詢參數中的餐廳名稱: test11」，但實際檔案名稱仍為「餐廳」
+   - **邏輯順序錯誤**：URL 查詢參數應該是最權威的餐廳名稱來源
+
+3. 解決方案｜Solution
+   - **調整優先級順序**：修改商家名稱獲取邏輯，優先使用 URL 查詢參數
+   - **統一獲取邏輯**：在 `downloadQRCode` 和 `batchDownloadQRCodes` 兩個函數中統一修改
+   - **改進日誌記錄**：添加更詳細的日誌來追蹤商家名稱的獲取過程
+
+4. 技術實現｜Technical implementation
+   - **修改前（錯誤的優先級）**：
+     ```javascript
+     // 先從 localStorage 獲取
+     const merchantRaw = localStorage.getItem('merchant_user')
+     if (merchantRaw) {
+       const merchant = JSON.parse(merchantRaw)
+       businessName = merchant.businessName || merchant.name || merchant.merchantName || merchant.restaurantName || '餐廳'
+       
+       // 只有在 localStorage 中沒有有效名稱時才檢查 URL
+       if (businessName === '餐廳') {
+         const urlParams = new URLSearchParams(window.location.search)
+         const restaurantName = urlParams.get('restaurantName')
+         if (restaurantName) {
+           businessName = restaurantName
+         }
+       }
+     }
+     ```
+   
+   - **修改後（正確的優先級）**：
+     ```javascript
+     // 優先從 URL 查詢參數獲取餐廳名稱
+     const urlParams = new URLSearchParams(window.location.search)
+     const restaurantName = urlParams.get('restaurantName')
+     if (restaurantName) {
+       businessName = restaurantName
+       console.log('從 URL 查詢參數獲取商家名稱:', businessName)
+     } else {
+       // 如果 URL 中沒有，再嘗試從 localStorage 獲取
+       const merchantRaw = localStorage.getItem('merchant_user')
+       if (merchantRaw) {
+         const merchant = JSON.parse(merchantRaw)
+         businessName = merchant.businessName || merchant.name || merchant.merchantName || merchant.restaurantName || '餐廳'
+         console.log('從 localStorage 獲取商家名稱:', businessName)
+       }
+     }
+     ```
+
+5. 修正結果｜Results
+   - ✅ QR Code 檔案名稱現在正確使用 URL 查詢參數中的餐廳名稱
+   - ✅ 檔案名稱格式：`test11-桌次2.png`（而不是 `餐廳-桌次2.png`）
+   - ✅ 批量下載功能也使用正確的餐廳名稱
+   - ✅ 提升了 QR Code 檔案的可識別性和專業性
+   - ✅ 詳細的日誌記錄便於調試和問題排查
+
+6. 影響範圍｜Impact
+   - QR Code 單一下載功能
+   - QR Code 批量下載功能
+   - 檔案命名的一致性
+   - 用戶體驗的改善
+
+7. 相關檔案｜Related files
+   - 桌次管理頁面：`web/src/views/merchant/tables/Tables.vue`
+   - 商家名稱獲取邏輯
+   - QR Code 下載功能
+
+8. 經驗總結｜Lessons learned
+   - **數據來源優先級**：URL 查詢參數通常是最權威的數據來源，應該優先使用
+   - **邏輯順序重要性**：獲取邏輯的順序會直接影響最終結果
+   - **日誌調試價值**：詳細的日誌記錄有助於快速定位問題
+   - **用戶體驗細節**：檔案命名等細節對用戶體驗有重要影響
+
+9. 預防措施｜Prevention measures
+   - 建立數據獲取優先級的標準規範
+   - 在涉及多個數據來源的功能中添加詳細日誌
+   - 定期檢查用戶體驗相關的細節功能
+   - 建立功能測試清單，包含檔案命名等細節
+
+*時間：2025-08-23 00:15*

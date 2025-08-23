@@ -206,6 +206,16 @@ exports.createTable = catchAsync(async (req, res, next) => {
   
   // 生成二維碼
   try {
+    // 確保 uniqueCode 和 customerUrl 已經生成
+    if (!table.uniqueCode) {
+      table.uniqueCode = table.generateUniqueCode();
+    }
+    if (!table.customerUrl) {
+      table.customerUrl = table.generateCustomerUrl();
+    }
+    
+    console.log(`桌次 ${table.tableNumber} 的 customerUrl: ${table.customerUrl}`);
+    
     const qrCodeDataUrl = await QRCode.toDataURL(table.customerUrl, {
       width: 300,
       margin: 2,
@@ -217,8 +227,11 @@ exports.createTable = catchAsync(async (req, res, next) => {
     
     table.qrCodeDataUrl = qrCodeDataUrl;
     await table.save();
+    
+    console.log(`桌次 ${table.tableNumber} QR Code 生成成功`);
   } catch (error) {
     console.error('生成二維碼失敗:', error);
+    console.error('錯誤詳情:', error.message);
   }
   
   res.status(201).json({
@@ -403,6 +416,8 @@ exports.regenerateQRCode = catchAsync(async (req, res, next) => {
     table.uniqueCode = table.generateUniqueCode();
     table.customerUrl = table.generateCustomerUrl();
     
+    console.log(`重新生成桌次 ${table.tableNumber} 的 QR Code，URL: ${table.customerUrl}`);
+    
     // 生成新的二維碼
     const qrCodeDataUrl = await QRCode.toDataURL(table.customerUrl, {
       width: 300,
@@ -415,6 +430,8 @@ exports.regenerateQRCode = catchAsync(async (req, res, next) => {
     
     table.qrCodeDataUrl = qrCodeDataUrl;
     await table.save();
+    
+    console.log(`桌次 ${table.tableNumber} QR Code 重新生成成功`);
     
     res.status(200).json({
       status: 'success',
@@ -475,6 +492,72 @@ exports.getTableStats = catchAsync(async (req, res, next) => {
     status: 'success',
     data: {
       stats: result
+    }
+  });
+});
+
+// 批量生成 QR Code（為現有桌次生成 QR Code）
+exports.batchGenerateQRCode = catchAsync(async (req, res, next) => {
+  const merchantId = getMerchantId(req);
+  
+  // 查找該商家的所有桌次
+  const tables = await Table.find({ merchant: merchantId });
+  
+  let successCount = 0;
+  let errorCount = 0;
+  const results = [];
+  
+  for (const table of tables) {
+    try {
+      // 確保 uniqueCode 和 customerUrl 已經生成
+      if (!table.uniqueCode) {
+        table.uniqueCode = table.generateUniqueCode();
+      }
+      if (!table.customerUrl) {
+        table.customerUrl = table.generateCustomerUrl();
+      }
+      
+      // 生成 QR Code
+      const qrCodeDataUrl = await QRCode.toDataURL(table.customerUrl, {
+        width: 300,
+        margin: 2,
+        color: {
+          dark: '#000000',
+          light: '#FFFFFF'
+        }
+      });
+      
+      table.qrCodeDataUrl = qrCodeDataUrl;
+      await table.save();
+      
+      successCount++;
+      results.push({
+        tableNumber: table.tableNumber,
+        status: 'success',
+        message: 'QR Code 生成成功'
+      });
+      
+      console.log(`桌次 ${table.tableNumber} QR Code 生成成功`);
+    } catch (error) {
+      errorCount++;
+      results.push({
+        tableNumber: table.tableNumber,
+        status: 'error',
+        message: error.message
+      });
+      
+      console.error(`桌次 ${table.tableNumber} QR Code 生成失敗:`, error.message);
+    }
+  }
+  
+  res.status(200).json({
+    status: 'success',
+    message: `批量生成完成，成功: ${successCount}，失敗: ${errorCount}`,
+    data: {
+      total: tables.length,
+      success: successCount,
+      error: errorCount,
+      results
     }
   });
 });

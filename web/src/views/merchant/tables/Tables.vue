@@ -7,6 +7,10 @@
           <font-awesome-icon icon="plus" />
           新增桌次
         </button>
+        <button class="batch-download-btn" @click="batchDownloadQRCodes" :disabled="isBatchDownloading">
+          <font-awesome-icon icon="download" />
+          {{ isBatchDownloading ? '下載中...' : '批量下載 QR Code' }}
+        </button>
       </div>
     </div>
 
@@ -34,13 +38,20 @@
         </div>
         
         <div class="table-info">
-          <p><strong>座位數:</strong> {{ table.capacity }}人</p>
-          <p><strong>狀態:</strong> 
+          <div class="info-row">
+            <span class="info-label">座位數:</span>
+            <span class="info-value">{{ table.capacity }}人</span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">狀態:</span>
             <span class="status-badge" :class="table.status">
               {{ getStatusText(table.status) }}
             </span>
-          </p>
-          <p v-if="table.currentSession?.customerName"><strong>客戶:</strong> {{ table.currentSession.customerName }}</p>
+          </div>
+          <div v-if="table.currentSession?.customerName" class="info-row">
+            <span class="info-label">客戶:</span>
+            <span class="info-value">{{ table.currentSession.customerName }}</span>
+          </div>
           
           <!-- QR Code 和客戶端連結區域 -->
           <div class="customer-access-section">
@@ -291,6 +302,9 @@ const receiptComponent = ref(null)
 // 結帳狀態管理
 const isCheckingOut = ref(false)
 
+// 批量下載狀態管理
+const isBatchDownloading = ref(false)
+
 // 自動刷新相關
 const refreshInterval = ref(null)
 const autoRefreshEnabled = ref(true)
@@ -473,8 +487,46 @@ const setTableReserved = async (tableId) => {
 
 // QR Code 相關功能
 // 切換 QR Code 顯示狀態
-const toggleQRCode = (tableId) => {
-  showQRCode.value[tableId] = !showQRCode.value[tableId]
+const toggleQRCode = async (tableId) => {
+  const table = tables.value.find(t => (t._id || t.id) === tableId)
+  
+  if (!table) {
+    console.error('找不到桌次:', tableId)
+    return
+  }
+  
+  // 如果 QR Code 已顯示，則隱藏
+  if (showQRCode.value[tableId]) {
+    showQRCode.value[tableId] = false
+    return
+  }
+  
+  // 如果沒有 QR Code，立即生成
+  if (!table.qrCodeDataUrl) {
+    try {
+      console.log('桌次', table.tableNumber, '沒有 QR Code，正在生成...')
+      
+      // 調用重新生成 QR Code API
+      const response = await tableAPI.regenerateQRCode(tableId)
+      
+      // 更新本地桌次數據（後端返回 { table } 結構）
+      const updatedTable = tables.value.find(t => (t._id || t.id) === tableId)
+      if (updatedTable && response.data.table) {
+        updatedTable.qrCodeDataUrl = response.data.table.qrCodeDataUrl
+        updatedTable.uniqueCode = response.data.table.uniqueCode
+        updatedTable.customerUrl = response.data.table.customerUrl
+      }
+      
+      console.log('QR Code 生成成功')
+    } catch (error) {
+      console.error('生成 QR Code 失敗:', error)
+      alert('生成 QR Code 失敗：' + (error.message || '未知錯誤'))
+      return
+    }
+  }
+  
+  // 顯示 QR Code
+  showQRCode.value[tableId] = true
 }
 
 // 進入桌次
@@ -548,9 +600,40 @@ const downloadQRCode = (table, qrCodeDataUrl) => {
   }
   
   try {
+    // 獲取商家信息
+    let businessName = '餐廳'
+    try {
+      // 優先從 URL 查詢參數獲取餐廳名稱
+      const urlParams = new URLSearchParams(window.location.search)
+      const restaurantName = urlParams.get('restaurantName')
+      if (restaurantName) {
+        businessName = restaurantName
+        console.log('從 URL 查詢參數獲取商家名稱:', businessName)
+      } else {
+        // 如果 URL 中沒有，再嘗試從 localStorage 獲取
+        const merchantRaw = localStorage.getItem('merchant_user')
+        if (merchantRaw) {
+          const merchant = JSON.parse(merchantRaw)
+          console.log('完整的商家信息:', merchant)
+          
+          // 嘗試多個可能的字段名稱
+          businessName = merchant.businessName || merchant.name || merchant.merchantName || merchant.restaurantName || '餐廳'
+          console.log('從 localStorage 獲取商家名稱:', businessName)
+        }
+      }
+    } catch (error) {
+      console.warn('無法獲取商家名稱，使用預設名稱:', error)
+    }
+    
+    // 生成檔案名稱：餐廳名稱-桌次
+    const fileName = `${businessName}-桌次${table.tableNumber}.png`
+    console.log('生成的檔案名稱:', fileName)
+    console.log('businessName:', businessName)
+    console.log('table.tableNumber:', table.tableNumber)
+    
     const link = document.createElement('a')
     link.href = qrCodeDataUrl
-    link.download = `桌號${table.tableNumber}_QRCode.png`
+    link.download = fileName
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
@@ -558,6 +641,145 @@ const downloadQRCode = (table, qrCodeDataUrl) => {
   } catch (error) {
     console.error('下載 QR Code 失敗:', error)
     alert('下載 QR Code 失敗')
+  }
+}
+
+// 批量下載 QR Code
+const batchDownloadQRCodes = async () => {
+  if (isBatchDownloading.value) {
+    console.log('正在批量下載中，忽略重複調用')
+    return
+  }
+  
+  try {
+    isBatchDownloading.value = true
+    console.log('開始批量下載 QR Code')
+    
+    // 獲取商家信息
+    let businessName = '餐廳'
+    try {
+      // 優先從 URL 查詢參數獲取餐廳名稱
+      const urlParams = new URLSearchParams(window.location.search)
+      const restaurantName = urlParams.get('restaurantName')
+      if (restaurantName) {
+        businessName = restaurantName
+        console.log('從 URL 查詢參數獲取商家名稱:', businessName)
+      } else {
+        // 如果 URL 中沒有，再嘗試從 localStorage 獲取
+        const merchantRaw = localStorage.getItem('merchant_user')
+        if (merchantRaw) {
+          const merchant = JSON.parse(merchantRaw)
+          console.log('完整的商家信息:', merchant)
+          
+          // 嘗試多個可能的字段名稱
+          businessName = merchant.businessName || merchant.name || merchant.merchantName || merchant.restaurantName || '餐廳'
+          console.log('從 localStorage 獲取商家名稱:', businessName)
+        }
+      }
+    } catch (error) {
+      console.warn('無法獲取商家名稱，使用預設名稱:', error)
+    }
+    
+    // 檢查是否有桌次
+    if (tables.value.length === 0) {
+      alert('目前沒有任何桌次可以下載 QR Code')
+      return
+    }
+    
+    // 確認批量下載
+    const confirmMessage = `確定要批量下載所有桌次的 QR Code 嗎？\n共 ${tables.value.length} 個桌次\n將打包成一個 ZIP 檔案：${businessName}-桌次qrcode.zip`
+    
+    if (!confirm(confirmMessage)) {
+      return
+    }
+    
+    // 導入 JSZip
+    const JSZip = (await import('jszip')).default
+    const zip = new JSZip()
+    
+    let successCount = 0
+    let errorCount = 0
+    const errors = []
+    
+    // 遍歷所有桌次
+    for (const table of tables.value) {
+      try {
+        console.log(`處理桌次 ${table.tableNumber} 的 QR Code`)
+        
+        // 如果沒有 QR Code，先生成
+        if (!table.qrCodeDataUrl) {
+          console.log(`桌次 ${table.tableNumber} 沒有 QR Code，正在生成...`)
+          await tableAPI.regenerateQRCode(table._id || table.id)
+          
+          // 重新載入桌次列表以獲取新的 QR Code
+          await loadTables()
+          
+          // 重新獲取桌次數據
+          const updatedTable = tables.value.find(t => (t._id || t.id) === (table._id || table.id))
+          if (!updatedTable || !updatedTable.qrCodeDataUrl) {
+            throw new Error(`無法為桌次 ${table.tableNumber} 生成 QR Code`)
+          }
+          table.qrCodeDataUrl = updatedTable.qrCodeDataUrl
+        }
+        
+        // 將 QR Code 添加到 ZIP 檔案
+        const fileName = `${businessName}-桌次${table.tableNumber}.png`
+        
+        // 從 Data URL 提取 base64 數據
+        const base64Data = table.qrCodeDataUrl.split(',')[1]
+        zip.file(fileName, base64Data, { base64: true })
+        
+        successCount++
+        console.log(`桌次 ${table.tableNumber} QR Code 已添加到 ZIP`)
+        
+      } catch (error) {
+        console.error(`桌次 ${table.tableNumber} QR Code 處理失敗:`, error)
+        errorCount++
+        errors.push(`桌次 ${table.tableNumber}: ${error.message || '未知錯誤'}`)
+      }
+    }
+    
+    // 生成並下載 ZIP 檔案
+    if (successCount > 0) {
+      try {
+        console.log('正在生成 ZIP 檔案...')
+        const zipBlob = await zip.generateAsync({ type: 'blob' })
+        
+        // 下載 ZIP 檔案
+        const zipFileName = `${businessName}-桌次qrcode.zip`
+        const link = document.createElement('a')
+        link.href = URL.createObjectURL(zipBlob)
+        link.download = zipFileName
+        document.body.appendChild(link)
+        link.click()
+        document.body.removeChild(link)
+        
+        // 清理 URL 對象
+        URL.revokeObjectURL(link.href)
+        
+        console.log('ZIP 檔案下載成功')
+      } catch (error) {
+        console.error('ZIP 檔案生成失敗:', error)
+        errorCount++
+        errors.push(`ZIP 檔案生成: ${error.message || '未知錯誤'}`)
+      }
+    }
+    
+    // 顯示結果
+    let resultMessage = `批量下載完成！\n成功：${successCount} 個 QR Code 已打包\n失敗：${errorCount} 個`
+    
+    if (errorCount > 0) {
+      resultMessage += `\n\n失敗詳情：\n${errors.join('\n')}`
+    }
+    
+    alert(resultMessage)
+    
+  } catch (error) {
+    console.error('批量下載 QR Code 失敗:', error)
+    alert('批量下載 QR Code 失敗：' + (error.message || '未知錯誤'))
+  } finally {
+    isBatchDownloading.value = false
+    console.log('批量下載完成，重置狀態')
   }
 }
 

@@ -34,5 +34,6 @@ router.patch('/batch/status', requirePermissions('桌位:管理'), tableControll
 
 // 二維碼管理
 router.post('/:id/regenerate-qr', requirePermissions('桌位:管理'), tableController.regenerateQRCode);
+router.post('/batch/generate-qr', requirePermissions('桌位:管理'), tableController.batchGenerateQRCode);
 
 module.exports = router;
