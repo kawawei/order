@@ -414,15 +414,16 @@ export function useDashboard(restaurantId = null) {
           // 按桌次分組合併訂單
           const tableOrders = mergeOrdersByTable(response.data.orders)
           
-          // 計算今日結帳的訂單數
+          // 計算今日結帳的訂單數（使用台灣時區）
           const today = new Date()
-          today.setHours(0, 0, 0, 0)
+          const taiwanStart = new Date(today.getFullYear(), today.getMonth(), today.getDate())
+          const taiwanEnd = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59, 999)
           
           const todayCompletedOrders = tableOrders.filter(order => {
             if (!order.completedAt) return false
             const completedDate = new Date(order.completedAt)
-            completedDate.setHours(0, 0, 0, 0)
-            return completedDate.getTime() === today.getTime()
+            // 檢查是否在今日台灣時區範圍內
+            return completedDate >= taiwanStart && completedDate <= taiwanEnd
           })
           
           // 計算今日客人數

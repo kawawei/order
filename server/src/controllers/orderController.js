@@ -769,63 +769,139 @@ exports.getOrderStats = catchAsync(async (req, res, next) => {
     };
   }
   
+  // 計算總訂單數
+  const totalOrdersResult = await Order.aggregate([
+    { 
+      $match: { 
+        merchantId: new mongoose.Types.ObjectId(merchantId),
+        status: { $in: ['completed'] }
+      } 
+    },
+    { $group: { _id: null, count: { $sum: 1 } } }
+  ]);
+  
+  const totalOrders = totalOrdersResult[0]?.count || 0;
+  
   // 添加調試日誌
   console.log('getOrderStats - 查詢條件:', JSON.stringify(matchQuery, null, 2))
   console.log('getOrderStats - 總訂單數:', totalOrders)
   
   // 計算營業額 - 使用 completedAt 過濾已完成的訂單
+  let revenueMatchQuery = {
+    merchantId: new mongoose.Types.ObjectId(merchantId),
+    status: { $in: ['completed'] } // 只計算已完成的訂單
+  };
+  
+  // 台灣時區是 UTC+8，所以需要減去 8 小時來轉換為 UTC
+  const taiwanTimezoneOffset = 8 * 60; // 8小時 = 480分鐘
+  
+  if (date) {
+    // 如果指定了日期，使用該日期（轉換為台灣時區）
+    const taiwanStart = new Date(date);
+    taiwanStart.setHours(0, 0, 0, 0);
+    const taiwanEnd = new Date(date);
+    taiwanEnd.setHours(23, 59, 59, 999);
+    
+    // 轉換為 UTC 時間：台灣時間 - 8小時 = UTC 時間
+    const startDate = new Date(taiwanStart.getTime() - (taiwanTimezoneOffset * 60 * 1000));
+    const endDate = new Date(taiwanEnd.getTime() - (taiwanTimezoneOffset * 60 * 1000));
+    
+    revenueMatchQuery.completedAt = {
+      $gte: startDate,
+      $lte: endDate
+    };
+  } else if (startDate && endDate) {
+    // 如果指定了日期範圍，使用該範圍（轉換為台灣時區）
+    const taiwanStart = new Date(startDate);
+    taiwanStart.setHours(0, 0, 0, 0);
+    const taiwanEnd = new Date(endDate);
+    taiwanEnd.setHours(23, 59, 59, 999);
+    
+    // 轉換為 UTC 時間：台灣時間 - 8小時 = UTC 時間
+    const start = new Date(taiwanStart.getTime() - (taiwanTimezoneOffset * 60 * 1000));
+    const end = new Date(taiwanEnd.getTime() - (taiwanTimezoneOffset * 60 * 1000));
+    
+    revenueMatchQuery.completedAt = {
+      $gte: start,
+      $lte: end
+    };
+  } else {
+    // 默認計算今日結帳的訂單（轉換為台灣時區）
+    const today = new Date();
+    const taiwanStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    const taiwanEnd = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59, 999);
+    
+    // 轉換為 UTC 時間：台灣時間 - 8小時 = UTC 時間
+    const todayStart = new Date(taiwanStart.getTime() - (taiwanTimezoneOffset * 60 * 1000));
+    const todayEnd = new Date(taiwanEnd.getTime() - (taiwanTimezoneOffset * 60 * 1000));
+    
+    revenueMatchQuery.completedAt = {
+      $gte: todayStart,
+      $lte: todayEnd
+    };
+  }
+  
+  // 添加調試日誌
+  console.log('getOrderStats - 營業額查詢條件:', JSON.stringify(revenueMatchQuery, null, 2))
+  console.log('getOrderStats - 時區轉換說明: 台灣時間轉換為 UTC 時間 (減去 8 小時)')
+  
   const totalRevenue = await Order.aggregate([
     { 
-      $match: { 
-        merchantId: new mongoose.Types.ObjectId(merchantId),
-        status: { $in: ['completed'] }, // 只計算已完成的訂單
-        ...(date ? {
-          completedAt: {
-            $gte: new Date(date),
-            $lt: new Date(new Date(date).setDate(new Date(date).getDate() + 1))
-          }
-        } : {}),
-        ...(startDate && endDate ? {
-          completedAt: {
-            $gte: new Date(startDate),
-            $lt: new Date(new Date(endDate).setDate(new Date(endDate).getDate() + 1))
-          }
-        } : {})
-      } 
+      $match: revenueMatchQuery
     },
     { $group: { _id: null, total: { $sum: '$totalAmount' } } }
   ]);
+  
+  console.log('getOrderStats - 營業額統計結果:', totalRevenue)
+  console.log('getOrderStats - 總營業額:', totalRevenue[0]?.total || 0)
 
   // 獲取客人數量 - 使用 completedAt 過濾已完成的訂單
   let customerMatchQuery = {
     merchantId: new mongoose.Types.ObjectId(merchantId),
-    status: { $in: ['completed', 'cancelled'] }
+    status: { $in: ['completed'] } // 只計算已完成的訂單
   };
   
+  // 使用與營業額相同的時區轉換邏輯
   if (date) {
-    // 如果指定了日期，使用該日期
-    const startDate = new Date(date);
-    const endDate = new Date(date);
-    endDate.setDate(endDate.getDate() + 1);
+    // 如果指定了日期，使用該日期（轉換為台灣時區）
+    const taiwanStart = new Date(date);
+    taiwanStart.setHours(0, 0, 0, 0);
+    const taiwanEnd = new Date(date);
+    taiwanEnd.setHours(23, 59, 59, 999);
+    
+    // 轉換為 UTC 時間：台灣時間 - 8小時 = UTC 時間
+    const startDate = new Date(taiwanStart.getTime() - (taiwanTimezoneOffset * 60 * 1000));
+    const endDate = new Date(taiwanEnd.getTime() - (taiwanTimezoneOffset * 60 * 1000));
+    
     customerMatchQuery.completedAt = {
       $gte: startDate,
-      $lt: endDate
+      $lte: endDate
     };
   } else if (startDate && endDate) {
-    // 如果指定了日期範圍，使用該範圍
-    const start = new Date(startDate);
-    const end = new Date(endDate);
-    end.setDate(end.getDate() + 1);
+    // 如果指定了日期範圍，使用該範圍（轉換為台灣時區）
+    const taiwanStart = new Date(startDate);
+    taiwanStart.setHours(0, 0, 0, 0);
+    const taiwanEnd = new Date(endDate);
+    taiwanEnd.setHours(23, 59, 59, 999);
+    
+    // 轉換為 UTC 時間：台灣時間 - 8小時 = UTC 時間
+    const start = new Date(taiwanStart.getTime() - (taiwanTimezoneOffset * 60 * 1000));
+    const end = new Date(taiwanEnd.getTime() - (taiwanTimezoneOffset * 60 * 1000));
+    
     customerMatchQuery.completedAt = {
       $gte: start,
-      $lt: end
+      $lte: end
     };
   } else {
-    // 默認計算今日結帳的訂單
-    const todayStart = new Date();
-    todayStart.setHours(0, 0, 0, 0);
-    const todayEnd = new Date();
-    todayEnd.setHours(23, 59, 59, 999);
+    // 默認計算今日結帳的訂單（轉換為台灣時區）
+    const today = new Date();
+    const taiwanStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    const taiwanEnd = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59, 999);
+    
+    // 轉換為 UTC 時間：台灣時間 - 8小時 = UTC 時間
+    const todayStart = new Date(taiwanStart.getTime() - (taiwanTimezoneOffset * 60 * 1000));
+    const todayEnd = new Date(taiwanEnd.getTime() - (taiwanTimezoneOffset * 60 * 1000));
+    
     customerMatchQuery.completedAt = {
       $gte: todayStart,
       $lte: todayEnd
@@ -866,13 +942,29 @@ exports.getOrderStats = catchAsync(async (req, res, next) => {
   console.log('getOrderStats - 客人統計結果:', customerStats)
   console.log('getOrderStats - 總客人數:', customerStats[0]?.totalCustomers || 0)
 
+  // 計算狀態分佈
+  const statusStats = await Order.aggregate([
+    { 
+      $match: { 
+        merchantId: new mongoose.Types.ObjectId(merchantId),
+        status: { $in: ['pending', 'preparing', 'ready', 'delivered', 'completed', 'cancelled'] }
+      } 
+    },
+    { $group: { _id: '$status', count: { $sum: 1 } } }
+  ]);
+  
+  const statusBreakdown = {};
+  statusStats.forEach(stat => {
+    statusBreakdown[stat._id] = stat.count;
+  });
+
   res.status(200).json({
     status: 'success',
     data: {
       totalOrders,
       totalRevenue: totalRevenue[0]?.total || 0,
       totalCustomers: customerStats[0]?.totalCustomers || 0,
-      statusBreakdown: stats
+      statusBreakdown
     }
   });
 });
