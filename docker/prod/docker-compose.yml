@@ -5,7 +5,7 @@ services:
     image: mongo:latest
     container_name: order-mongodb-prod
     ports:
-      - "27017:27017"
+      - "27018:27017"
     volumes:
       - mongodb_data:/data/db
     environment:
@@ -53,7 +53,7 @@ services:
       dockerfile: Dockerfile.prod
     container_name: order-frontend-prod
     ports:
-      - "80:80"
+      - "8081:80"
     environment:
       - NODE_ENV=production
       - VITE_API_URL=${API_URL}
